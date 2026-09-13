@@ -1,0 +1,6 @@
+type: au.engine.repo::au-engine
+name: placeholder-picker
+description: the shipped placeholder-projection — the empty-slot content picker
+deps:
+  - name: au-host-sdk
+  - name: intent

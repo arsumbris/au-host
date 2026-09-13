@@ -1,0 +1,14 @@
+# <au-table-row> — a row of <au-table>.
+#: <au-table-row> — a row of <au-table>. Slot <au-table-header-cell> (in a head) or <au-table-cell> (in a
+#: body). `selectable` makes it a hover-lift + keyboard target that emits `au-select`; `selected` rests on
+#: a surface tint. Emphasis is surface + ink, never a leading rail.
+extends: ui-component::component-contract
+fields:
+  #: Make the row a hover-lift + keyboard-activatable target that emits au-select.
+  selectable?: Boolean
+  #: Resting selected state — a surface lift (never a leading bar).
+  selected?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-select]
+    preview: '<au-table><au-table-body><au-table-row selectable selected><au-table-cell>Selected row</au-table-cell></au-table-row></au-table-body></au-table>'

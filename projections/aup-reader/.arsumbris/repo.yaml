@@ -1,0 +1,13 @@
+# Repo identity + deps (au.engine.repo). Additive first-party projection — a markdown READER
+# using shared components. Pairs with editor-pane: `opens-meta` declares md/markdown/mdx,
+# so this reader is ELIGIBLE for markdown (eligibility, not the decision — md resolves through the
+# viewer ladder, else the host chooser asks) and "Open with" offers both. `::au-host-sdk` for the pane-projection parent + the au-host-sdk metas. `intent` is now a
+# type crossing too: aup-reader fires open-intent, so its type-def declares fires-intent-meta::intent
+# and the fired def-ref (`open-intent::intent`) crosses into the intent repo. `selection` stays a CODE
+# import only (no `::repo` type crossing), so it is not a dep.
+type: au.engine.repo::au-engine
+name: aup-reader
+description: Markdown reader projection using shared components
+deps:
+  - name: au-host-sdk
+  - name: intent

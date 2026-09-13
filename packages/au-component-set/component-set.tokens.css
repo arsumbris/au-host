@@ -1,0 +1,16 @@
+/* Component-owned controls exposed through customTokenEntry.
+ * Typed declarations provide independent initial values; root defaults link them
+ * to shared theme roles. Components without local controls consume shared roles directly.
+ */
+
+/* ── tree ───────────────────────────────────────────────────────────────── */
+@property --au-tree-item-selected { syntax: "<color>";  inherits: true; initial-value: #3b82f6; }
+@property --au-tree-item-hover    { syntax: "<color>";  inherits: true; initial-value: rgba(255, 255, 255, 0.06); }
+@property --au-tree-item-radius   { syntax: "<length>"; inherits: true; initial-value: 4px; }
+@property --au-tree-font          { syntax: "*"; inherits: true; initial-value: 13px/1.6 system-ui, sans-serif; }
+:root {
+  --au-tree-item-selected: var(--au-chrome-active);
+  --au-tree-item-hover:    var(--au-chrome-hover);
+  --au-tree-item-radius:   var(--au-radius-row);
+  --au-tree-font:          var(--au-t-sm)/var(--au-lh-sm) var(--au-font-sans);
+}

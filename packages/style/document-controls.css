@@ -1,0 +1,52 @@
+/* One document-action slot shared by editor, reader and artifact previews.
+   Component-local aliases derive geometry from the theme's spacing/density scale. */
+.au-document-view {
+  --document-action-height: var(--au-space-7);
+  --document-action-width: calc(var(--document-action-height) * 2);
+  --document-action-top: var(--au-space-2);
+  --document-action-end: var(--au-space-3);
+  --document-action-reserve: calc(var(--document-action-width) + var(--document-action-end) + var(--au-space-2));
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+.au-document-view > .au-document-toolbar { padding-inline-end: var(--document-action-reserve); }
+.au-document-mode-button {
+  position: absolute; inset-block-start: var(--document-action-top); inset-inline-end: var(--document-action-end); z-index: var(--au-z-raised);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--au-space-1);
+  box-sizing: border-box; inline-size: var(--document-action-width); min-block-size: var(--document-action-height); padding: 0 var(--au-space-2);
+  border: 0; border-radius: var(--au-radius-sm); color: var(--au-ink-2); background: var(--au-color-surface-1);
+  font: var(--au-t-xs)/1 var(--au-font-sans); cursor: pointer; opacity: 0;
+  transition: opacity var(--au-m-fast) var(--au-e-std), background-color var(--au-m-fast) var(--au-e-std);
+}
+.au-document-view:hover > .au-document-mode-button, .au-document-view:focus-within > .au-document-mode-button { opacity: 1; }
+.au-document-mode-button:hover { background: var(--au-chrome-hover); }
+.au-document-mode-button:focus-visible { outline: 1px solid color-mix(in oklch, var(--au-focus-outer) 60%, transparent); outline-offset: -1px; }
+.au-document-mode-button:disabled { cursor: default; color: var(--au-ink-3); }
+@media (prefers-reduced-motion: reduce) { .au-document-mode-button { transition: none; } }
+@media (hover: none) { .au-document-mode-button { opacity: 1; } }
+
+.au-document-mode-button[hidden] { display: none; }
+
+.au-document-mode-button svg { inline-size: var(--au-t-base); block-size: var(--au-t-base); flex: none; }
+
+/* The <au-viewer-switch> element occupies the same document-action slot. The element owns its pill LOOK
+   in its own shadow; this rule owns only PLACEMENT (top-end) and the reveal-on-hover, so the two never
+   double up. Kept beside .au-document-mode-button so editor, reader and previews share one slot. */
+.au-document-view > au-viewer-switch {
+  position: absolute; inset-block-start: var(--document-action-top); inset-inline-end: var(--document-action-end); z-index: var(--au-z-raised);
+  opacity: 0; transition: opacity var(--au-m-fast) var(--au-e-std);
+}
+.au-document-view:hover > au-viewer-switch, .au-document-view:focus-within > au-viewer-switch { opacity: 1; }
+.au-document-view > au-viewer-switch[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .au-document-view > au-viewer-switch { transition: none; } }
+@media (hover: none) { .au-document-view > au-viewer-switch { opacity: 1; } }
+
+/* The action row shares the pane's continuous material and follows the document scroll offset.
+   No sticky return, opaque shelf, or painted tail. */
+.au-document-view[data-scroll-toolbar] > .au-document-toolbar {
+  position:absolute; inset:0 0 auto; inset-inline-end:var(--document-scrollbar-inset, 0px);
+  z-index:var(--au-z-raised); width:auto; box-sizing:border-box;
+  background:transparent; box-shadow:none;
+  transform:translateY(var(--document-toolbar-offset, 0px));
+}

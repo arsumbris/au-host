@@ -1,0 +1,113 @@
+/*
+ * SectionHeader — a small, muted sidebar or panel label with optional count and actions.
+ * Sentence case is the default. The sans prop selects the proportional face; caps selects
+ * an uppercase monospace label. Optional collapse behavior composes Chevron.
+ */
+.au-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  width: 100%;
+  min-height: var(--au-row-h);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-mono);
+  color: var(--au-ink-4);
+}
+
+/* Collapsible header is a keyboard target; the chevron carries the ring, so the
+ * header itself only tints its label on hover. */
+.au-section-header[data-collapsible] {
+  cursor: pointer;
+}
+
+/* Sans variant — steps the label up to the FULL `.au-label` role (styles/rhythm.css `.au-label`),
+ * token-for-token: the sans reading face, `--au-t-sm`, `--au-lh-sm`, snug tracking, and the brighter
+ * `--au-ink-2` masthead ink. This is a NAMED panel section ("Properties"), so it leaves the quiet mono
+ * group-header default and joins the same one label role a PaneHeader / menu-group / field label use —
+ * one definition, not a per-component reinvention. (The row grows within its `--au-row-h` floor.)
+ *
+ * DECOUPLED from weight: a heavier group header would compete with the file names it labels.
+ * Weight stays `--au-w-medium` from the base (the label role's own weight) and is the
+ * caller's to override, never the face's. Face, weight, caps and tracking are each their own axis: mono
+ * ↔ sans here, uppercase via `caps`, weight from the base, tracking derived per role. */
+.au-section-header[data-sans] {
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-sm);
+  line-height: var(--au-lh-sm);
+  letter-spacing: var(--au-ls-snug);
+  color: var(--au-ink-2);
+}
+
+/* caps=on — opt IN to the mono uppercase eyebrow: shouted + opened-up tracking. Reserve it for a
+ * section whose label is genuinely machine-ish (a status / enum group), NOT a named surface. A named
+ * section reads in sentence case (the default) so it recedes rather than shouts. */
+.au-section-header[data-caps='on'] {
+  text-transform: uppercase;
+  letter-spacing: var(--au-ls-label);
+}
+
+.au-section-header-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Collapsible headers tint the label on hover — ease it, don't snap. */
+  transition: color var(--au-m-fast) var(--au-e-std);
+}
+
+/* Trailing count / meta, right-aligned and one ink-step dimmer. A count is a machine-ish NUMBER, not
+ * part of the label role, so it is PINNED to the quiet mono face + `--au-t-xs` + tabular figures — it
+ * must NOT inherit the sans face or `--au-t-sm` size when the label steps up to `sans`. Stable across
+ * every SectionHeader variant. */
+.au-section-header-count {
+  margin-left: auto;
+  padding-left: var(--au-space-2);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  color: var(--au-ink-5);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--au-ls-mono);
+  text-transform: none;
+}
+
+/* Actions cluster (right-aligned when there is no count). */
+.au-section-header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-1);
+  flex-shrink: 0;
+}
+
+.au-section-header-count + .au-section-header-actions {
+  margin-left: var(--au-space-2);
+}
+
+.au-section-header[data-collapsible]:hover .au-section-header-label,
+.au-section-header[data-collapsible][data-force-hover] .au-section-header-label {
+  color: var(--au-ink-3);
+}
+
+/* A `sans` (named) label rests a rung brighter (ink-2), so its hover brightens ONE FURTHER step to
+ * ink-1 instead of dimming toward the mono default's ink-3 — hover always brightens, either variant. */
+.au-section-header[data-sans][data-collapsible]:hover .au-section-header-label,
+.au-section-header[data-sans][data-collapsible][data-force-hover] .au-section-header-label {
+  color: var(--au-ink-1);
+}
+
+/* Locked (structure-locked group): grip/collapse suppressed upstream; the label
+ * reads one step quieter to signal it can't be reorganised. */
+.au-section-header[data-locked],
+.au-section-header[data-force-locked] {
+  color: var(--au-ink-5);
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-section-header-label {
+    transition: none;
+  }
+}

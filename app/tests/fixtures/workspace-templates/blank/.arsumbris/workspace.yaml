@@ -1,0 +1,6 @@
+type: au.engine.workspace::au-engine
+edit:
+  - blank
+discover:
+  - host-bundle
+  - mcp-bundle

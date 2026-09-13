@@ -1,0 +1,11 @@
+# <au-menu> — the floating-menu container of the overlay elevation family.
+#: <au-menu> — a floating menu surface (the DropdownMenu look): elev-5 fill + inset hairline + glass
+#: shadow, panel radius, a small pad. A padded list of <au-menu-item> rows (+ <au-divider> separators /
+#: section labels) slotted in. The LOOK only — a host surface (context-menu / chooser) owns positioning,
+#: keyboard nav, and submenus.
+extends: ui-component::component-contract
+fields: {}
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [menu]
+    preview: '<au-menu style="width:240px"><au-menu-item icon="file" label="Open" shortcut="⌘O"></au-menu-item><au-menu-item icon="pencil" label="Rename" active></au-menu-item><au-divider></au-divider><au-menu-item icon="trash" label="Delete" destructive></au-menu-item></au-menu>'

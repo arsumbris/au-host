@@ -1,0 +1,87 @@
+# Owned by au-host-sdk (the host mount-contract vocabulary).
+# Generates the exported `Composition` interface.
+
+
+# A composition is its OWN type, NOT a projection subtype. It does not mount; it names its WINDOWS.
+# It is a normalized DOCUMENT: a `windows` list plus a flat POOL of projection records, each
+# addressable by its `^:` block-id and cross-referenced by `[[^^id]]`. A container names its
+# children by REFERENCE into the pool, never by embedding, so a re-parent is a reference re-point
+# of two independent records and no parent ever re-serializes a stale copy of a child.
+
+# THE POOL ROOT IS MULTI-SURFACE. One authority runtime drives every OS window, so a composition names
+# a SET of windows, not a single root — each `window` holds its own view by reference, and the primary
+# window (surface 0) is the one the app opens into. A single-view composition is one window whose
+# `content` is that view. Reopening a saved composition reopens its windows. So the entry point is
+# `windows`, and reachability walks from every window.
+
+
+# The host entry is ALWAYS a composition: mounting a single view is a composition
+# whose one window's `content` names that record. So there is no bare-instance entry, metadata always
+# has a home, and `instances_of(composition)` returns exactly the openable entries.
+
+# A composition arranges views and routes intents through its intent-routing field.
+# The intent base, routing aspect and host-relied metadata are host-sdk-owned.
+# Concrete command and UI payload vocabulary lives in packages/intent, preserving
+# the one-way intent -> host-sdk dependency.
+
+
+# `composition` is one of the three SEALED branches of `mountable` (the others are `projection` and
+# `window`), so a child slot referencing `mountable*` may name a WHOLE composition — a reusable
+# sub-layout — as a window's `content`, and the host mounts that sub-composition's primary window's
+# content inline (it does NOT open new OS windows for a nested composition). It stays a distinct type —
+# a composition is NOT a projection — so `instances_of(composition)` returns exactly the openable
+# entries. See [[mountable]].
+
+# `windows` is `window*[+]` (REFERENCE-ONLY): the host opens an OS surface per window and mounts each
+# window's `content`. Each element is a `[[^^id]]` into `projections` naming a `window` record. An
+# inline record at a child position is a TYPE ERROR, which is the by-construction death of inline
+# nesting. Exactly one window is `primary` (surface 0, the entry).
+
+# `projections` is `mountable[]` (INLINE records, own-repo bare): the flat pool. It holds every pooled
+# record, including projections and windows — a `window` record (the multi-surface root layer) is a
+# sibling branch of `mountable`, so the pool element type is the `mountable` base, not `projection`. Each
+# element carries a `^:` block-id; containers + windows reference pool siblings by `[[^^id]]`. Own-repo
+# bare, since composition is host-sdk-owned. Each inline element carries an explicit `type:` (the sealed
+# `mountable` ceiling is non-claimable, so a bare record could not synthesize its identity). The pool is
+# inline-only. The host
+# owns the authoritative pool and is the single writer; a record sends its own via `saveConfig`, merged by id.
+# (The runtime + serializer key on the field name `projections`, which holds windows too.)
+extends: mountable
+#: A typed document naming a set of windows and a flat pool of referenced projection records. The
+#: host's canonical form for a saved, mountable workspace, across one or more OS windows.
+fields:
+  #: The windows the host opens on load, each a `[[^^id]]` into `projections` naming a `window` record.
+  #: One is `primary` (surface 0, the main window); the rest are secondary surfaces of the SAME
+  #: composition. Non-empty: a composition always has at least the primary window. Reopening a saved
+  #: composition reopens its windows.
+  windows: window*[+]
+  #: The flat pool. Each element is an inline `mountable` record (a projection, or a `window` site)
+  #: carrying a `^:` block-id + an explicit `type:`; containers + windows reference siblings by `[[^^id]]`.
+  #: The tree structure lives in the reference graph, not in nesting.
+  projections?: mountable[]
+  #: The routing-config bundle: ambient defaults, explicit wires, per-node reachability, and the
+  #: initial-focus seed. A first-class part of the composition contract (not a mixin); left unset is
+  #: absence. Its type is a `composition-config` aspect, so a projection's routing edit-right is
+  #: bounded by the unchanged `edits: type<composition-config>*`.
+  intent-routing?: intent-routing
+  #: The per-file-kind default viewer config: which viewer opens each kind by default. A standalone
+  #: `composition-config` aspect (sibling to `intent-routing`); left unset means every ambiguous open
+  #: pickers until a default is authored. Opens-meta declares only ELIGIBILITY; this is the decision.
+  viewer-defaults?: viewer-defaults
+  #: The composition-wide default placeholder an EMPTY slot resolves to (the `configured` rung of the
+  #: empty-slot ladder). A standalone `composition-config` aspect (sibling to the above); a per-slot
+  #: `container-slot.placeholder` overrides it. Left unset means an empty slot falls to sole / ask.
+  slot-defaults?: slot-defaults
+  #: The grouping config: which `grouping-container` a new group is built with (`group-into`), and whether
+  #: new document panes arrive grouped (`group-new-panes`). A standalone `composition-config` aspect
+  #: (sibling to the two above). Left unset means a wrap asks the chooser
+  #: and documents open bare.
+  grouping?: grouping
+  #: The ORDERED list of active keymaps. A chord resolves over the merge of these files (global + the
+  #: focus-scoped ones whose type is focused), focus-first with list order breaking ties. Drop an entry
+  #: to turn a keymap off. A referenced-record list of shareable keymap FILES, NOT a `composition-config`
+  #: aspect. Left unset means the composition binds no keys.
+  keymaps?: keymap*[+]
+  #: Milliseconds to wait for a key-sequence continuation. Zero disables automatic expiry.
+  #: Omitted retains the dispatcher default. Inspection pauses and refills this window.
+  key-sequence-timeout-ms?: Number

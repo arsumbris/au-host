@@ -1,0 +1,29 @@
+# <au-menu-item> — one row of the floating-menu family (DropdownMenu / ContextMenu / chooser).
+#: <au-menu-item> — one menu row. A label (+ optional icon / trailing shortcut / a second muted
+#: description line), highlighted by a translucent wash (accent-soft on hover, selection-bg when active)
+#: that LIFTS on any card elevation — never a solid surface fill. active / disabled / destructive states;
+#: an optional trailing submenu chevron. Emits au-activate on click (unless disabled).
+extends: ui-component::component-contract
+fields:
+  #: The row label.
+  label?: String
+  #: An optional second, muted line (a chooser / palette row description).
+  description?: String
+  #: A leading au-icon glyph name.
+  icon?: String
+  #: Trailing mono shortcut text (e.g. ⌘K).
+  shortcut?: String
+  #: Keyboard/hover highlight — the firmer selection wash (for the arrow-keyed / hovered row).
+  active?: Boolean
+  #: Non-interactive + de-emphasized.
+  disabled?: Boolean
+  #: A destructive action — danger ink.
+  destructive?: Boolean
+  #: Show a trailing submenu chevron.
+  submenu?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-activate]
+    states: [active, disabled, destructive]
+    parts: [item, icon, label, description, shortcut, chevron]
+    preview: '<au-menu style="width:240px"><au-menu-item icon="columns" label="column" active></au-menu-item><au-menu-item icon="layout" label="tabs" description="one titled group"></au-menu-item><au-menu-item icon="trash" label="Delete" destructive></au-menu-item></au-menu>'

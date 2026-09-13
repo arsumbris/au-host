@@ -1,0 +1,87 @@
+/* EmptyState — icon + title + hint + optional CTA (derives the Welcome pattern).
+ * Centered empty-slot messaging. The CTA is the warm off-white call-to-action
+ * and honors hover/active/focus/disabled + the gallery's data-force-* mirrors. */
+
+.au-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--au-space-2);
+  padding: var(--au-space-7) var(--au-space-5);
+  color: var(--au-ink-3);
+}
+
+.au-empty-icon {
+  display: grid;
+  place-items: center;
+  margin-bottom: var(--au-space-1);
+  color: var(--au-ink-4);
+}
+
+.au-empty-title {
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-lead);
+  line-height: var(--au-lh-lead);
+  font-weight: var(--au-w-strong);
+  letter-spacing: var(--au-ls-snug);
+  color: var(--au-ink-1);
+}
+
+.au-empty-hint {
+  max-width: var(--au-side-w);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-sm);
+  line-height: var(--au-lh-body);
+  color: var(--au-ink-3);
+}
+
+.au-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-1);
+  margin-top: var(--au-space-2);
+  padding: var(--au-space-2) var(--au-space-4);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-base);
+  line-height: var(--au-lh-base);
+  font-weight: var(--au-w-medium);
+  color: var(--au-cta-ink);
+  background: var(--au-cta-bg);
+  border: 0;
+  border-radius: var(--au-radius-row);
+  cursor: pointer;
+  transition:
+    background-color var(--au-m-fast) var(--au-e-std),
+    box-shadow var(--au-m-fast) var(--au-e-std);
+}
+
+.au-empty-cta:hover,
+.au-empty-cta[data-force-hover] {
+  background: var(--au-cta-hover);
+}
+
+.au-empty-cta:active,
+.au-empty-cta[data-force-active] {
+  background: var(--au-cta-pressed);
+}
+
+.au-empty-cta:focus-visible,
+.au-empty-cta[data-force-focus] {
+  outline: var(--au-space-0-5) solid transparent;
+  outline-offset: var(--au-space-0-5);
+  box-shadow: var(--au-focus-ring);
+}
+
+.au-empty-cta:disabled,
+.au-empty-cta[data-force-disabled] {
+  color: var(--au-ink-5);
+  background: var(--au-color-surface-2);
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-empty-cta {
+    transition: none;
+  }
+}

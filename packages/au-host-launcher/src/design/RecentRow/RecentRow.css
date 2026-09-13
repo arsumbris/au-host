@@ -1,0 +1,129 @@
+/* RecentRow — a two-line "recent item" row: a name on the primary line, a mono meta line beneath,
+ * and an optional leading live / stale StatusDot. Taller than a NavItem (two lines), but the same
+ * monochrome emphasis ladder: quiet at rest, a surface TINT + hairline ring on hover, surface-2 +
+ * hairline RING when selected — NO left accent bar, NO motion. Rendered as a <button>; honors focus/disabled + the
+ * gallery's data-force-* mirrors. Tokens only; @scope-safe under `.au-recent-row`. */
+
+.au-recent-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  width: 100%;
+  padding: var(--au-space-1) var(--au-space-2);
+  border: 0;
+  border-radius: var(--au-radius-row);
+  background: none;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color var(--au-m-fast) var(--au-e-std),
+    box-shadow var(--au-m-fast) var(--au-e-std);
+}
+
+/* Leading marker slot (StatusDot / icon), aligned to the name line. */
+.au-recent-row__lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  height: var(--au-lh-sm);
+  color: var(--au-ink-4);
+}
+
+.au-recent-row__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+}
+
+.au-recent-row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--au-ink-2);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-sm);
+  line-height: var(--au-lh-sm);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-snug);
+  transition: color var(--au-m-fast) var(--au-e-std);
+}
+
+.au-recent-row__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── hover (surface tint + hairline ring, NO motion — the row never shifts) ────────────────────── */
+.au-recent-row:hover:not([data-selected]),
+.au-recent-row[data-force-hover]:not([data-selected]) {
+  background: var(--au-elev-4-fill);
+  box-shadow: var(--au-elev-4-line);
+}
+
+.au-recent-row:hover:not([data-selected]) .au-recent-row__name,
+.au-recent-row[data-force-hover]:not([data-selected]) .au-recent-row__name {
+  color: var(--au-ink-1);
+}
+
+/* ── selected / current (surface-2 + hairline ring; NO left bar) ─────────────────────────────── */
+.au-recent-row[data-selected] {
+  background: var(--au-color-surface-2);
+  box-shadow: var(--au-elev-4-line);
+}
+
+.au-recent-row[data-selected] .au-recent-row__name {
+  color: var(--au-ink-1);
+}
+
+/* ── focus ───────────────────────────────────────────────────────────────────────────────────── */
+.au-recent-row:focus-visible,
+.au-recent-row[data-force-focus] {
+  outline: none;
+  box-shadow: var(--au-focus-ring);
+}
+
+.au-recent-row[data-selected]:focus-visible,
+.au-recent-row[data-selected][data-force-focus] {
+  box-shadow: var(--au-elev-4-line), var(--au-focus-ring);
+}
+
+/* ── disabled ────────────────────────────────────────────────────────────────────────────────── */
+.au-recent-row:disabled,
+.au-recent-row[data-force-disabled] {
+  background: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.au-recent-row:disabled .au-recent-row__name,
+.au-recent-row[data-force-disabled] .au-recent-row__name {
+  color: var(--au-ink-5);
+}
+
+.au-recent-row:disabled .au-recent-row__meta,
+.au-recent-row[data-force-disabled] .au-recent-row__meta,
+.au-recent-row:disabled .au-recent-row__lead,
+.au-recent-row[data-force-disabled] .au-recent-row__lead {
+  color: var(--au-ink-5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-recent-row,
+  .au-recent-row__name {
+    transition: none;
+  }
+}

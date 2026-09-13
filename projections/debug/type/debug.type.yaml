@@ -1,0 +1,19 @@
+#: Developer tools for the host itself.
+# debug IS a `pane-projection`: a dev/debug pane that hosts debug affordances (a notification
+# test-fire today; a home for future debug tools). Kept OUT of real panes so they stay clean.
+# No config. `meta` declares its loadable code, resolved via the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[ui-notification::intent]]"
+      # The progress test-fire fires this SUBTYPE (a notifications-owned type). The gate matches by exact
+      # type, so the concrete type it fires is declared, not just the base.
+      - "[[ui-notification-progress::notifications]]"

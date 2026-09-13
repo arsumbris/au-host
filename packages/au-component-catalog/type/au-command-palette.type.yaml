@@ -1,0 +1,30 @@
+# <au-command-palette> — the ⌘K launcher of the overlay elevation family: a borderless search over
+# grouped, keyboard-first results. DATA-DRIVEN + SELF-MANAGED: the consumer passes `items`; the element
+# owns filtering, the active row, and the keyboard, and emits `au-run` with the chosen item's id. The
+# consumer decides what running MEANS (open a file, run a command) — the component stays action-agnostic.
+#
+# This is a reusable picker; the consumer owns the command registry and keybindings.
+#: <au-command-palette> — a ⌘K launcher: pass `items`, the element filters + navigates + emits au-run
+#: with the chosen id. `grouped` (default) shows section headers + icons + shortcut clusters + a footer
+#: legend; `compact` is the flat dense picker. Selection is a soft wash + ink raise, never a bright fill.
+#: Uses shared picker entrance motion. A consumer sets data-state="closed", makes the surface inert,
+#: and retains it through its finite exit animations before removal. Reduced motion settles immediately.
+extends: ui-component::component-contract
+fields:
+  #: The rows to search. Set as a PROPERTY (complex data), not an attribute. Render-resilient: empty.
+  items?: au-command-item[]
+  #: grouped (default) — section headers + shortcut clusters + footer legend; compact — flat dense list.
+  variant?: [grouped, compact]
+  #: Input placeholder.
+  placeholder?: String
+  #: Swap the leading search glyph for a spinner while results load.
+  loading?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-run]
+    states: [variant, loading]
+    parts: [palette, search, input, dismiss, list, item, label, detail, match, empty, footer]
+    # An overlay/data-heavy widget schema-synthesis can't showcase — a shell preview (items are a
+    # property, not settable via the attribute the gallery's innerHTML uses).
+    preview: |
+      <au-command-palette placeholder="Type a command or search…"></au-command-palette>

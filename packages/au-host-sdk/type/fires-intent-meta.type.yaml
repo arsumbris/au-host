@@ -1,0 +1,29 @@
+# Owned by @arsumbris/host-sdk — a host-relied meta the declared-capability gate reads.
+# The MIRROR of `handles-intent-meta`, opposite direction: the META a projection
+# carries to declare WHICH intents it FIRES — a list of def-refs to intent type-defs.
+# Read off the projection subtype's type-def in the discovery pass (the SAME fetch
+# that carries projection-runtime-meta + handles-intent-meta), so "who fires intent X"
+# is a client-side filter, no new engine read. def-ref-in-meta is engine-validated: a
+# wrong-closure target is a load error, not a silent typo.
+
+# Declared firing capabilities let the type graph answer which projections can fire an intent
+# before any runtime activity. Command registries and inspectors consume this metadata.
+
+# CHECKED, not merely declared. A declaration about what code does is a mirror nothing
+# verifies, so it drifts silently — the exact failure
+
+# names. So the runtime `host.intent.fire` is GATED on this declaration (rung 3, warn +
+# ratchet — the symmetric sibling of the `handle()` gate on handles-intent-meta), per
+
+
+
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The intents this projection TYPE fires, as def-refs to `intent` subtypes.
+  fires: type<intent>*[]

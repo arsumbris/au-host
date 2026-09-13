@@ -1,0 +1,4 @@
+type: theme
+name: Cool — Dark
+styles:
+  - ./cool-dark.theme.css

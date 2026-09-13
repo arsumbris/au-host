@@ -1,0 +1,20 @@
+# Owned by au-component-catalog. The INTERFACE for `<au-tooltip>` — the whisper tier of the overlay
+# elevation family, the smallest floating surface.
+#
+# The type NAME is the custom-element tag. This is the BUBBLE ONLY: trigger wiring, hover-intent delay,
+# and positioning belong to whoever shows it (the universal AuElement native-`title` driver via the
+# `showTooltip` seam, or a projection). The label rides the default slot.
+#: The interface for <au-tooltip>: the whisper-tier label bubble — the smallest floating overlay surface.
+#: side (pointing edge) + optional arrow; the label is slotted. Claims no overlay itself; a container floats it.
+extends: ui-component::component-contract
+fields:
+  #: The edge the bubble points FROM: `top` (default, bubble above the anchor) / `right` / `bottom` / `left`.
+  side?: [top, right, bottom, left]
+  #: Show the little pointer arrow tracking `side`. Default on.
+  arrow?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    states: [side]
+    slots: [default]
+    parts: [arrow, label]
+    preview: '<au-tooltip side="top">Rename — ⌘R</au-tooltip> <au-tooltip side="bottom" arrow>side=bottom</au-tooltip> <au-tooltip side="top">arrow=off</au-tooltip>'

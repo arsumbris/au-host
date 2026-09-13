@@ -1,0 +1,54 @@
+# Owned by component-contract. The INTERFACE for `<au-combobox>` — the filtering value-picker.
+#
+# Select that filters: au-select's surface + row recipe (leading check on the chosen row, accent-soft
+# hover, a firmer selection wash on the cursor — never a left-edge bar) plus a borderless SEARCH field,
+# an ink-WEIGHT match highlight, a no-match empty block, an optional monochrome CREATE row, an async
+# spinner/skeleton path, and an optional multi-select chip field. DATA-DRIVEN (`options` is a
+# au-combobox-option[]).
+#
+# THE OVERLAY SEAM: the popup draws into a layer CLAIMED from `host.overlay` (the `dropdown` band), never
+# a body portal nor a clip-prone inline absolute popover. FORM-ASSOCIATED: the committed value(s) cross into a native `<form>` + reset.
+#: The interface for <au-combobox>: a value-picker that filters — a field/trigger + a filterable
+#: Text-role fallbacks match the base palette when token stylesheets are absent.
+#: listbox over `options` (au-combobox-option[]) drawn through host.overlay. `trigger` or `inline` mode,
+#: single or `multiple`. Form-associated. Emits `au-change` ({value}|{values}), `au-input` {query},
+#: `au-create` {query}. Keyboard listbox nav (Arrow/Home/End/Enter/Escape/Tab).
+extends: ui-component::component-contract
+fields:
+  #: The option model. The consumer owns it; the control renders, filters + navigates.
+  options?: au-combobox-option[]
+  #: The chosen value (single-select). Empty → the placeholder shows. Form-associated.
+  value?: String
+  #: The committed values (multi-select) — rendered as chips in the field. JS property (`.values`).
+  values?: String[]
+  #: Multi-select: pick toggles membership, the popup stays open across picks, chips fill the field.
+  multiple?: Boolean
+  #: `trigger` (default — the search lives in the popup) or `inline` (the field IS the filter).
+  mode?: [trigger, inline]
+  #: Field placeholder when nothing is committed.
+  placeholder?: String
+  #: Placeholder for the in-popup search field (trigger mode).
+  searchPlaceholder?: String
+  #: Whether typing narrows the list at all (default on).
+  filterable?: Boolean
+  #: Remote filter: the control stops filtering internally (treats `options` as already-filtered) and
+  #: reports each keystroke via `au-input`. Pair with `loading`.
+  remote?: Boolean
+  #: Async: swaps the search magnifier for a spinner and shows skeleton rows / dims the prior set.
+  loading?: Boolean
+  #: Offer a monochrome “Add ‘<query>’” row when the query matches no existing label. Emits `au-create`.
+  creatable?: Boolean
+  #: Non-interactive + de-emphasized. Reflected.
+  disabled?: Boolean
+  #: Accessible name for the field + listbox.
+  label?: String
+  #: Whether the popup is open. Reflected — set it to seed an open preview.
+  open?: Boolean
+  #: The live filter query. Seed it to show a filtered / no-match / create preview.
+  query?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change, au-input, au-create]
+    states: [disabled, open, multiple, loading]
+    parts: [trigger, control, input, icon, value, chevron, popup]
+    preview: '<au-combobox placeholder="Search countries…"></au-combobox>'

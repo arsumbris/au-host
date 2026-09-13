@@ -1,0 +1,31 @@
+# <au-table> — the monochrome data grid. Slot au-table-head / au-table-body.
+#: <au-table> — the monochrome data grid. Slot <au-table-head> / <au-table-body> holding rows + cells;
+#: columns align across rows via display:table, wrapped in a thin horizontal-scroll sliver. `dense`
+#: tightens the vertical rhythm. Sortable headers (au-table-header-cell) + selectable rows (au-table-row)
+#: are their own concern; the cross-shadow state (dense padding, hover/selected ink) rides inherited vars.
+extends: ui-component::component-contract
+fields:
+  #: Tighten the vertical rhythm — half-height cell padding.
+  dense?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [grid]
+    preview: |
+      <au-table>
+        <au-table-head>
+          <au-table-row>
+            <au-table-header-cell>Name</au-table-header-cell>
+            <au-table-header-cell align="end">Count</au-table-header-cell>
+          </au-table-row>
+        </au-table-head>
+        <au-table-body>
+          <au-table-row>
+            <au-table-cell>alpha</au-table-cell>
+            <au-table-cell align="end">12</au-table-cell>
+          </au-table-row>
+          <au-table-row>
+            <au-table-cell>beta</au-table-cell>
+            <au-table-cell align="end" muted>3</au-table-cell>
+          </au-table-row>
+        </au-table-body>
+      </au-table>

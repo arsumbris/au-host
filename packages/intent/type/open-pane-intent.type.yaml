@@ -1,0 +1,35 @@
+# Owned by the `intent` package.
+# "Place THIS projection instance as a pane." The payload is a caller-supplied projection
+# CONFIG (e.g. an agent terminal), which the MRU-focused container that handles the verb
+# mounts as a new permanent pane. General open-a-pane verb; bento and tabs handle it today.
+#
+# Distinct from `open-intent` (which names a TARGET, a selection, and lets the container pick
+# the viewer) and from `show-pane-intent` (which names a pane TYPE to reveal-or-create). This
+# one ships the whole instance to mount.
+#
+# The payload `pane` is `opaque`: OPAQUE to the intent vocab (the container interprets it as a
+# projection config, the intent package never does), which is exactly why its TS type is
+# `unknown`. Typing it `projection&` would falsely claim the intent validates it; leaving it the
+# interpreted top type `any` would claim its nested `type:` as an edge, which the fence forbids.
+#
+# NOT agent-firable, and the gate refuses it TWICE over. `firable: false` states the answer on
+# the record; and even were it true, `opaque` admits arbitrary mountable content, which the
+# agent-intent gate treats as `privileged-payload` regardless of any marker.
+#
+# Routing metadata rides the type-def: routed + ambient. The MRU-focused
+# handler claims it (claim/decline).
+#: Place a caller-supplied projection instance as a new pane. Routed + ambient: the
+#: MRU-focused container that handles it claims it and splits the pane in. Its payload
+#: is a projection CONFIG, so it is never agent-firable.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: intent-agent-meta
+    firable: false
+fields:
+  #: The projection instance to mount, OPAQUE to the intent vocab (the container interprets it).
+  #: `opaque` is the privileged payload: arbitrary mountable content, which is why the verb is
+  #: never firable, and it is why the TS type is `unknown`.
+  pane: opaque

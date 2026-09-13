@@ -1,0 +1,13 @@
+# <au-toolbar-spacer> — the flexible gap that pushes trailing controls to the far edge of an <au-toolbar>.
+#: <au-toolbar-spacer> — a flex spacer (flex:1) inside an <au-toolbar>; it pushes the controls after it
+#: to the far edge. No content.
+extends: ui-component::component-contract
+fields: {}
+meta:
+  - type: ui-component-meta::component-contract
+    preview: |
+      <au-toolbar aria-label="Split" style="width:280px">
+        <au-button size="sm" variant="ghost">Left</au-button>
+        <au-toolbar-spacer></au-toolbar-spacer>
+        <au-button size="sm" variant="ghost">Right</au-button>
+      </au-toolbar>

@@ -1,0 +1,18 @@
+# Test-only guarded pane preserves unsaved input when closing is vetoed.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^guarded]]"
+      - "[[^^other]]"
+  - ^: guarded
+    type: guarded-pane::e2e-vault
+  - ^: other
+    type: file-tree::file-tree

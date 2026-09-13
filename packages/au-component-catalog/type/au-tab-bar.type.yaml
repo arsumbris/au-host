@@ -1,0 +1,30 @@
+# Owned by component-contract. The INTERFACE for `<au-tab-bar>` — the pane/editor tab strip.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# slots, and the gallery sample. `tabs` is DATA (a au-tab-bar-item[]); the parent owns the model, the bar
+# owns only chrome behaviour (pinned sort, roving-focus, scroll-into-view, scrim state, middle-click close).
+# Imperative chrome geometry (no model mutation): tabCellRects() returns visual cells;
+# tabTrackRect() returns the visible track excluding actions; scrollDragEdge(x, y, elapsedMs)
+# scrolls at a held pointer near either track edge and returns whether scrolling occurred.
+# A container calls this only during an active drag and re-resolves its target after scrolling.
+# The gallery's overflow example exercises the same edge-scroll method without reordering.
+#: The interface for <au-tab-bar>: a scrolling row of tabs over a strip with edge scrims. Emits
+#: `au-select {id}` / `au-close {id}` / `au-add`. The container owns drag-to-reorder.
+extends: ui-component::component-contract
+fields:
+  #: The tab model. The parent owns it; the bar renders + orders (pinned to front).
+  tabs?: au-tab-bar-item[]
+  #: The selected tab's id. The track reveals it on selection and when the available track size changes.
+  activeId?: String
+  #: The id of the tab being dragged (the container sets it from its drag store); that cell lifts.
+  draggingId?: String
+  #: Show the add (+) button in the track (emits `au-add`).
+  add?: Boolean
+  #: Whether tabs carry a close affordance + middle-click close. Default true.
+  closable?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-select, au-close, au-add]
+    # `leading` sits before the track; `actions` is the trailing cluster (behind a hairline divider).
+    slots: [leading, actions]
+    preview: '<au-tab-bar add style="max-width: 420px"></au-tab-bar>'

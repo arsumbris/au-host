@@ -1,0 +1,9 @@
+# A capable spatial container creates an empty split beside its active position.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: New split down
+    category: Layout

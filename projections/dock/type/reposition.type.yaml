@@ -1,0 +1,25 @@
+# Owned by `dock`, not the shared `intent` package, because it is dock-specific: only dock
+# fires it and only dock handles it. A dock bar fires it for ITSELF to move to another edge;
+# dock re-parents the firer to that edge. The way `editor-pane` belongs to editor, this verb
+# belongs to the container whose layout dialect it names (dock edges).
+#
+# NOT agent-firable, for the same structural reason as `promote-intent`: it is `firer-relative`
+# and means "move ME". The handler acts on whoever fired it; an agent fires from the socket,
+# which enters the tree at the ROOT with no node identity, so there is nothing to be relative
+# TO. Declared `false` on the record rather than omitted.
+#
+# `extends: intent::au-host-sdk` — the intent base + `intent-routing-meta` are host-sdk-owned (the
+# mechanism), so those are `::au-host-sdk`-qualified; `intent-agent-meta` stays in `packages/intent`
+# (agent-governance vocab), so it is `::intent`. dock deps both.
+#: Move the FIRING dock bar to a given edge. Fired by a bar for ITSELF; dock re-parents it.
+#: Routed + firer-relative, so never agent-firable.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: firer-relative
+  - type: intent-agent-meta::intent
+    firable: false
+fields:
+  #: Which dock edge to move the firing bar to.
+  edge: [top, bottom, left, right]

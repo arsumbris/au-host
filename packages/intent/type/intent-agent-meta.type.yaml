@@ -1,0 +1,38 @@
+# Owned by the `intent` package (NOT the SDK).
+# WHETHER AN AGENT MAY FIRE THIS INTENT — the trust declaration, read off the intent
+# TYPE-DEF by the host's `fireIntent` gate before anything reaches the intent tree.
+
+# DEFAULT-DENY. The host refuses any intent whose type-def does not carry this block with
+# `firable: true`, so an intent that says nothing is not firable over the agent-host socket.
+# That socket accepts every connection with no credential or peer check, and a local agent
+# with shell access can reach it. The gate prevents agent-firable intents from admitting
+# privileged payloads.
+
+# SEPARATE FROM `intent-routing-meta`, deliberately. That block answers HOW THE HOST ROUTES
+# an intent (`kind` / `dispatch`); this one answers WHETHER A CALLER MAY SEND IT AT ALL.
+# Routing is on every intent and says nothing about trust, so folding a trust key into it
+# would make "which intents carry an agent declaration" unaskable — the query would return
+# every intent and the answer would live inside.
+
+# IT DOES NOT OVERRIDE THE DERIVED CHECK. An intent whose type-def declares a field admitting
+# an arbitrary projection config (or a bare `any`) is privileged BY ITS PAYLOAD and is refused
+# regardless of what this block says: the payload is what makes it dangerous, not the verb
+# name, and a third-party container could accept one tomorrow. That check needs no declaration
+# because the field's own shape already states it.
+
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+#: Whether an AGENT may fire this intent over the agent-host socket. Default-deny: an
+#: intent with no such block is refused. Separate from routing metadata, which says how
+#: the host dispatches an intent rather than who may send it.
+extends: au.engine.meta::au-engine
+fields:
+  #: `true` = an agent may fire this intent. `false` = it may not, and saying so
+  #: explicitly is the point — the field is REQUIRED inside the block, so declaring the
+  #: block is an explicit yes or an explicit no, never a shrug. A refusal still stands
+  #: when the intent's payload is privileged by shape.
+  firable: Boolean

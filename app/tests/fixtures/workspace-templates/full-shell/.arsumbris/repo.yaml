@@ -1,0 +1,13 @@
+type: au.engine.repo::au-engine
+name: full-shell
+description: Files, writing, connections and a terminal, together.
+deps:
+  - name: au-host-sdk
+  - name: intent
+  - name: sandwich
+  - name: tabs
+  - name: file-tree
+  - name: editor
+  - name: backlinks
+  - name: terminal
+  - name: column

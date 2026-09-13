@@ -1,0 +1,14 @@
+# VIEW-STATE-RESTORE fixture — a single editor pane on a LONG file (view-state-long.md), so the editor
+# scrolls. The view-state-restore E2E scrolls it, restarts the app, and asserts the boot hydrate restored
+# the scroll — the regression lock for main-window view-state hydration (mountRootPortal → hydrateViewState).
+type: composition::au-host-sdk
+windows:
+  - "[[^^au-window-primary]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^main]]"
+    ^: au-window-primary
+  - ^: main
+    type: editor-pane::editor
+    file: view-state-long.md

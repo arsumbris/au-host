@@ -1,0 +1,31 @@
+/* Discovered through projection metadata, including before a terminal is mounted. */
+@property --au-terminal-font-size {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 13px;
+}
+/* Unitless leading scales with terminal text rather than the surrounding app controls. */
+@property --au-terminal-line-height {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1.2307692307692308;
+}
+:root {
+  --au-terminal-font-size: var(--au-t-sm);
+}
+
+/* Foreground correction preserves ANSI backgrounds; 1 disables adjustment. */
+@property --au-terminal-minimum-contrast {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 4.5;
+}
+/* Reference for native material or image-backed surfaces whose pixels CSS cannot resolve. */
+@property --au-terminal-contrast-ground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171512;
+}
+:root {
+  --au-terminal-contrast-ground: var(--au-color-surface-1);
+}

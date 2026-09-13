@@ -1,0 +1,28 @@
+{
+  "name": "@arsumbris/au-host-launcher",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./workspace-create": "./src/WorkspaceCreate.tsx",
+    "./mist": "./src/design/Mist/mistEngine.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/au-avatar": "workspace:*",
+    "@arsumbris/au-host-app": "workspace:*",
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "clsx": "^2.1.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "@arsumbris/style": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^6.0.3"
+  }
+}

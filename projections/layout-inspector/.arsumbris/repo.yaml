@@ -1,0 +1,7 @@
+# Repo identity + deps (au.engine.repo). Its type-def claims `pane-projection` and
+# `projection-runtime-meta` from au-host-sdk, and the peer gate needs those DECLARED.
+type: au.engine.repo::au-engine
+name: layout-inspector
+description: a read-only view of the composition's own structure — what nests in what, and which positions carry rules
+deps:
+  - name: au-host-sdk

@@ -1,0 +1,27 @@
+# A sandwich with a nested bento editor at left and a file-tree at center.
+# Floating or moving the editor supplies its occupant pool ID. Bento must resolve it
+# to the leaf position before extraction. The file-tree keeps the source layout nonempty.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^grid]]"
+    center: "[[^^tree]]"
+  - ^: grid
+    type: bento::bento
+    root: "[[^^ed]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

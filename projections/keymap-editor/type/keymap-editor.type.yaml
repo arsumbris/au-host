@@ -1,0 +1,11 @@
+# keymap-editor IS a projection subtype. A pane that reads the composition's active keymaps
+# (host.keymaps) + the discoverable keymap FILES + the command registry, and lets a user manage the active
+# list (add / remove / reorder — every layer removable, nothing hidden) and REBIND a keybind's chord (via
+# <au-chord-input>), writing the keymap file (copy-on-edit for a consumed one). No durable config.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

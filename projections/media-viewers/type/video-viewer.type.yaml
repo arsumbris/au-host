@@ -1,0 +1,15 @@
+extends: pane-projection::au-host-sdk
+fields:
+  file?: String
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Video preview
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    export: video
+    contractVersion: 7
+  - type: opens-meta::au-host-sdk
+    opens: [mp4, webm, mov, m4v]
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"

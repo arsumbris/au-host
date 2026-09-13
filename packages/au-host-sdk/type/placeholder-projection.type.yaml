@@ -1,0 +1,14 @@
+# Owned by au-host-sdk. What an EMPTY SLOT shows — a content picker, a recents launcher, a dashboard,
+# a blank. A `projection` KIND, sibling to pane / container / bar projections, with its own locator
+# (each concrete subtype declares its own `projection-runtime-meta`, inherited-required from `projection`).
+
+# An empty slot is a GENUINE state (no phantom occupant); the substrate resolves WHICH placeholder shows
+# through the one host decision ladder (a configured default, else the sole installed one, else an in-pane
+# ask) and mounts it inline. The resolved placeholder then renders its OWN content. A placeholder that
+# declares `handles: open-intent` is a NORMAL handler in focus-MRU routing, so opening a file into an empty
+# slot fills it by ordinary rules; one that declares none simply is not an open target.
+
+# Abstract: a projection kind. Only concrete placeholder subtypes are ever mounted.
+abstract: true
+extends: projection
+fields: {}

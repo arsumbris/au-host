@@ -1,0 +1,42 @@
+# file-tree IS a projection subtype. Minimal config (it reads
+# the vault root); `meta` declares its loadable code, read via the type owner.
+extends: pane-projection::au-host-sdk
+fields:
+  #: Follow the ACTIVE FILE: when the enclosing selection changes, unfold this tree to that file
+  #: and scroll it into view. Absent = false, so an unconfigured tree is unchanged.
+  #:
+  #: This is DELIBERATELY NOT a global preference. "The active file changed" is STANDING STATE, so
+  #: it rides the selection channel; whether a given tree FOLLOWS is that tree's own business, and
+  #: per-instance means two trees can differ (a workspace tree that follows, a scoped tree that
+  #: does not). The setting belongs to the file tree that owns the reveal behavior.
+  #:
+  #: The explicit reveal (a go-to-def) is a different path and needs no field: it arrives as a
+  #: `ui-intent-highlight` broadcast and is always honoured. This gates only the PASSIVE follow.
+  revealActiveFile?: Boolean
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Files
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this projection HANDLES (typed capability). Discovered in the
+  # `subtypes('projection')` pass; the runtime handler binds at mount. The file-tree handles
+  # ui-intent-highlight (flashes the row for the target file).
+
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[filter-intent::intent]]"
+      - "[[create-file-intent::intent]]"
+      - "[[ui-intent-highlight::intent]]"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"
+      - "[[open-pane-intent::intent]]"
+      - "[[show-pane-intent::intent]]"
+      - "[[reveal-pane-intent::intent]]"
+      - "[[ui-notification::intent]]"

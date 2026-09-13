@@ -1,0 +1,26 @@
+# <au-pane-target> — a pane offered as a SELECTION target. The sibling of <au-drop-zone>.
+#: <au-pane-target> — a pane offered as a SELECTION target, the interactive sibling of <au-drop-zone>.
+#: An absolute overlay docked over a candidate pane's rect: a receiver frame (the drop-zone's hairline +
+#: soft ink fill vocabulary) with a resting and a highlighted (`active`) state, an optional keyboard letter
+#: HINT (an <au-kbd> keycap, top-left) and an optional caption LABEL (a mono chip, centered). Unlike the
+#: drop-zone it is INTERACTIVE — hover lifts the frame, a click emits `au-activate`. The spatial
+#: presentation of the host chooser's CHOOSE strategy (dock "into which container?", and any ambiguous
+#: ambient intent). Positioned by the host from a live getBoundingClientRect.
+extends: ui-component::component-contract
+fields:
+  #: Highlighted (the keyboard/arrow-nav selection). Reflected. Default false.
+  active?: Boolean
+  #: The keyboard letter-hint shown as an <au-kbd> keycap, top-left. Absent = no hint.
+  hint?: String
+  #: An optional caption naming what picking does (e.g. the container name), a mono chip centered over the pane.
+  label?: String
+  #: Non-selectable (dimmed, pointer-events off). Reflected. Default false.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [frame, hint, label]
+    events: [au-activate]
+    preview: |
+      <div style="position:relative;width:220px;height:130px;border:1px solid var(--au-line-1);border-radius:var(--au-radius-md);overflow:hidden;isolation:isolate">
+        <au-pane-target active hint="a" label="Add tab" style="left:0;top:0;right:0;bottom:0"></au-pane-target>
+      </div>

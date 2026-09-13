@@ -1,0 +1,35 @@
+# Two declared windows, each with editor content and a default keymap.
+# The secondary window contains two tabs. ⌘W there closes its focused tab through the
+# originating window’s focus identity while leaving the main editor unchanged.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w0]]"
+  - "[[^^w1]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed0]]"
+    ^: w0
+  - type: window::au-host-sdk
+    content: "[[^^tabs]]"
+    ^: w1
+  - ^: ed0
+    type: editor-pane::editor
+    file: refs-sample.md
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^a]]"
+      - "[[^^b]]"
+  - ^: a
+    type: editor-pane::editor
+    file: sample.md
+  - ^: b
+    type: editor-pane::editor
+    file: other.md

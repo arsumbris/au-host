@@ -1,0 +1,95 @@
+# Owned by au-host-sdk (the keybinds vocabulary). A NAMED ENUM — the closed vocabulary of bindable keys.
+# One member per bindable key, the canonical name for an `event.code`.
+
+# NAMING. Letters strip the `Key` prefix (`KeyS` -> `s`). Digits keep a letter-led form (`Digit1` ->
+# `digit1`), because an enum member must start with a letter. Every other key is the lowercased
+# `event.code` (`Slash` -> `slash`, `ArrowUp` -> `arrowup`, `F1` -> `f1`, `PageUp` -> `pageup`).
+
+# ONE SOURCE. The runtime canonicalizer (event.code -> key-name) produces exactly these members, and
+# `gen:types` emits a `KeyName` type both it and the `<au-chord-input>` capture element are typed against.
+# So the vocabulary has one source; a keymap naming a key outside this set is a load error.
+
+# CORE SET, grows additively. This is the core (letters, the digit row, f1-f12, arrows, whitespace + nav,
+# common punctuation). Adding a member is non-breaking. Excluded until a binding demands them: numpad,
+# f13-f24, media / system / browser keys, international / lang keys, and bare modifier keys.
+
+shape:
+  # letters — event.code KeyA..KeyZ, prefix stripped
+  - a
+  - b
+  - c
+  - d
+  - e
+  - f
+  - g
+  - h
+  - i
+  - j
+  - k
+  - l
+  - m
+  - n
+  - o
+  - p
+  - q
+  - r
+  - s
+  - t
+  - u
+  - v
+  - w
+  - x
+  - y
+  - z
+  # the digit row — event.code Digit0..Digit9, letter-led
+  - digit0
+  - digit1
+  - digit2
+  - digit3
+  - digit4
+  - digit5
+  - digit6
+  - digit7
+  - digit8
+  - digit9
+  # function keys
+  - f1
+  - f2
+  - f3
+  - f4
+  - f5
+  - f6
+  - f7
+  - f8
+  - f9
+  - f10
+  - f11
+  - f12
+  # arrows
+  - arrowup
+  - arrowdown
+  - arrowleft
+  - arrowright
+  # whitespace + navigation
+  - enter
+  - tab
+  - escape
+  - space
+  - backspace
+  - delete
+  - home
+  - end
+  - pageup
+  - pagedown
+  # common punctuation
+  - minus
+  - equal
+  - bracketleft
+  - bracketright
+  - backslash
+  - semicolon
+  - quote
+  - backquote
+  - comma
+  - period
+  - slash

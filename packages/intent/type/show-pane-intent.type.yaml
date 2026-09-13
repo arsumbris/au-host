@@ -1,0 +1,32 @@
+# Owned by the `intent` package.
+# "Make a pane of this KIND visible." Reveal-or-create: the MRU-focused container that handles
+# it either focuses an existing pane whose config `type` matches, or instantiates a BARE pane
+# of that type and splits it in. Claim/decline.
+#
+# The payload is a bare projection TYPE NAME, never a config: the container instantiates
+# `{ type: paneType }` itself, so the firer supplies no fields and authors nothing. That is
+# what keeps this benign where `open-pane-intent` is privileged — one names a type the
+# workspace already knows, the other ships arbitrary content to mount.
+#
+# AGENT-FIRABLE. "Show me the file tree / diagnostics" is a benign, canonical agent UI verb,
+# and its payload names a type rather than supplying a config, so the gate's payload check
+# leaves it allowed.
+#
+# Routing metadata rides the type-def: routed + ambient.
+#: Reveal-or-create a pane of a given type. Routed + ambient: the MRU-focused container
+#: that handles it focuses a matching pane or creates a bare one. Agent-firable: it names
+#: a type, never a config.
+extends: intent::au-host-sdk
+meta:
+  - type: command-meta::au-host-sdk
+    label: Show projection…
+    category: Navigation
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: intent-agent-meta
+    firable: true
+fields:
+  #: The projection type name to reveal-or-create. A bare type name; the container
+  #: instantiates `{ type: paneType }`, authoring no other fields.
+  paneType: String

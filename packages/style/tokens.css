@@ -1,0 +1,147 @@
+/* @arsumbris/style — first-party design tokens.
+ *
+ * Declared with CSS @property: each token is TYPED (syntax), inheritable, and carries a
+ * default (initial-value). This makes tokens:
+ *   - runtime-discoverable via the CSSOM (walk `CSSPropertyRule` in document.styleSheets),
+ *   - the source of truth for theming (a theme overrides via :root / injected --au-*),
+ *   - the shipped crafted-default look (initial-value IS the default).
+ *
+ * The host imports this once at the renderer root; every projection inherits the tokens
+ * through the shared-DOM cascade. A projection consumes them with `var(--au-...)`, and may
+ * declare its OWN --au-<projection>-* tokens (see the customTokenEntry meta locator).
+ *
+ * Naming: tokens follow a `--au-<group>-<prop>` convention (color, radius, space, font) so a
+ * theming pane auto-derives each token's group from its name and its control from its syntax.
+ * Projection tokens use `--au-<projection>-...`.
+ *
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+/* surface + text */
+@property --au-color-bg      { syntax: "<color>"; inherits: true; initial-value: #16181d; }
+@property --au-color-surface { syntax: "<color>"; inherits: true; initial-value: #1e2128; }
+@property --au-color-border  { syntax: "<color>"; inherits: true; initial-value: #2c303a; }
+@property --au-color-text    { syntax: "<color>"; inherits: true; initial-value: #d6d9e0; }
+@property --au-color-muted   { syntax: "<color>"; inherits: true; initial-value: #8a8f9d; }
+
+/* accent + status */
+@property --au-color-accent  { syntax: "<color>"; inherits: true; initial-value: #6dbbec; }
+@property --au-color-ok      { syntax: "<color>"; inherits: true; initial-value: #76cd98; }
+@property --au-color-warn    { syntax: "<color>"; inherits: true; initial-value: #e6b55d; }
+@property --au-color-danger  { syntax: "<color>"; inherits: true; initial-value: #fb817c; }
+@property --au-color-anchor  { syntax: "<color>"; inherits: true; initial-value: #cf9fe5; } /* block-ids / anchors */
+@property --au-color-cyan    { syntax: "<color>"; inherits: true; initial-value: #72d0d0; } /* bool values */
+
+/* text selection — mostly-transparent by default so selected text stays readable,
+ * whatever color it is. A theme may override to a solid color (then also set a selected-text color
+ * if it wants an inverted look). Consumed by the editor's CodeMirror selection layer. */
+@property --au-color-selection { syntax: "<color>"; inherits: true; initial-value: rgba(109, 187, 236, 0.35); }
+
+/* radius */
+@property --au-radius-sm   { syntax: "<length>"; inherits: true; initial-value: 5px; }
+@property --au-radius-md   { syntax: "<length>"; inherits: true; initial-value: 8px; }
+@property --au-radius-pill { syntax: "<length>"; inherits: true; initial-value: 99px; }
+
+/* density multiplier — scales the spacing scale. 1 = default; a theme/user may set
+ * e.g. 0.85 (compact) / 1.15 (comfortable). */
+@property --au-density { syntax: "<number>"; inherits: true; initial-value: 1; }
+
+/* spacing — initial-value must be computationally independent (no var()), so it stays the
+ * concrete base; the live density-aware value is set in :root below. */
+@property --au-space-1 { syntax: "<length>"; inherits: true; initial-value: 4px; }
+@property --au-space-2 { syntax: "<length>"; inherits: true; initial-value: 8px; }
+@property --au-space-3 { syntax: "<length>"; inherits: true; initial-value: 12px; }
+@property --au-space-4 { syntax: "<length>"; inherits: true; initial-value: 16px; }
+@property --au-space-5 { syntax: "<length>"; inherits: true; initial-value: 20px; }
+
+:root {
+  --au-space-1: calc(4px * var(--au-density));
+  --au-space-2: calc(8px * var(--au-density));
+  --au-space-3: calc(12px * var(--au-density));
+  --au-space-4: calc(16px * var(--au-density));
+  --au-space-5: calc(20px * var(--au-density));
+}
+
+/* typography — font stacks are not a typed CSS value, so syntax is the universal "*". */
+@property --au-font-sans { syntax: "*"; inherits: true; initial-value: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+@property --au-font-mono { syntax: "*"; inherits: true; initial-value: ui-monospace, 'SF Mono', monospace; }
+
+/*
+ * Shared motion, easing, elevation and material tokens.
+ * Every @property initial-value is computationally independent so the browser can register it.
+ * Themes override these values through the cascade; check-initial-values.ts validates declarations.
+ */
+
+/* MOTION — durations. instant is a 0ms convenience; the reduced-motion snap is the @media at the end
+ * of this section. Names: fast / base / slow / cinema. */
+@property --au-m-instant { syntax: "<time>"; inherits: true; initial-value: 0ms; }
+@property --au-m-fast    { syntax: "<time>"; inherits: true; initial-value: 160ms; }
+@property --au-m-base    { syntax: "<time>"; inherits: true; initial-value: 220ms; }
+@property --au-m-slow    { syntax: "<time>"; inherits: true; initial-value: 420ms; }
+@property --au-m-cinema  { syntax: "<time>"; inherits: true; initial-value: 780ms; }
+
+/* EASING — a cubic-bezier is not a typed CSS value, so syntax is "*" and the bezier initial is legal. */
+@property --au-e-std  { syntax: "*"; inherits: true; initial-value: cubic-bezier(0.2, 0, 0, 1); }    /* standard  */
+@property --au-e-soft { syntax: "*"; inherits: true; initial-value: cubic-bezier(0.22, 1, 0.36, 1); } /* entrance  */
+@property --au-e-deep { syntax: "*"; inherits: true; initial-value: cubic-bezier(0.16, 1, 0.3, 1); }  /* exit      */
+@property --au-e-move { syntax: "*"; inherits: true; initial-value: cubic-bezier(0.77, 0, 0.175, 1); }/* transport */
+
+/* ELEVATION LADDER — a surface-tint FILL + a hairline LINE per tier; NO drop shadow on tiers 1-5. The
+ * `1px` in the line recipes is the sanctioned hairline exception. These initials are the warm-mono
+ * crafted default; the design kit's ext.css re-binds --au-elev-*-fill/line to its surface/hairline
+ * ladders in :root so its presets propagate (a neutral-only consumer keeps these static defaults). The
+ * two floating shadows (glass/header), the peek + thumb drops, and the modal scrim carry the real
+ * shadows. */
+@property --au-elev-1-fill { syntax: "<color>"; inherits: true; initial-value: #0d0c0b; }
+@property --au-elev-2-fill { syntax: "<color>"; inherits: true; initial-value: #100e0c; }
+@property --au-elev-3-fill { syntax: "<color>"; inherits: true; initial-value: #15130f; }
+@property --au-elev-4-fill { syntax: "<color>"; inherits: true; initial-value: #1c1a15; }
+@property --au-elev-5-fill { syntax: "<color>"; inherits: true; initial-value: #25221c; }
+
+@property --au-elev-1-line { syntax: "*"; inherits: true; initial-value: none; }
+@property --au-elev-2-line { syntax: "*"; inherits: true; initial-value: inset -1px 0 0 rgba(245, 243, 238, 0.055); }
+@property --au-elev-3-line { syntax: "*"; inherits: true; initial-value: inset 0 0 0 1px rgba(245, 243, 238, 0.055); }
+@property --au-elev-4-line { syntax: "*"; inherits: true; initial-value: inset 0 0 0 1px rgba(245, 243, 238, 0.09); }
+@property --au-elev-5-line { syntax: "*"; inherits: true; initial-value: inset 0 0 0 1px rgba(245, 243, 238, 0.14); }
+
+@property --au-sh-glass  { syntax: "*"; inherits: true; initial-value: 0 0 0 1px rgba(245, 243, 238, 0.06), inset 0 1px 0 rgba(245, 243, 238, 0.04), 0 24px 64px -16px rgba(0, 0, 0, 0.6); }
+@property --au-sh-header { syntax: "*"; inherits: true; initial-value: 0 1px 0 rgba(245, 243, 238, 0.06), 0 8px 24px -16px rgba(0, 0, 0, 0.4); }
+
+/* PEEK FLOAT — the HoverCard / preview-overlay drop: a two-layer pure-black drop (deep ambient blur +
+ * tight contact). Drop-only — the peek draws its own hairline, so this omits the glass ring + inset. */
+@property --au-sh-pop { syntax: "*"; inherits: true; initial-value: 0 12px 40px -8px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35); }
+
+/* SCRIM — the one shared modal dim. Warm-black (a desk-step alpha), not pure black. */
+@property --au-scrim { syntax: "<color>"; inherits: true; initial-value: rgba(5, 4, 3, 0.62); }
+
+/* THUMB LIFT — the sole small drop shadow below the sh-* floating pair (Slider thumb). Warm-black. */
+@property --au-sh-lift { syntax: "*"; inherits: true; initial-value: 0 1px 2px rgba(5, 4, 3, 0.25); }
+
+/* MATERIAL — the chrome's SUBSTANCE: opaque <-> frosted glass, a theme property never a hardcode.
+ *   --au-material-blur   backdrop-filter blur radius on chrome surfaces (panes, palette). 0px = none.
+ *   --au-surface-alpha   how opaque a chrome fill paints; a surface mixes its own fill with transparent
+ *                        by this fraction (1 = solid).
+ * OPAQUE DEFAULT: blur 0, alpha 1 — chrome paints solid. FROSTED: a theme lifts blur and drops alpha,
+ * frosting the app's OWN content behind it. IN-APP frost only (a CSS backdrop-filter over rendered
+ * content); it never touches the Electron window. Both initials are computationally independent, so
+ * there is no :root derivation — the consuming chrome does the color-mix inline against its own fill. */
+@property --au-material-blur  { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --au-material-filter { syntax: "*"; inherits: true; initial-value: none; }
+@property --au-surface-alpha  { syntax: "<number>"; inherits: true; initial-value: 1; }
+
+/*
+ * Reduced-motion media queries set animation durations near zero. The browser applies these
+ * overrides independently of theme discovery, which skips CSSMediaRule entries.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --au-m-instant: 0ms;
+    --au-m-fast: 0.01ms;
+    --au-m-base: 0.01ms;
+    --au-m-slow: 0.01ms;
+    --au-m-cinema: 0.01ms;
+  }
+}

@@ -1,0 +1,30 @@
+/* Icon — the inline-SVG primitive. Token-only, @scope-safe (.au-icon + [data-size] hooks).
+ *
+ * The box is `1em` square; `font-size` (bound to the type ramp) is the single size knob, so an icon
+ * scales with the exact --au-t-* token the surrounding text uses. Stroke color is `currentColor`,
+ * so an icon inherits the ink of its context — no per-icon color rule needed. No raw px (the `1em`
+ * box and the type-token font-sizes carry every dimension). */
+
+.au-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 1em;
+  height: 1em;
+  font-size: var(--au-t-title); /* md default → 20px via the ramp */
+  color: inherit;
+  vertical-align: -0.125em; /* optical mid-cap alignment beside text */
+  overflow: visible;
+}
+
+.au-icon[data-size='xs'] {
+  font-size: var(--au-t-xs);
+}
+.au-icon[data-size='sm'] {
+  font-size: var(--au-t-body);
+}
+.au-icon[data-size='md'] {
+  font-size: var(--au-t-title);
+}
+.au-icon[data-size='lg'] {
+  font-size: var(--au-t-h2);
+}

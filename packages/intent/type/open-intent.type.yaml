@@ -1,0 +1,55 @@
+# STAND-IN type-def, owned by the `intent` package.
+# "Open this target." `target` is a selection (a file-selection names the file to
+# open). `mode` disposes of HOW the container opens it:
+#   - transient   — a preview, reused + replaced in place.
+#   - permanent   — a persistent tab (double-click / an edit promotes here).
+#   - preview-pin — PIN the container's current preview (promote it), then open this
+#                   target as a NEW preview (the cmd/ctrl+click "keep + peek next").
+# The focused container that declares the `open-intent` capability handles it, and
+# decides HOW (bento -> a tab, a canvas -> a node).
+
+# `mode` IS OPTIONAL, and its two states mean different things:
+#   - PRESENT — the firer is being EXPLICIT, because a GESTURE said so. A double-click
+#     means "I want this kept"; a cmd-click means "pin what I am previewing, peek the
+#     next". That is genuine firer knowledge and the container honours it.
+#   - ABSENT  — the firer has NO OPINION. The CONTAINER decides, which is where
+#     realization already lives: `tabs` owns preview, `bento` cannot preview at all.
+#     A container may carry an AUTHORED default, so one group differs from another.
+
+# Transient-vs-permanent is a REALIZATION detail, so `mode` is optional.
+# The ENUM is needed because `preview-pin` cannot be expressed as a boolean.
+# An app-global open-mode preference would put realization back in the firer and
+# could never vary per group.
+
+
+# Routing metadata rides the type-def: routed + ambient. The constructor threads it onto the fired payload
+#: Open a target in the focused container. Routed + ambient: the MRU-focused
+#: container that handles open-intent claims it and decides HOW (bento a tab, a
+#: canvas a node); `mode` disposes of the tab lifecycle.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  # AGENT-FIRABLE. Opening a file is the agent's canonical UI verb, and au-mcp already
+  # fires it live over the host socket. Its payload is a SELECTION (a path plus an optional
+  # range), never a projection config, so it names a target the workspace already holds
+  # rather than supplying arbitrary content to mount.
+  - type: intent-agent-meta
+    firable: true
+fields:
+  #: What to open, a selection. A file-selection names the file (path + optional range).
+  target: selection::selection&
+  #: How the container disposes the open. OPTIONAL: absent means the firer has no
+  #: opinion and the CONTAINER decides (its own default, which a composition may
+  #: author). Present means a gesture was explicit. transient = a reused/replaced
+  #: preview; permanent = a persistent tab (double-click or an edit promotes here);
+  #: preview-pin = pin the current preview, then open this as a new preview
+  #: (cmd/ctrl+click, keep + peek next).
+  mode?: [transient, permanent, preview-pin]
+  #: The chosen VIEWER, a projection type reference. OPTIONAL: absent means the viewer resolves through
+  #: the explicit ladder (`opens-meta` ELIGIBILITY, then a composition viewer-default, the sole eligible
+  #: viewer, else the host chooser asks); present (an "Open with X" pick) names the viewer to use and
+  #: wins the ladder outright. A DEF-REF, so it is verifiable against the type graph even though intents
+  #: are never persisted; and a POINTER, not a config, so the socket gate leaves open-intent firable.
+  with?: type<projection::au-host-sdk>*

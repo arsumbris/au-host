@@ -1,0 +1,7 @@
+# A host-authored agent-profile: a saved session launch selection (skills / inject / tools / hooks /
+# adapter). All fields are INHERITED from the au-mcp-sdk base; this subtype only names the host's
+# profile identity (`session-profile`), whose instances live in the workspace's operations store.
+#
+# The inherited `adapter?: type<mcp.adapter>*` def-ref selects a discovered adapter subtype.
+# Adapter choices come from the type graph; this subtype does not redeclare inherited fields.
+extends: agent-profile::au-mcp-sdk

@@ -1,0 +1,30 @@
+# A nested editor inside bento at the sandwich’s left, with a file-tree at center.
+# The default keymap binds ⌘W to close-view-intent. Focus either the inner editor
+# or its enclosing container and assert that closeFocusedView resolves the intended pane.
+# The hierarchy is sw → grid → ed, with tree also under sw.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^grid]]"
+    center: "[[^^tree]]"
+  - ^: grid
+    type: bento::bento
+    root: "[[^^ed]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

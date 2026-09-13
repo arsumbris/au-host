@@ -1,0 +1,23 @@
+{
+  "name": "@au-projections/terminal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo terminal --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@arsumbris/au-host-app": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

@@ -1,0 +1,7 @@
+# Illustrative geometry only; never a composition or a source of runtime behavior.
+fields:
+  axis?: String
+  children?: workspace-template-preview[]
+  label?: String
+  kind?: String
+  weight?: Number

@@ -1,0 +1,28 @@
+# A sandwich with a column containing an editor at left and a file-tree at center.
+# Float the column, then unwrap its single child at the secondary window root.
+# The editor must become that window’s content.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^col]]"
+    center: "[[^^tree]]"
+  - ^: col
+    type: column::column
+    items:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tree
+    type: file-tree::file-tree

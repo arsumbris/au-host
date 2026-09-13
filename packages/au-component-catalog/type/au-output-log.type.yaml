@@ -1,0 +1,28 @@
+# Owned by component-contract. The INTERFACE for `<au-output-log>` — a live monospace output tail.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries the
+# states + parts + a gallery preview. A raised-panel surface (fill + hairline inset, matching a code
+# block) whose body is an au-scroll-area, so the tail scrolls on a hairline tokened bar.
+#
+# AUTO-FOLLOW: it rides the newest line down as lines arrive, UNTIL the reader scrolls up, then holds
+# and never yanks them back; scrolling back to the bottom re-arms the follow. `lines` is set as a
+# PROPERTY (an array), newest LAST, capped at `maxLines`. When empty, a light-DOM text fallback (the
+# default slot) renders instead — a static log authorable as element text.
+#: The interface for <au-output-log>: a scrolling monospace log tail. `lines` (a String[] property,
+#: newest last) capped at `maxLines`; auto-follows the tail unless scrolled up. Composes au-scroll-area.
+#: A read-only surface — no events.
+extends: ui-component::component-contract
+fields:
+  #: The log lines, one entry per line, newest LAST. Set as a PROPERTY (an array), not an attribute.
+  lines?: String[]
+  #: Keep at most this many lines; oldest beyond it drop off the top. Default 500.
+  maxLines?: Number
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [pre]
+    preview: |
+      <au-output-log style="display:block;height:120px;max-width:380px">[12:04:29.881] au::serve  daemon listening on unix:/tmp/au.sock (schema 17)
+      [12:04:30.114] au::index  scanning content vault … 1,204 files
+      [12:04:31.006] au::index  built type registry: 96 defs across 27 repos
+      [12:04:31.204] au::serve  GET subtypes  kind=pane-projection  → 11
+      [12:04:31.502] au::watch  subscribed reads=3 clients=1</au-output-log>

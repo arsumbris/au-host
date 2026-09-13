@@ -1,0 +1,20 @@
+# Owned by the column projection. The slot type for a column item, extending the shared
+# `container-slot` with exactly what COLUMN honours: an item has an extent along the
+# column axis, and a collapsed (accordion) state.
+
+# Position-specific sizing and collapse for a column item. These fields belong to
+# the slot and survive occupant changes; fixed and admits are inherited slot rules.
+
+# WHY THIS IS A SUBTYPE rather than fields on the shared base: see the same note on
+# `sandwich-slot`. The honoured set must be visible in the type, or an author writes a
+# value nothing acts on.
+
+
+#: A column item: the shared slot rules, plus the size and collapsed state column renders.
+extends: container-slot::au-host-sdk
+fields:
+  #: The item's extent along the column axis, in px. Absent = column's default.
+  size?: Number
+  #: The item is collapsed to its header. A collapsed item still has its occupant and its
+  #: rules.
+  collapsed?: Boolean

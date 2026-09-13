@@ -1,0 +1,6 @@
+type: au.engine.repo::au-engine
+name: media-viewers
+description: File preview projections for images, documents and media
+deps:
+  - name: au-host-sdk
+  - name: intent

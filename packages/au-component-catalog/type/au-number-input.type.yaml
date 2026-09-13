@@ -1,0 +1,68 @@
+# Owned by component-contract. The INTERFACE for `<au-number-input>` — the dev-tool spinbutton.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. A naked numeric field in a hairline-ring wrapper with three affordance variants:
+# trailing stacked carets (`stepper`, default), a hover-in column over a borderless grid field (`scrub`),
+# or a `− value +` capsule (`split`). It owns the numeric behaviour — keyboard (±step, Shift/Page =
+# ±largeStep, Home/End = min/max), wheel-while-focused, hold-to-repeat on the carets, and a horizontal DRAG
+# on the value field to scrub it (right = increase, left = decrease, in every variant; a plain click still
+# focuses to type), clamp + round to `precision` on commit, optional `wrap` — while the consumer owns `value`.
+#
+# FORM-ASSOCIATED: the committed value crosses the shadow boundary into a native `<form>` + reset. Emits
+# `au-input` (per keystroke, uncommitted) and `au-change` (on commit — step / scrub / wheel / blur /
+# Enter), both with detail `{ value }` (a number, or null when empty), composed + bubbling.
+#
+# NOTE: a display `format` function is a JS-only property (not a data field — functions are not
+# serializable), set in JS via `el.format = fn`. The default is `Intl.NumberFormat` with grouping.
+#: Text-role fallbacks match the base ink palette without token stylesheets.
+#: The interface for <au-number-input>: a numeric spinbutton — stepper / scrub / split variants, tabular
+#: mono digits, keyboard + wheel + hold-repeat + drag-scrub, clamp/round. Form-associated. `value` is a
+#: Number, empty is null. Emits `au-input` / `au-change {value}`.
+extends: ui-component::component-contract
+fields:
+  #: The numeric value. Empty is null (the placeholder shows). Form-associated.
+  value?: Number
+  #: Lower bound. Home jumps to it; steps clamp to it (unless `wrap`).
+  min?: Number
+  #: Upper bound. End jumps to it; steps clamp to it (unless `wrap`).
+  max?: Number
+  #: Base increment for arrows / carets / wheel. Default 1.
+  step?: Number
+  #: Shift+Arrow · PageUp/Down · Shift-scrub increment. Default `step * 10`.
+  largeStep?: Number
+  #: Alt/Option-scrub fine increment. Default `step / 10`.
+  fineStep?: Number
+  #: Decimals to round to on commit. Default inferred from `step`.
+  precision?: Number
+  #: Wrap max → min (cyclic values like degrees).
+  wrap?: Boolean
+  #: Muted mono suffix folded into `aria-valuetext` — 'px' | '%' | '°' | 'ms' | …
+  unit?: String
+  #: Leading label / glyph prefix; the drag handle in the `scrub` variant (a short string or au-icon name).
+  leading?: String
+  #: Affordance shape. `stepper` (default, trailing carets), `scrub` (hover-in column), `split` (− value +).
+  variant?: [stepper, scrub, split]
+  #: Value alignment. `left` (forms, default) or `right` (property grids).
+  align?: [left, right]
+  #: Height step. `md` (default), `sm`, `lg` — parity with au-input.
+  size?: [sm, md, lg]
+  #: Enable drag-scrub on the leading label. Default true in `scrub`, else false.
+  scrubbable?: Boolean
+  #: Async value pending — a spinner rides the trailing slot and the value dims.
+  loading?: Boolean
+  #: Paints the danger border + ring and sets aria-invalid. Reflected as the `error` state.
+  error?: Boolean
+  #: Placeholder shown when the value is null.
+  placeholder?: String
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Read-only — the value shows but cannot be edited or stepped.
+  readonly?: Boolean
+  #: Accessible name for the spinbutton.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-input, au-change]
+    states: [disabled, error, loading, scrubbing]
+    parts: [field, steppers, caret-up, caret-down, lead, unit]
+    preview: '<au-number-input value="42" unit="px"></au-number-input> <au-number-input value="180" min="0" max="360" wrap unit="°"></au-number-input> <au-number-input variant="split" value="3" min="0"></au-number-input>'

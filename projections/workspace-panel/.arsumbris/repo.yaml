@@ -1,0 +1,7 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: workspace-panel
+description: first-party workspace-panel projection (read-only members /
+  diagnostics / resolution files)
+deps:
+  - name: au-host-sdk

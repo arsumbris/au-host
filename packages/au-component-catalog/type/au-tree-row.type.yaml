@@ -1,0 +1,40 @@
+# Owned by component-contract. The INTERFACE for `<au-tree-row>` — a file-tree row.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, content regions, states, parts. Set-INDEPENDENT: a consumer types against THIS.
+#
+# A NavItem shaped for hierarchy. ONE leading column holds the IDENTITY glyph — folder / folder-open
+# for a folder, the file glyph for a leaf (override either via the `icon` slot) — on a rail whose width
+# IS the indent step, so one level of nesting moves the glyph exactly one column. The DISCLOSURE chevron
+# sits at the TRAILING edge, after the label, so a label's left edge stays flush with the rows below it
+# instead of being pushed right by a chevron gutter. `level` drives the indent via `--au-tree-level`
+# against the public `--au-tree-indent` step, and nesting GUIDES (a vertical line per ancestor level,
+# shown on tree hover via the inherited `--au-tree-guide-opacity`) make depth legible. Emphasis is
+# SURFACE + ink weight + a hairline ring, never a left accent bar. The ROW is the single roving tab stop
+# (the parent sets the host `tabindex`); the chevron is a non-focusable glyph. Emits `au-activate` (row
+# press) and `au-toggle` (disclosure press, folders only), both composed + bubbling.
+#: The interface for <au-tree-row>: a file-tree row. `kind` folder/file, `level` indent, `open` /
+#: `selected` / `dirty` / `disabled`. Identity glyph leads on the indent-step rail (`icon` overrides it);
+#: the disclosure chevron trails after the label. Default-slot label. Emits au-activate + au-toggle.
+extends: ui-component::component-contract
+fields:
+  #: Folder (folder glyph + a trailing disclosure twist) or file (file glyph, no twist). Default file.
+  kind?: [file, folder]
+  #: Nesting depth (0 = root). Drives the leading indent via `--au-tree-level`.
+  level?: Number
+  #: Folder disclosure state — rotates the twist, swaps to the open-folder glyph.
+  open?: Boolean
+  #: Current / active row — firms to surface-2 + a hairline ring (no bar), brightens the ink.
+  selected?: Boolean
+  #: Unsaved changes — a small ink dot at the trailing edge (never a rail).
+  dirty?: Boolean
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state; suppresses activation.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-activate, au-toggle]
+    # Trailing controls share the navigation row height; text padding does not wrap the control.
+    slots: [icon, trailing]
+    states: [kind, level, open, selected, dirty, disabled]
+    parts: [row, lead, label, trail, dirty, disc]
+    preview: '<au-tree-row kind="folder" open>src</au-tree-row> <au-tree-row kind="folder" level="1">projections</au-tree-row> <au-tree-row level="2" selected>index.ts</au-tree-row> <au-tree-row level="2" dirty>composition.ts</au-tree-row>'

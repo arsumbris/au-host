@@ -1,0 +1,17 @@
+import {test, expect} from '../fixtures/app'
+test.use({composition:'file-tabs-preference'})
+test('file-tree opens reuse document Tabs without a placement or viewer question', async ({page}) => {
+  await expect(page.locator('.au-reader')).toBeVisible()
+  const sample=page.locator('au-tree-row[data-kind="file"][data-path$="/sample.md"]')
+  await expect(sample).toBeVisible()
+  await sample.click()
+  await expect(page.getByRole('tab',{name:'sample.md',exact:true})).toBeVisible()
+  await expect(page.locator('.au-reader[data-file="sample.md"]')).toBeVisible()
+  await sample.click()
+  await expect(page.getByRole('tab',{name:'sample.md',exact:true})).toHaveCount(1)
+  await expect(page.getByText(/Nothing here can handle|Wrap which pane|Open with/)).toHaveCount(0)
+  await page.locator('au-tree-row[data-kind="file"][data-path$="/refs-sample.md"]').click()
+  await expect(page.getByRole('tab',{name:'refs-sample.md',exact:true})).toBeVisible()
+  await expect(page.getByRole('tab',{name:'sample.md',exact:true})).toBeVisible()
+  await page.screenshot({path:'/private/tmp/au-file-tabs-preference.png'})
+})

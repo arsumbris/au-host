@@ -1,0 +1,34 @@
+/* Per-tree categorical colours for the activity stream, discovered before mounting.
+   These encode a DATA ROLE (which working tree a commit belongs to), not a UI status,
+   so they live here rather than reaching for a status token. A tree's colour is assigned
+   by stable index into this ramp; the ramp wraps past its length. */
+@property --au-git-activity-tree-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #6dbbec;
+}
+@property --au-git-activity-tree-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #76cd98;
+}
+@property --au-git-activity-tree-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e6b55d;
+}
+@property --au-git-activity-tree-4 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #cf9fe5;
+}
+@property --au-git-activity-tree-5 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fa995a;
+}
+@property --au-git-activity-tree-6 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #72d0d0;
+}

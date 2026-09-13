@@ -1,0 +1,43 @@
+/* focal-tree token declarations — DECLARATIONS ONLY (no component styles).
+ *
+ * Discovered + eager-loaded by the host via `projection-runtime-meta.customTokenEntry`, so a theming
+ * pane enumerates focal-tree's own `--au-focal-tree-*` tokens (grouped "Focal tree") even unmounted.
+ * Custom properties inherit through any isolation boundary, so these reach the view regardless.
+ */
+@property --au-focal-tree-bg         { syntax: "<color>";  inherits: true; initial-value: transparent; }
+@property --au-focal-tree-focus      { syntax: "<color>";  inherits: true; initial-value: #e8e6f0; }
+@property --au-focal-tree-node       { syntax: "<color>";  inherits: true; initial-value: #8a86a8; }
+/* outbound vs inbound reference hemispheres */
+@property --au-focal-tree-out        { syntax: "<color>";  inherits: true; initial-value: #6ea8fe; }
+@property --au-focal-tree-in         { syntax: "<color>";  inherits: true; initial-value: #f0a868; }
+/* UNCONSUMED, and deliberately kept. `neighborhoodToTree` COMPUTES a `duplicates` set (a
+   multi-parent node attached once and marked) and nothing outside its own test reads it — so the
+   renderer never distinguishes a duplicate. This token is the visible half of that unfinished
+   feature, not dead vocabulary; deleting it would erase the intent rather than the debt. */
+@property --au-focal-tree-dup        { syntax: "<color>";  inherits: true; initial-value: #c678dd; }
+@property --au-focal-tree-edge       { syntax: "<color>";  inherits: true; initial-value: #3a3a46; }
+@property --au-focal-tree-edge-field { syntax: "<color>";  inherits: true; initial-value: #4a5a7a; }
+@property --au-focal-tree-label      { syntax: "<color>";  inherits: true; initial-value: #b8b6c8; }
+/* a collapsed far region, drawn as a cluster of dots with its node count */
+@property --au-focal-tree-cluster    { syntax: "<color>";  inherits: true; initial-value: #5c5a70; }
+/* the structure overlay: the depth rings and each node's angular sector */
+@property --au-focal-tree-shell      { syntax: "<color>";  inherits: true; initial-value: #2e2e3a; }
+@property --au-focal-tree-wedge      { syntax: "<color>";  inherits: true; initial-value: #262633; }
+@property --au-focal-tree-label-size { syntax: "<length>"; inherits: true; initial-value: 11px; }
+
+/* Graph roles remain independently overridable while their defaults follow the app theme. */
+:root {
+  --au-focal-tree-bg: transparent;
+  --au-focal-tree-node: var(--au-ink-3);
+  --au-focal-tree-out: color-mix(in oklch, var(--au-color-accent) 75%, var(--au-ink-2));
+  --au-focal-tree-in: color-mix(in oklch, var(--au-color-warn) 70%, var(--au-ink-2));
+  --au-focal-tree-dup: var(--au-color-danger);
+  --au-focal-tree-edge: var(--au-line-2);
+  --au-focal-tree-edge-field: var(--au-color-accent);
+  --au-focal-tree-label: var(--au-ink-2);
+  --au-focal-tree-label-size: var(--au-t-2xs);
+  --au-focal-tree-focus: var(--au-ink-1);
+  --au-focal-tree-cluster: var(--au-ink-3);
+  --au-focal-tree-shell: var(--au-line-2);
+  --au-focal-tree-wedge: var(--au-line-1);
+}

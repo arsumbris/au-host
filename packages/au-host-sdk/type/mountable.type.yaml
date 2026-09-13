@@ -1,0 +1,38 @@
+# Owned by au-host-sdk (the host mount-contract vocabulary).
+# Generates the exported `Mountable` marker.
+
+
+# A THING THE HOST CAN MOUNT BY REFERENCE. A SEALED family with three branches:
+#   - `projection`  — it renders. A view whose fields are its config.
+#   - `composition` — it names its windows and a pool; it does NOT itself render, the host opens each window.
+#   - `window`      — an OS window SURFACE holding one root view by reference. Not content and not a layout:
+#                     it is a SITE (no loadable module, not a layout choice), so it is its own branch rather
+#                     than a `projection`. See [[window]].
+
+# WHY A SHARED SEALED BASE, not the union `<projection* | composition*>`. Both branches of that
+# union are `[[...]]` references, so the engine has no discriminator to tell them apart at a slot —
+# two-reference disambiguation is not spelled out in the grammar. `mountable*` is ONE closure check,
+# no disambiguation, and every container writes ONE name at every child position. The
+# branch split lives in the HOST RESOLVER (a projection mounts, a composition mounts its windows, a
+# window opens an OS surface and mounts its content), which is exhaustive precisely because the family
+# is SEALED.
+# Third-party views extend via `projection` subtypes, so the closed set costs an external author nothing.
+
+# NEITHER a projection NOR a composition itself, so `instances_of(projection)` and
+# `instances_of(composition)` each stay clean — the launcher query is not polluted by the base.
+
+# A mountable* child slot accepts references only. An inline record produces
+# field-shape-mismatch, keeping each child in its own addressable pool record.
+
+# NAMING: the branches are `projection` and `composition`, NOT the dotted `mountable.projection` /
+# `mountable.composition` the sealed-leaf convention suggests. Both names predate this base and are
+# referenced pervasively, so renaming them would be gratuitously breaking. A non-dotted sealed
+# branch is a LINT warning only, never a load error (see [[type sealed naming::au-engine]]), and the
+# clarity of keeping `projection` / `composition` as-is outweighs the lint.
+#: A thing the host can mount by reference: a projection (renders), a composition (names windows), or a
+#: window (an OS surface holding a view). A sealed family of those three branches; child slots reference
+#: this base as `mountable*`.
+sealed:
+  - projection
+  - composition
+  - window

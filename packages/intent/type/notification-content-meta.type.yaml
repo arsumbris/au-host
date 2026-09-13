@@ -1,0 +1,23 @@
+# STAND-IN type-def, owned by the `intent` package (NOT the SDK).
+# The locator meta a `ui-notification` SUBTYPE carries to declare its CONTENT RENDERER: a module +
+# export the host loads and calls to draw the toast's CONTENT into the HOST-OWNED frame. The host
+# discovers these in a `subtypes('ui-notification')` pass (mirroring projection discovery), loads
+# each renderer, and selects one by the FIRED notification's type; the base `ui-notification` uses
+# the host-shipped default. This is the type-keyed CONTENT SLOT — the frame + lifecycle stay the
+# host's, a renderer only fills the element (the same seam as `host.preview.show`'s `fill`).
+
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+#: The content-renderer locator for a ui-notification subtype: the module + export the host loads
+#: to draw the toast's content into the host frame (selected by the fired notification's type).
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  #: The ESM entry, relative to the owning package root (the built dist module).
+  entry: String
+  #: The named export that IS the content renderer — a (notification, element, fireAction) => void
+  #: the host calls to fill the toast. Default `render`.
+  export?: String

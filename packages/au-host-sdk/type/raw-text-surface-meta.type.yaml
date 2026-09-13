@@ -1,0 +1,15 @@
+# Owned by au-host-sdk — a host-relied meta the keybind ARBITRATION reads. A projection carries it to
+# declare that its focused content is a RAW-TEXT SURFACE: while such a projection holds focus, bare
+# printable keys and primitive navigation are typed as INPUT, not resolved as keybinds. A command chord
+# (a modifier, or a named command key) still resolves, unless the surface claims it.
+
+# A no-fields TAG — PRESENCE is the declaration. Read off the projection subtype's type-def in the
+# discovery pass (the same fetch as projection-runtime-meta / handles-intent-meta), so arbitration is a
+# client-side filter, no engine read. Host chrome (a focused input / textarea / contenteditable) is
+# detected at the DOM instead; this flag is the PROJECTION half of the same question.
+
+
+# `-meta` suffix per the type-system convention for `meta:` type-defs. A `meta:` type mixes in
+# `au.engine.meta::au-engine`, the engine's nominal marker for meta types (a universal peer, no `deps`).
+extends: au.engine.meta::au-engine
+fields: {}

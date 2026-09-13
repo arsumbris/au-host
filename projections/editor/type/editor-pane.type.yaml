@@ -1,0 +1,55 @@
+# editor-pane IS a `pane-projection` (a full content surface). Its instance IS its config:
+# `file` records the open vault file so a saved composition reopens where you left off.
+# `meta` declares its loadable code (the default `mount` export), resolved via the type owner.
+# The editor's status item is a SEPARATE surface — editor-status (status-projection) — sharing
+# this same module via the locator `export`.
+extends: pane-projection::au-host-sdk
+fields:
+# Optional vault-relative path. An absent value shows the open prompt.
+  # The file API accepts paths rather than engine-native typed file references.
+  file?: String
+  # Show the document minimap gutter (a scaled document silhouette + viewport indicator down the
+  # right edge). OPTIONAL, default OFF — a composition opts in.
+  minimap?: Boolean
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Editor
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  # No `export` → the default `mount` export (the editor pane).
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this projection HANDLES (typed capability). Discovered in the
+  # `subtypes('projection')` pass; the runtime handler binds at mount.
+  # - `handles` (AMBIENT): ui-intent-highlight (flashes when it holds the target file); save-intent (⌘S
+  #   saves THIS editor's file when it holds one — MRU-focus routes a focused editor's save here, else the
+  #   host's composition save takes it as the empty-focus fallback).
+  # - `handlesTargeted` (AIMED-ONLY): open-intent — an open AIMED at this editor (the open chooser's
+  #   "replace this editor" pick, or an explicit wire) swaps its shown file. NEVER an ambient candidate,
+  #   so an ambient open (a file-tree click) still routes to a CONTAINER, never to every editor at once
+  #.
+
+
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[ui-intent-highlight::intent]]"
+      - "[[save-intent::intent]]"
+    handlesTargeted:
+      - "[[open-intent::intent]]"
+  # The content this viewer opens (content-routing axis). `*` = any file: the editor is ELIGIBLE for
+  # every file — a real always-eligible capability, not a weak last resort. Eligibility is not the
+  # decision: the viewer resolves through the explicit ladder (`resolveViewer`), so a kind with two
+  # eligible viewers (md: editor + a markdown reader) asks the host chooser unless a composition
+  # viewer-default is set.
+  - type: opens-meta::au-host-sdk
+    opens:
+      - "*"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"
+      - "[[ui-intent-highlight::intent]]"
+      - "[[promote-intent::intent]]"

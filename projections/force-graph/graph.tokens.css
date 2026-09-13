@@ -1,0 +1,91 @@
+/* Categorical graph data roles, discovered before mounting. These do not encode UI status. */
+@property --au-graph-repo-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fa995a;
+}
+@property --au-graph-repo-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #6dbbec;
+}
+@property --au-graph-repo-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #76cd98;
+}
+@property --au-graph-repo-4 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e6b55d;
+}
+@property --au-graph-repo-5 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #cf9fe5;
+}
+@property --au-graph-repo-6 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #72d0d0;
+}
+@property --au-graph-repo-7 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fb817c;
+}
+@property --au-graph-repo-8 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #b7c86b;
+}
+@property --au-graph-kind-note {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #6dbbec;
+}
+@property --au-graph-kind-instance {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #76cd98;
+}
+@property --au-graph-kind-type-def {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #cf9fe5;
+}
+@property --au-graph-kind-asset {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e6b55d;
+}
+@property --au-graph-edge-field {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(118, 205, 152, 0.28);
+}
+@property --au-graph-edge-contributing {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(207, 159, 229, 0.24);
+}
+@property --au-graph-edge-navigational {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(109, 187, 236, 0.20);
+}
+@property --au-graph-edge-subtype {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(251, 129, 124, 0.5);
+}
+@property --au-graph-edge-field-type {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(230, 181, 93, 0.45);
+}
+@property --au-graph-edge-instance-of {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(114, 208, 208, 0.4);
+}

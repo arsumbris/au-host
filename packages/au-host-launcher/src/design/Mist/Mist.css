@@ -1,0 +1,23 @@
+/* Mist — canvas layout. The engine (mist.ts) owns all paint; this sheet only positions the canvas so
+ * it fills its POSITIONED parent as an atmosphere ground. Give the parent `position: relative` (or
+ * absolute/fixed) and the mist covers it; content composites above via its own stacking. Tokens only;
+ * the sole raw values are the full-cover inset (0) which is not a spacing decision. */
+
+.au-mist {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* atmosphere sits at the back of its parent; content layers over it with position + z-index. */
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Honour reduced motion at the layout level too: the engine already renders a single static frame,
+ * this just documents that no CSS animation rides the canvas. */
+@media (prefers-reduced-motion: reduce) {
+  .au-mist {
+    /* no-op — kept as an explicit anchor so the reduced-motion contract is visible in the sheet. */
+  }
+}

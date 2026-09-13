@@ -1,0 +1,16 @@
+# Save the active composition under a new name through the host command node.
+# The palette renders a text input from the name field before firing.
+# The host saves into the primary writable member.
+#: Save the active composition under a new name. A host-handled command.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Save composition as…
+    icon: save
+    category: Composition
+fields:
+  #: The new composition's name.
+  name: String

@@ -1,0 +1,27 @@
+{
+  "name": "@au-projections/placeholder-picker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/container-core": "workspace:*",
+    "@arsumbris/container-kit": "workspace:*",
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/selection": "link:../../packages/selection",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3"
+  }
+}

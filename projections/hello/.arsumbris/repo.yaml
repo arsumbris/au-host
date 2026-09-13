@@ -1,0 +1,6 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: hello
+description: throwaway hello example projection
+deps:
+  - name: au-host-sdk

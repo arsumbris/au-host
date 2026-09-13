@@ -1,0 +1,11 @@
+type: composition::au-host-sdk
+windows:
+  - "[[^^window]]"
+projections:
+  - ^: window
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^editor]]"
+  - ^: editor
+    type: editor-pane::editor
+    file: range-document.md

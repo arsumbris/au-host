@@ -1,0 +1,12 @@
+# <au-spinner> — an indeterminate activity ring (motion tokens only). No content.
+#: <au-spinner> — an indeterminate activity ring. `size` sm/md/lg; `label` names it for assistive tech.
+#: Collapses to a static neutral ring under reduced motion.
+extends: ui-component::component-contract
+fields:
+  #: Size step. Default md.
+  size?: [md, sm, lg]
+  #: Accessible name (role=status). Default "Loading".
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    preview: '<au-spinner size="sm"></au-spinner> <au-spinner></au-spinner> <au-spinner size="lg"></au-spinner>'

@@ -1,0 +1,8 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: tabs
+description: first-party tabs container-projection; a peer container (always
+  ≥2), the shared tab set
+deps:
+  - name: au-host-sdk
+  - name: intent

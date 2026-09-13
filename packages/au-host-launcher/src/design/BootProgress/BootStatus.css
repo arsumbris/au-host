@@ -1,0 +1,85 @@
+/* BootStatus — the startup flow as a single cross-fading status line (no bar, no counter, no %).
+ * The label + detail stack in one grid cell and only the active state is opaque, so a phase change
+ * cross-fades rather than pops. All motion rides the motion tokens; monochrome except the one `ok`
+ * dot at ready (drawn by StatusDot). Tokens only. @scope-safe under `.au-bootstatus`. */
+
+.au-bootstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  min-inline-size: 0;
+}
+
+.au-bootstatus__marker {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  /* align the dot to the label's cap line, not the two-line block centre. */
+  align-self: center;
+}
+
+/* the cross-fade stack — one cell, two-line height held so the row never reflows between states. */
+.au-bootstatus__lines {
+  position: relative;
+  display: grid;
+  min-inline-size: 0;
+  min-block-size: calc(var(--au-lh-base) + var(--au-lh-xs));
+  align-items: center;
+}
+
+.au-bootstatus__line {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+  min-inline-size: 0;
+  opacity: 0;
+  transform: translateY(var(--au-space-1));
+  /* the phase cross-fade rides SLOW (--au-m-slow, not -base): the startup should read unhurried, a soft
+   * settle between phases rather than a quick swap. Reduced-motion disables the transition locally. */
+  transition:
+    opacity var(--au-m-slow) var(--au-e-soft),
+    transform var(--au-m-slow) var(--au-e-soft);
+  pointer-events: none;
+}
+
+.au-bootstatus__line[data-active] {
+  opacity: 1;
+  transform: none;
+}
+
+.au-bootstatus__label {
+  color: var(--au-ink-1);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-sm);
+  line-height: var(--au-lh-sm);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-bootstatus__detail {
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* at ready the primary line firms to full ink — the "served" tell, mirroring the ok dot. */
+.au-bootstatus[data-served] .au-bootstatus__line[data-active] .au-bootstatus__label {
+  color: var(--au-ink-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-bootstatus__line {
+    transition: none;
+  }
+}

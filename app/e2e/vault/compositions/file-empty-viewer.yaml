@@ -1,0 +1,39 @@
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+intent-routing:
+  wires:
+    - intent: "[[open-intent::intent]]"
+      source: "[[^^tree]]"
+      targets: ["[[^^documents]]"]
+      mode: fallback
+  defaults:
+    - intent: "[[open-intent::intent]]"
+      roles: ["[[tabs::tabs]]"]
+      mode: priority
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[aup-reader::aup-reader]]"
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^shell]]"
+  - ^: shell
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^grid]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: grid
+    type: bento::bento
+    root: "[[^^documents]]"
+  - ^: documents
+    type: tabs::tabs
+    activeTab: empty
+    tabs: ["[[^^reader]]", "[[^^empty]]"]
+  - ^: reader
+    type: aup-reader::aup-reader
+    file: other.md
+  - ^: empty
+    type: aup-reader::aup-reader

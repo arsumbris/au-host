@@ -1,0 +1,45 @@
+.key-sequence-hints {
+  position: fixed;
+  top: var(--au-space-12, 48px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 92vw);
+  box-sizing: border-box;
+  padding: var(--au-space-3);
+  border-radius: var(--au-radius-frame);
+  color: var(--au-ink-1);
+  box-shadow: var(--au-elev-5-line), var(--au-sh-glass);
+  font: var(--au-t-sm)/var(--au-lh-body) var(--au-font-sans);
+  pointer-events: auto;
+}
+.key-sequence-hints__heading, .key-sequence-hints__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+}
+.key-sequence-hints__heading { font-weight: var(--au-w-medium); }
+.key-sequence-hints ul { list-style: none; padding: 0; margin: var(--au-space-3) 0; max-height: 55vh; overflow: auto; }
+.key-sequence-hints__choice { width:100%; border:0; background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius:var(--au-radius-sm); display: flex; align-items: center; justify-content: space-between; gap: var(--au-space-3); padding: var(--au-space-2); }
+.key-sequence-hints__choice > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.key-sequence-hints__footer { color: var(--au-ink-3); font-size: var(--au-t-xs); }
+
+.key-sequence-hints__timer {
+  margin-left: auto; flex: none; padding: var(--au-space-1); width: var(--au-space-8); height: var(--au-space-8);
+  display: grid; place-items: center; border: 0; background: transparent; color: var(--au-ink-2);
+  border-radius: var(--au-radius-sm); cursor: pointer;
+}
+.key-sequence-hints__timer:hover { background: var(--au-chrome-hover); color: var(--au-ink-1); }
+.key-sequence-hints__timer:focus-visible { outline: 1px solid var(--au-control-focus, var(--au-focus-outer)); outline-offset: -1px; }
+.key-sequence-hints__timer svg { width: var(--au-space-6); height: var(--au-space-6); fill: none; stroke: currentColor; stroke-width: 1.5; }
+.key-sequence-hints__track { stroke: var(--au-color-border); }
+.key-sequence-hints__remaining { stroke-dasharray: 100; transform: rotate(-90deg); transform-origin: center; }
+@media (prefers-reduced-motion: reduce) {
+  .key-sequence-hints__remaining { visibility: hidden; }
+}
+
+@media (forced-colors: active) {
+  .key-sequence-hints__timer:focus-visible { outline-color: Highlight; }
+}
+
+.key-sequence-hints__choice:hover { background:var(--au-chrome-hover); }
+.key-sequence-hints__choice:focus-visible { outline:1px solid var(--au-control-focus, var(--au-focus-outer)); outline-offset:-1px; }

@@ -1,0 +1,22 @@
+# Owned by component-contract. The INTERFACE for `<au-segmented-control>` — an exclusive choice group.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. `items` is DATA (a au-segment-item[]); the consumer owns the model, the control
+# owns roving-focus + keyboard nav. `value` is the selected segment's value.
+#: The interface for <au-segmented-control>: a pill-in-tray toggle over `items` (au-segment-item[]).
+#: Emits `au-change {value}`. Roving tabindex + Arrow/Home/End keyboard nav.
+extends: ui-component::component-contract
+fields:
+  #: The segment model. The consumer owns it; the control renders + navigates.
+  items?: au-segment-item[]
+  #: The selected segment's value.
+  value?: String
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Accessible name for the choice group.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change]
+    states: [disabled]
+    preview: '<au-segmented-control value="all"></au-segmented-control>'

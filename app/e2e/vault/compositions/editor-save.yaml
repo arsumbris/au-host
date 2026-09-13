@@ -1,0 +1,16 @@
+# A bare editor at the window root with the default ⌘S → save-intent binding.
+# The host command handler is a fallback after eligible editor handlers, so the editor
+# saves its own sample.md file. Saving the clean buffer rewrites identical bytes.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed]]"
+    ^: w
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

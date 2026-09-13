@@ -1,0 +1,10 @@
+# STAND-IN type-def, owned by the first-party `range` package (NOT the SDK).
+#
+# The base range type: a sub-region of some content. Medium-agnostic.
+# Open for extension, NOT sealed — a package (vtt, a PDF viewer, an image annotator)
+# adds its own `type: range` subtype and renders it. A consumer narrows to the
+# subtypes it knows, via is-a.
+# A tag today; the discriminant is the instance's own type claim.
+# Abstract: the base range tag. Only concrete range subtypes (text-range, ...) are instantiated.
+abstract: true
+fields: {}

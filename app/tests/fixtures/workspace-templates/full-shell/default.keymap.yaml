@@ -1,0 +1,8 @@
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - key: p
+        mods:
+          - mod
+          - shift
+    intent: "[[toggle-command-palette-intent::intent]]"

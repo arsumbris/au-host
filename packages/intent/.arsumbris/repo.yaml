@@ -1,0 +1,8 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: intent
+description: first-party intent vocabulary; owns intent, open-intent, promote-intent
+deps:
+  - name: selection
+  - name: range
+  - name: au-host-sdk

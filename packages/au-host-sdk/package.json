@@ -1,0 +1,26 @@
+{
+  "name": "@arsumbris/au-host-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./generated": "./src/generated.ts",
+    "./shared-deps": "./src/shared-deps.ts",
+    "./engine-reads": "./src/engine-reads.ts",
+    "./build": "./src/build.ts"
+  },
+  "dependencies": {
+    "@arsumbris/au-engine-sdk": "link:../../../au-engine-sdk"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo au-host-sdk --out src/generated.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

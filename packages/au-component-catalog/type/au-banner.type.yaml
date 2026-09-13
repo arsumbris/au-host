@@ -1,0 +1,39 @@
+# Owned by component-contract. The INTERFACE for `<au-banner>` — the message family's PERSISTENT surface.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states + slots. Where a toast is transient + floating, a banner is ANCHORED in flow and
+# stays until its condition clears or the user closes it. Severity rides the leading dot/glyph ONLY, never
+# a left rail; a `tint` emphasis is the one sanctioned whisper of hue into the surface (danger/warn only).
+#
+# Anatomy shared with the toast: a leading tone dot (or an `icon` glyph) · content (heading + message) · an
+# optional `action` slot · an optional close. The queue + lifecycle + height-collapse reflow are the
+# consumer's; this is the surface.
+#: Text-role fallbacks match the base ink palette without token stylesheets.
+#: The interface for <au-banner>: a persistent inline message surface — tone dot/glyph + heading + message,
+#: optional action slot + dismiss. tone / variant / placement / emphasis. Emits `au-dismiss`.
+extends: ui-component::component-contract
+fields:
+  #: Severity, on the leading dot/glyph only. `neutral` (default) / `info` (grey, not a hue) / `ok` / `warn` / `danger`.
+  tone?: [neutral, info, ok, warn, danger]
+  #: `inline` (default, a trailing action cluster) or `block` (a richer callout, actions drop to their own row).
+  variant?: [inline, block]
+  #: `contained` (default) or `docked` (a full-bleed edge strip, reads as chrome).
+  placement?: [contained, docked]
+  #: `flat` (mono, default) or `tint` (opt-in danger/warn surface whisper + tone ring; reserve for a blocking banner).
+  emphasis?: [flat, tint]
+  #: Optional bold heading line above the message.
+  heading?: String
+  #: The message text (data-driven, a string). Composed action controls go in the `action` slot.
+  message?: String
+  #: Optional leading au-icon glyph NAME (a string) replacing the tone dot; it inherits the tone colour. For
+  #: a live / pending banner, slot an au-spinner / au-status-dot into the `icon` slot instead (it wins).
+  icon?: String
+  #: Show a trailing close affordance. Emits `au-dismiss` on press.
+  dismissible?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-dismiss]
+    states: [tone, variant, placement, emphasis]
+    slots: [icon, action]
+    parts: [dot, icon, content, heading, message, actions, close]
+    preview: '<au-banner tone="danger" heading="Save failed" message="The workspace is not clean at HEAD." dismissible></au-banner> <au-banner tone="ok" message="All members mounted."></au-banner> <au-banner tone="warn" emphasis="tint" message="Engine not ready — start the daemon."></au-banner>'

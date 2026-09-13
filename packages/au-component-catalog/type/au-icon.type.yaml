@@ -1,0 +1,24 @@
+# Owned by component-contract. The INTERFACE for `<au-icon>` — the inline-SVG glyph primitive.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# the non-field half (content regions, states, parts, the gallery sample).
+#
+# Set-INDEPENDENT: a consumer types against THIS, never against a specific set.
+#
+# RENDER-RESILIENCE: a bare `<au-icon>` (unknown/absent name) renders an empty box, never throws.
+#: The interface for <au-icon>: a type-scaled inline-SVG glyph. `name` picks the shape; it scales
+#: with the type ramp and inherits `currentColor`. Decorative by default; `label` makes it labelled.
+extends: ui-component::component-contract
+fields:
+  #: Glyph name (e.g. `gear`, `search`, `chevron-right`). The set owns the shape table.
+  name: String
+  #: Size step, bound to the type ramp (--au-t-*). Default md.
+  size?: [xs, sm, md, lg]
+  #: Accessible name. Omitted, empty or whitespace-only → decorative (aria-hidden); a non-empty trimmed label → role=img + <title>.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [svg]
+    # A sample the gallery renders verbatim: `name` is a free String, so schema-synthesis cannot
+    # pick a real glyph. This shows a representative row instead.
+    preview: '<au-icon name="gear"></au-icon> <au-icon name="search" size="lg"></au-icon> <au-icon name="chevron-right" size="sm"></au-icon> <au-icon name="check"></au-icon>'

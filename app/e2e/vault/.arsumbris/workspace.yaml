@@ -1,0 +1,8 @@
+# The E2E test vault's workspace manifest. `edit: [e2e-vault]` self-lists the containing repo (REQUIRED).
+# `discover: [host-bundle]` pulls the whole host UI projection closure (bento / tabs / editor / …) into
+# the graph so the fixtures mount — host-bundle members resolve on disk via the device registry.
+type: au.engine.workspace::au-engine
+edit:
+  - e2e-vault
+discover:
+  - host-bundle

@@ -1,0 +1,6 @@
+# Host-sdk base for structural container nodes, including container-slot.
+# These nodes arrange child projections and remain distinct from projection content.
+# The type is open: containers declare their own structural subtypes.
+# Abstract: only concrete node subtypes are instantiated.
+abstract: true
+fields: {}

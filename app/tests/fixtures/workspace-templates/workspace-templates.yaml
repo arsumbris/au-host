@@ -1,0 +1,51 @@
+type: workspace-template-manifest::au-host-sdk
+templates:
+  - path: blank
+    name: Blank
+    description: A clean space. Add your own views as you go.
+    preview:
+      label: Your space
+      kind: empty
+    highlights:
+      - An empty canvas for your own layout
+      - Host and agent tools available
+  - path: full-shell
+    name: Full shell
+    description: Files, writing, connections and a terminal, together.
+    preview:
+      axis: row
+      children:
+        - label: Files
+          kind: tree
+          weight: 1
+        - axis: column
+          weight: 3.4
+          children:
+            - label: Editor
+              kind: document
+              weight: 3
+            - label: Terminal
+              kind: terminal
+        - label: Backlinks
+          kind: list
+          weight: 1.2
+    highlights:
+      - Browse and edit your files side by side
+      - Keep backlinks and a terminal within reach
+    initialComposition: "[[workspace-layout]]"
+  - path: reader
+    name: Reader
+    description: Your files beside a quiet reading surface.
+    preview:
+      axis: row
+      children:
+        - label: Files
+          kind: tree
+          weight: 1
+        - label: Reader
+          kind: document
+          weight: 3.8
+    highlights:
+      - Browse files beside your document
+      - Read with fewer distractions
+    initialComposition: "[[workspace-layout]]"

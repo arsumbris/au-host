@@ -1,0 +1,16 @@
+# <au-scroll-area> — the one scrolling surface primitive: hairline tokened scrollbars.
+#: <au-scroll-area> — the scrolling surface primitive: hairline tokened scrollbars, no chunky OS default.
+#: Takes no size of its own — constrain it via style/parent. `axis` clamps the direction. Default slot.
+extends: ui-component::component-contract
+fields:
+  #: Flow content normally, or center one content block in the available body. Oversized centered content stays reachable from the scroll start.
+  content?: [flow, center]
+  #: Which axes may scroll: both (default), x (horizontal only), or y (vertical only).
+  axis?: [both, x, y]
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [scroll]
+    preview: |
+      <au-scroll-area axis="y" style="display:block;height:90px;max-width:220px">
+        <div style="padding:8px">Line 1<br>Line 2<br>Line 3<br>Line 4<br>Line 5<br>Line 6<br>Line 7<br>Line 8</div>
+      </au-scroll-area>

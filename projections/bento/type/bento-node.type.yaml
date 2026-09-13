@@ -1,0 +1,5 @@
+# Structural root of the bento layout tree, disjoint from projection.
+# The sealed hierarchy admits one branch kind; leaf positions use slots directly.
+extends: container-node::au-host-sdk
+sealed:
+  - bento-node.branch

@@ -1,0 +1,18 @@
+# WRAP-UNWRAP fixture — a window whose content is a single-tab tabs holding an editor on sample.md. The
+# test drives the tab's ⋯ menu → Wrap (picking a container kind in the host chooser), asserts the editor's
+# identity (its data-pane-id) survives the wrap, then unwraps and asserts it survives the round-trip.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

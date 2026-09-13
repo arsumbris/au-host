@@ -1,0 +1,28 @@
+#: How a projection names itself to a human — its display title, distinct from its type identity.
+# Owned by au-host-sdk. Generates the exported `ProjectionPresentationMeta` interface.
+
+# WHY THIS EXISTS. A masthead, tab or drag label that renders the raw type identifier (`editor-pane`
+# over an editor, `scope-panel` where a product would say "Scope") names the MECHANISM to someone
+# looking at CONTENT — the loudest devtool tell in the shell. The name a projection shows is a
+# PROPERTY OF THE PROJECTION, so it is declared on the projection's own type-def and folded from the
+# type graph, never held in a kernel table keyed by type name.
+
+
+# OPT-IN, never `required`. A projection that declares no presentation falls back to a
+# derivation of its type name (strip `::repo`, split, title-case).
+
+# It reaches a CONTAINER through the descriptor the host publishes (`ProjectionDescriptor.meta`), not
+# through an engine read — so a container mounted without engine access still gets a child's title.
+# That is the isolation reason the carrier lives on the descriptor. Read off the subtype's type-def
+# (`subtypes` -> `meta_blocks`), never off an instance — it is type-level metadata.
+
+# This metadata declares `title` only. An icon field requires a consumer that can render it;
+# declaring a field nothing can render would create an inert abstraction.
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's nominal
+# marker for meta types. Without it the type is rejected as `non-meta-type-in-meta-position`.
+# `::au-engine` is a universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The human display name, shown on a masthead, tab, drag label or chooser row.
+  title: String

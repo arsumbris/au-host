@@ -1,0 +1,5 @@
+type: au.engine.repo::au-engine
+name: settings
+description: Settings hub for installed configuration surfaces
+deps:
+  - name: au-host-sdk

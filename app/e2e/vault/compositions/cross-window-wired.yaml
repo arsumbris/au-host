@@ -1,0 +1,40 @@
+# CROSS-WINDOW-WIRED fixture — a switchboard WIRE routes an intent across the window boundary.
+# window → sandwich (LEFT: a tabs group holding an editor, the wired RECIPIENT; CENTER: a file-tree, the
+# wired SOURCE). A STRICT `intent-wire` binds (file-tree, open-intent) → the tabs. Float the LEFT (the tabs)
+# into its own OS window, then click a file in the file-tree (which stays in the main window). The wire —
+# NOT the ambient MRU walk — must carry the open across to the floated tabs: the authority's `deliverWired`
+# gathers the remote recipient's claim over the wire (a `claim-remote` trace) and, on the widen, aims the
+# `commit` at it (a `commit-remote` trace). No `candidates`/`claim` ambient traces fire (the wire short-
+# circuits the ambient path), which is what distinguishes this from cross-window-route (the ambient twin).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+intent-routing:
+  wires:
+    - source: "[[^^tree]]"
+      intent: "[[open-intent::intent]]"
+      targets:
+        - "[[^^tabs]]"
+      mode: strict
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabs]]"
+    center: "[[^^tree]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

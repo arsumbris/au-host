@@ -1,0 +1,17 @@
+# One row in an <au-detail-list>. Serializable DATA — never a framework element (the data-driven rule).
+#: One <au-detail-list> row: a term (the muted key), an optional value (the bright datum), a `mono`
+#: flag for identifier values (ids / paths / sizes / timestamps on tabular figures), and an optional
+#: status `tone` that tints the value TEXT (never a rail). A null / empty value renders a faint
+#: em-dash, never blank.
+fields:
+  #: The key — the muted half of the two ink steps.
+  term: String
+  #: The datum. Null / empty renders a faint em-dash.
+  value?: String
+  #: Render the value in Geist Mono on tabular figures (ids / paths / sizes / durations / timestamps).
+  mono?: Boolean
+  #: The status tone for the value — ok / warn / danger. Drives tinted text, or the dot / badge fill.
+  tone?: [ok, warn, danger]
+  #: How the value reads. `text` (default) tints the value TEXT; `dot` composes an au-status-dot before
+  #: neutral text; `badge` renders the value as a filled au-badge pill.
+  valueKind?: [text, dot, badge]

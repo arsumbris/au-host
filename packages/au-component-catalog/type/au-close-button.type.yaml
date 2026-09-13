@@ -1,0 +1,22 @@
+# Owned by component-contract. The INTERFACE for `<au-close-button>` — the small ✕ affordance.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# states, parts, and the gallery sample.
+#: The interface for <au-close-button>: the ✕ affordance on tabs / chips / panels / modals.
+#: Emits `au-activate` on press.
+#: Hover and press use shared chrome interaction fills; keyboard focus uses the shared inset outline.
+extends: ui-component::component-contract
+fields:
+  #: `danger` tints the hover glyph with the danger token (a close that destroys). Default neutral.
+  tone?: [neutral, danger]
+  #: Accessible label. Missing or blank uses "Close". Supply a contextual name when several close actions share a surface.
+  label?: String
+  #: Non-interactive + de-emphasized; suppresses activation.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    # Composed + bubbling, per the contract rule in ui-component-meta.
+    events: [au-activate]
+    states: [disabled]
+    parts: [button]
+    preview: '<au-close-button></au-close-button> <au-close-button tone="danger"></au-close-button> <au-close-button disabled></au-close-button>'

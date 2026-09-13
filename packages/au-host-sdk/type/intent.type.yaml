@@ -1,0 +1,8 @@
+# Owned by host-sdk: the abstract, payload-opaque intent category.
+# The host routes by the type discriminant and declared handler capabilities.
+# Concrete command payloads extend this base from packages/intent.
+# Routing metadata belongs to the host contract and authored intent constructors.
+#: The base intent: a typed command fired into a scope. Concrete subtypes add payload fields.
+#: The host routes by the type discriminant against declared capabilities. Never persisted.
+abstract: true
+fields: {}

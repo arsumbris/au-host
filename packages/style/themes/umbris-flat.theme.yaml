@@ -1,0 +1,5 @@
+type: theme
+name: Umbris — Flat
+styles:
+  - ./umbris.theme.css
+  - ./flat-surfaces.css

@@ -1,0 +1,4 @@
+type: theme
+name: Base — Sculpted
+styles:
+  - ./base-sculpted.theme.css

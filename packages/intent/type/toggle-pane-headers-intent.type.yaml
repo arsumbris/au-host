@@ -1,0 +1,9 @@
+#: Temporarily reveal or hide pane headers without changing authored layout settings.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Toggle hidden pane headers
+    category: View

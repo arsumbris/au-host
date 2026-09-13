@@ -1,0 +1,19 @@
+# Owned by au-host-sdk. A projection that HOLDS + lays out child projections
+# (bento, dock, bar, sandwich, column, tabs). Its concrete subtypes declare their own child
+# positions — each a UNION of `<mountable* | that container's slot>`, a reference-only child — and mount them through
+# `host.children`. A `projection` subtype; the kind is for discovery (a layout picker can query
+# container-projections).
+
+
+# A fieldless container kind marker. Structural rules belong to container slots:
+# fixed controls movement and removal; admits constrains occupant types.
+
+
+# THE KIND STAYS at zero fields, deliberately rather than vestigially: the host's
+# `grouping-discovery.ts` selects on it, and `grouping-choice.group-into?: type<container-projection>*`
+# is an engine-validated def-ref bound with no shape-based equivalent.
+#: A projection that holds and lays out child projections. Identity only — what a container IS,
+#: never what it declares.
+abstract: true
+extends: projection
+fields: {}

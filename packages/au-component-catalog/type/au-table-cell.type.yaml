@@ -1,0 +1,11 @@
+# <au-table-cell> — a body cell of <au-table>.
+#: <au-table-cell> — a body cell of <au-table>. `align="end"` right-aligns + tabular figures; `muted` dims it.
+extends: ui-component::component-contract
+fields:
+  #: Cell alignment; `end` right-aligns + tabular figures.
+  align?: [start, end]
+  #: Render the value one ink-step dimmer (secondary meta).
+  muted?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    preview: '<au-table><au-table-body><au-table-row><au-table-cell>alpha</au-table-cell><au-table-cell align="end" muted>12</au-table-cell></au-table-row></au-table-body></au-table>'

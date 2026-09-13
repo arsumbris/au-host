@@ -1,0 +1,12 @@
+# Owned by au-host-sdk (the keybinds vocabulary). One STEP of a chord, matched by EQUALITY against a
+# canonicalized keydown (`{ mods, key }`). A `keybind.chord` is a non-empty list of these; one step is the
+# common case, several form a chord sequence (⌘K ⌘S).
+
+#: One keystroke of a chord: a set of modifiers plus one key, matched by equality against a canonicalized
+#: `event.code`.
+fields:
+  #: The modifiers held, a set. Absent means no modifiers.
+  mods?: key-modifier[]
+  #: The physical key, a canonical name from `event.code` (layout-stable). A closed vocabulary, so a typo
+  #: is a load error.
+  key: key-name

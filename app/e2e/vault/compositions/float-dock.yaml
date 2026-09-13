@@ -1,0 +1,25 @@
+# FLOAT-DOCK fixture — window → sandwich with TWO leaves (left: file-tree, center: editor). Two leaves so
+# a float does not empty the container, and DISTINGUISHABLE content (a tree vs .cm-content) so a dock's
+# non-destruction is assertable. Float is now a GENERIC pane action (every container), so the sandwich
+# region can pop out.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^ed]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

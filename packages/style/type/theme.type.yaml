@@ -1,0 +1,15 @@
+# A theme: a NAMED set of `--au-*` overrides stored AS CSS. The override VALUES live
+# in the `styles` CSS file(s) (a `:root { --au-*: ... }` block); this thin instance
+# carries discovery + naming, so themes are first-class like compositions
+# (`readInstancesOf('theme')`) without duplicating the values into the substrate.
+
+# `packages/style` owns this def (it owns the token vocabulary too). The content vault
+# VENDORS a copy so theme instances written there validate + discover in place.
+
+# Theme styles are relative paths. The host reads the listed CSS files in order.
+
+
+
+fields:
+  name: String
+  styles: String[+]

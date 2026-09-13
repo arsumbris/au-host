@@ -1,0 +1,452 @@
+/* Launcher — the host's start screen as a FULL-VIEWPORT product surface (not a boxed dialog).
+ *
+ * A single centred column floats in the mist atmosphere: the living brand orb (the one light), the
+ * wordmark led in medium-weight tightly-tracked display type, a muted tagline (the ink1→ink3 value gap
+ * IS the hierarchy), a recents cluster that EMERGES FROM SHADOW (a translucent surface whose painted
+ * ground is masked to fade into the atmosphere at its foot — the rows themselves
+ * stay fully legible above the mask), a primary actions row, and one quiet status footline.
+ *
+ * MONOCHROME + CALM: depth is the surface stack + hairlines + the sanctioned atmosphere tokens
+ * (tone-inset / tone-grad), never a colored leading bar. Hue is reserved for the one live status dot.
+ * The regions RISE in on load with a staggered rise animation (--au-e-deep, 80ms stagger). Tokens only.
+ * @scope-safe under `.au-launcher`. */
+
+.au-launcher {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  /* presence when the parent gives no definite height (e.g. the component story preview). */
+  min-block-size: 0;
+  overflow: auto;
+  padding: var(--au-space-8) var(--au-space-6);
+  /* transparent — the mist behind reads through; the only surfaces are the emergent recents ground. */
+  background: transparent;
+}
+
+/* Centred single-column layout. */
+.au-launcher__column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--au-space-5);
+  inline-size: 100%;
+  max-inline-size: 32rem;
+  margin-block: auto;
+  /* The column (recents rows, action buttons, the brand) is interactive, so it carves out of the stage's
+     window-drag region — a press activates a control instead of starting a window move. The empty ground
+     around the column still drags (see `.au-launcher-stage` in launcher.css). */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ── brand: orb (the one light) → wordmark (display) → tagline (the value gap) ─────────────────── */
+.au-launcher__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--au-space-3);
+  text-align: center;
+}
+
+.au-launcher__mark-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--au-ink-1);
+  margin-block-end: var(--au-space-1);
+}
+
+/* The real orb — an inline SVG data-URI (see ./logo.ts), crisp at any size. NO blend mode: the vector
+ * carries a transparent ground. On this full-viewport composition the mark reads a touch larger (56px)
+ * so it anchors the column as the light in the room. */
+.au-launcher__mark,
+.au-launcher .au-launcher__mark-slot .au-orb__img {
+  /* 40px — a whole multiple of the 4px base step (10 × 4). Smaller: it anchors the column without
+   * reading as a logo lockup above the title. */
+  width: calc(var(--au-space-1) * 10);
+  height: calc(var(--au-space-1) * 10);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* The mark is a button now — the orb (or the woken sphere) is its only child. Reset it to a bare,
+ * clickable frame the same 40px box as the orb, so nothing shifts when it wakes. */
+.au-launcher__mark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  width: calc(var(--au-space-1) * 10);
+  height: calc(var(--au-space-1) * 10);
+  border-radius: 50%;
+  outline-offset: 3px;
+}
+.au-launcher__mark-sphere {
+  width: 100%;
+  height: 100%;
+}
+
+/* The detached roamer: a fixed, click-through overlay that trails the cursor (positioned each
+ * frame by JS via transform). Portaled to <body>, so it sits above the whole launcher. */
+.au-launcher__mark-roamer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+  z-index: var(--au-z-overlay,1100);
+  will-change: transform;
+}
+
+.au-launcher__wordmark {
+  margin: 0;
+  color: var(--au-ink-1);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-h2);
+  line-height: var(--au-lh-h2);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-display);
+}
+
+.au-launcher__tagline {
+  margin: 0;
+  max-inline-size: 32ch;
+  color: var(--au-ink-3);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-body);
+  line-height: var(--au-lh-body);
+}
+
+/* The brand-anchored status home: the boot chip rides the baseline directly under the wordmark, where
+ * the eye already is and the orb + mist tell the same story. A reserved min-height so the chip
+ * appearing (idle→starting) never nudges the recents below it. Centred + quiet — atmosphere, not a bar. */
+.au-launcher__brand-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--au-lh-base);
+  margin-block-start: var(--au-space-1);
+}
+
+/* ── Orb — the living brand mark ──────────────────────────────────────────────────────────────── */
+/* Same self-grounded vector orb as `.au-launcher__mark`, wrapped so it can BREATHE (and, while the
+ * engine is starting/deriving, slowly rotate as a "charging" tell). Motion only — no color, no box —
+ * fully stood down under reduced-motion. Wrapper carries the rotation, inner img the breathe, so the
+ * two transforms never fight over `transform`. */
+.au-orb {
+  display: inline-flex;
+  color: var(--au-ink-1);
+}
+
+.au-orb__img {
+  /* default standalone size; the launcher scopes a larger one above. */
+  width: calc(var(--au-space-1) * 11);
+  height: calc(var(--au-space-1) * 11);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+
+/* One continuous breathing animation reads its amplitude from a registered custom
+ * property. State changes transition the amplitude without restarting the animation. */
+@property --au-orb-amp {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1.028;
+}
+
+.au-orb {
+  --au-orb-amp: 1.028;
+  /* slow, so a phase change swells rather than switches (matches the mist's chase). */
+  transition: --au-orb-amp 1600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.au-orb__img {
+  animation: au-orb-breathe 6s ease-in-out infinite;
+}
+
+.au-orb[data-state='starting'] {
+  /* a deeper breath while the engine works — the life-sign, eased into, never restarted. */
+  --au-orb-amp: 1.055;
+}
+
+@keyframes au-orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(var(--au-orb-amp));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-orb,
+  .au-orb__img {
+    animation: none !important;
+    transition: none;
+  }
+}
+
+/* ── recents — the cluster that emerges from shadow ───────────────────────────────────────────── */
+.au-launcher__recents {
+  display: flex;
+  flex-direction: column;
+}
+
+/* the surface: a translucent warm ground + hairline + top sheen, whose PAINT is masked to fade into
+ * the atmosphere at its foot. The paint lives on ::before so the rows above it stay fully opaque and
+ * interactive — only the ground dissolves. */
+.au-launcher__recents-surface {
+  position: relative;
+  isolation: isolate;
+  padding: var(--au-space-4);
+  border-radius: var(--au-radius-panel);
+
+}
+
+.au-launcher__recents-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  /* warm translucent fill (mixed by the material alpha) + the inset hairline highlight (depth, no bar). */
+  background: color-mix(in srgb, var(--au-color-surface-1) calc(var(--au-surface-alpha) * 100%), transparent);
+  background-image: var(--au-pane-background-image);
+  box-shadow: var(--au-elev-3-line), var(--au-tone-inset);
+  /* Material follows the selected theme. */
+  -webkit-backdrop-filter: var(--au-material-filter);
+  backdrop-filter: var(--au-material-filter);
+  /* emerge-from-shadow: the ground (fill AND frost) is crisp at the top where it meets the brand and
+   * dissolves into the atmosphere toward the foot. A mask reads only the ALPHA channel, so the opaque
+   * stop is the CSS keyword `black`, never a colour literal — only where the ground shows is affected. */
+  -webkit-mask-image: linear-gradient(to bottom, black 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 62%, transparent 100%);
+}
+
+.au-launcher__recents-head {
+  padding-inline: var(--au-space-2);
+  margin-block-end: var(--au-space-1);
+}
+
+.au-launcher__recents-list {
+  max-block-size: min(36vh, 22rem);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+}
+
+/* Trailing meta line for a recent row: the mono path truncates, the aside (last-opened + selected ⏎)
+ * holds its place at the end. Rides inside `.au-recent-row__meta` (mono, 2xs, ink-4). */
+.au-launcher__recent-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  min-width: 0;
+}
+
+.au-launcher__recent-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-launcher__recent-aside {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--au-space-1);
+}
+
+.au-launcher__recent-when {
+  white-space: nowrap;
+}
+
+/* Per-workspace live status, on the row: a quiet mono word paired with the row's leading
+ * ok-dot. Value gap carries the meaning — ink-3 (serving) over the ink-4 path around it; no extra hue. */
+.au-launcher__recent-serving {
+  white-space: nowrap;
+  color: var(--au-ink-3);
+  font-family: var(--au-font-mono);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.au-launcher__recent-enter {
+  color: var(--au-ink-3);
+}
+
+/* First-run: the EmptyState seats on its own emergent frosted ground so it doesn't float unanchored. */
+.au-launcher__empty {
+  padding: var(--au-space-6) var(--au-space-4);
+  border-radius: var(--au-radius-panel);
+  background: color-mix(in srgb, var(--au-color-surface-1) calc(var(--au-surface-alpha) * 100%), transparent);
+  background-image: var(--au-pane-background-image);
+  box-shadow: var(--au-elev-3-line);
+  -webkit-backdrop-filter: var(--au-material-filter);
+  backdrop-filter: var(--au-material-filter);
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .au-launcher__recents-surface::before, .au-launcher__empty {
+    background: var(--au-color-surface-1);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ── actions ──────────────────────────────────────────────────────────────────────────────────── */
+.au-launcher__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--au-space-3);
+}
+
+/* The primary Launch verb + its reason, at the foot of the recents it acts on. The one
+ * sanctioned emphasis lives here; the browse/new actions below are ink-weight + surface only. */
+.au-launcher__launch-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--au-space-1);
+}
+
+/* Full-width primary CTA — the verb leads, the chevron trails (Launch →). Button.css owns the fill,
+ * the press-scale, and the disabled drop-to-ink; this only sets width + the label/gap. */
+.au-launcher__launch {
+  inline-size: 100%;
+  justify-content: center;
+  gap: var(--au-space-1);
+}
+
+
+.au-launcher__actions-row {
+  display: flex;
+  gap: var(--au-space-2);
+  inline-size: 100%;
+}
+
+/* Split the row evenly — each action carries its own paint (and considered hover) from Button.css. */
+.au-launcher__action {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* fallback daemon readout (used only when no `status` slot is passed). */
+.au-launcher__daemon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-1);
+  margin: 0;
+  color: var(--au-ink-4);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+
+.au-launcher__daemon-label {
+  color: var(--au-ink-3);
+}
+
+.au-launcher__daemon-detail {
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── entrance cascade — fade + 12px lift, staggered by --au-rise-i (80ms), --e-deep ── */
+.au-launcher .au-rise {
+  opacity: 0;
+  transform: translateY(var(--au-space-3));
+  animation: au-launcher-rise var(--au-m-base) var(--au-e-deep) both;
+  animation-delay: 0ms;
+}
+
+@keyframes au-launcher-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-launcher .au-rise {
+    transform: none;
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.au-launcher__setup-action { align-self: center; }
+.au-launcher__recents-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background-image: var(--au-pane-edge-image);
+  mask: linear-gradient(white 0 0) content-box, linear-gradient(white 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .au-launcher__recents-surface::before { background-image: none; }
+  .au-launcher__recents-surface::after { display: none; }
+}
+
+.au-launcher__workspace-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--au-space-1) * 9);
+  padding: var(--au-space-2) var(--au-space-3);
+  margin-bottom: var(--au-space-3);
+  color: var(--au-ink-1);
+  background: var(--au-color-bg);
+  border: 1px solid var(--au-line-2);
+  border-radius: var(--au-radius-md);
+  font: var(--au-t-xs) / var(--au-lh-xs) var(--au-font-sans);
+  transition: box-shadow var(--au-m-fast) var(--au-e-std), border-color var(--au-m-fast) var(--au-e-std);
+}
+.au-launcher__workspace-search::placeholder { color: var(--au-ink-4); }
+.au-launcher__workspace-search:focus-visible { outline: none; box-shadow: var(--au-focus-ring); }
+.au-launcher__workspace-icon {
+  display: grid;
+  place-items: center;
+  width: calc(var(--au-space-1) * 10);
+  height: calc(var(--au-space-1) * 10);
+  color: var(--au-ink-3);
+  background: var(--au-elev-2-fill);
+  border: 1px solid var(--au-line-1);
+  border-radius: var(--au-radius-md);
+  transition: color var(--au-m-fast) var(--au-e-std), background-color var(--au-m-fast) var(--au-e-std);
+}
+.au-launcher .au-recent-row { padding: var(--au-space-2); gap: var(--au-space-3); }
+.au-launcher .au-recent-row__lead { align-self: center; height: auto; }
+.au-launcher .au-recent-row:active { background: var(--au-chrome-active); }
+.au-launcher .au-recent-row:hover .au-launcher__workspace-icon { color: var(--au-ink-1); background: var(--au-chrome-hover); }
+.au-launcher__recent-meta { flex-wrap: wrap; row-gap: var(--au-space-1); }
+.au-launcher__recent-path { flex-basis: 100%; }
+.au-launcher__layout-label { color: var(--au-ink-3); font-family: var(--au-font-sans); }
+.au-launcher__no-matches { padding: var(--au-space-3); color: var(--au-ink-3); font-size: var(--au-t-xs); }
+@media (prefers-reduced-motion: reduce) {
+  .au-launcher__workspace-search, .au-launcher__workspace-icon { transition: none; }
+}

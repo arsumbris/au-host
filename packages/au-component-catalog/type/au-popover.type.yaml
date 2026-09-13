@@ -1,0 +1,21 @@
+# <au-popover> — the overlay elevation family's general-purpose floating panel (look-only).
+#: <au-popover> — a floating panel of the overlay elevation family: elev-5 fill + inset hairline + glass
+#: shadow, panel radius, an optional directional arrow per `side`, an optional heading, and a body slot.
+#: LOOK ONLY — a host/consumer surface mounts it into a claimed host.overlay layer and anchors it (the
+#: au-modal split); it owns no positioning or dismissal. A consumer drives the exit via data-state="closed".
+extends: ui-component::component-contract
+fields:
+  #: The side the panel points FROM — drives the arrow position.
+  side?: [top, right, bottom, left]
+  #: Whether to show the directional arrow (a rotated fill square). On by default.
+  arrow?: Boolean
+  #: An optional title line above the body.
+  heading?: String
+  #: Own one bounded scroll body; heading and footer remain outside scrolling.
+  scrollable?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default, footer]
+    states: [side, arrow, scrollable]
+    parts: [arrow, title, body, scroll, footer]
+    preview: '<au-popover side="bottom" heading="Keyboard shortcuts" style="width:17rem">Every overlay in this family shares one material: a warm-graphite surface, a single hairline, and the glass drop shadow.</au-popover>'

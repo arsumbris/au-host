@@ -1,0 +1,20 @@
+{
+  "--au-slider-track-paint": "Optional data-derived channel background; ordinary sliders retain the theme track and fill.",
+  "--au-slider-progress-paint": "Optional progress overlay paint for data-channel sliders; transparent preserves the full channel background in Firefox.",
+  "--au-accordion-indent": "Accordion content indentation override; falls back to shared spacing.",
+  "--au-accordion-pad-x": "Accordion horizontal padding override; falls back to shared spacing.",
+  "--au-accordion-row": "Accordion row height override; falls back to shared spacing.",
+  "--au-scroll-fade-size": "Scroll-area local fade length override; zero disables fading.",
+  "--au-tab-height": "Tab strip local height override; falls back to row height.",
+  "--au-tab-max-width": "Tab bar measurement output consumed by tab cells.",
+  "--au-tree-disc-opacity": "Tree disclosure affordance opacity override.",
+  "--au-tree-font": "Tree typography override; defaults supplied by the component.",
+  "--au-tree-guide-opacity": "Tree container hover-state input controlling indentation guides.",
+  "--au-tree-item-hover": "Generic tree item hover override.",
+  "--au-tree-item-radius": "Generic tree item corner override.",
+  "--au-tree-item-selected": "Generic tree item selection fill override.",
+  "--au-tree-level": "Tree row level property bridge used in indentation calculation.",
+  "--au-nesting-header-height": "Host nesting preference input: reserves wrapper header space while expanded; absent follows the local gutter hover.",
+  "--au-nesting-row-opacity": "Host nesting preference input: keeps wrapper labels visible while expanded; absent follows local hover.",
+  "--au-nesting-row-events": "Host nesting preference input: enables wrapper controls while expanded; absent follows local hover."
+}

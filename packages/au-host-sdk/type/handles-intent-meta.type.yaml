@@ -1,0 +1,27 @@
+# Owned by @arsumbris/host-sdk — a host-relied meta the declared-capability gate reads.
+# The META a projection carries to declare WHICH intents it handles — a list of
+# def-refs to intent type-defs. Read off the projection subtype's type-def in the
+# discovery pass (the SAME fetch that carries projection-runtime-meta), so "who
+# handles intent X" is a client-side filter, no new engine read. def-ref-in-meta
+# is engine-validated : a wrong-closure target is
+# a load error, not a silent misroute. STATIC declaration; the RUNTIME handler binds
+# at mount via host.intent.handle, keyed to the same typed capability.
+
+
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The intents this projection TYPE handles AMBIENTLY — reached by the focus-MRU ambient walk (and
+  # also targetable by an explicit wire / aimed delivery). Def-refs to `intent` subtypes.
+  handles?: type<intent>*[]
+  # The intents this projection handles ONLY when AIMED at it (a targeted / directed delivery — an
+  # explicit wire, or the open chooser's "replace this viewer" pick). A `handlesTargeted` intent is
+  # NEVER a candidate in the ambient walk, so a container-opened VIEWER (e.g. editor-pane) can be an open
+  # TARGET (replace its own content) without ever claiming an ambient open.
+
+  handlesTargeted?: type<intent>*[]

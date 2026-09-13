@@ -1,0 +1,38 @@
+# Owned by component-contract. The INTERFACE for `<au-stepper>` — ordered position in a finite flow.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. DATA-DRIVEN: `steps` is a au-step-item[] the consumer owns; `current` is the
+# 1-based-minus-one index that drives the derived complete/current/upcoming ladder. The control owns
+# layout (dots / horizontal / vertical), the state→class map, and (when interactive) roving focus.
+#
+# Position reads as marker FILL + ink WEIGHT + a 1px hairline connector — NEVER a coloured rail and
+# NEVER a left accent bar. Hue (danger) appears only on a genuine `error` step. Emits `au-step-select`
+# (detail `{ id, index }`, composed + bubbling) when an enabled step is activated.
+#: Text-role fallbacks match the base ink palette without token stylesheets.
+#: The interface for <au-stepper>: ordered position in an N-step flow over `steps` (au-step-item[]),
+#: `current` driving the ladder. Variants dots / horizontal / vertical; numbered markers; a chevron
+#: or hairline separator; read-only / linear / free interaction. Emits `au-step-select {id, index}`.
+extends: ui-component::component-contract
+fields:
+  #: The step model. The consumer owns it; the control renders + navigates.
+  steps?: au-step-item[]
+  #: The current step index (0-based); drives the derived complete / current / upcoming ladder.
+  current?: Number
+  #: Layout arrangement.
+  variant?: [horizontal, vertical, dots]
+  #: Markers carry mono numbers (→ a check on completion). Ignored by `dots`.
+  numbered?: Boolean
+  #: Horizontal only — a `›` glyph between steps instead of a hairline connector.
+  separator?: [line, chevron]
+  #: Read-only (`none`), click-back-only (`linear`, completed steps), or jump-anywhere (`free`).
+  interactive?: [none, linear, free]
+  #: Render a mono `n/m` read-out after the steps.
+  countLabel?: Boolean
+  #: Accessible name for the flow.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-step-select]
+    states: [interactive]
+    parts: [step, marker, label, connector, count]
+    preview: '<au-stepper numbered current="1" steps=''[{"id":"a","label":"Point at binary"},{"id":"b","label":"Point at workspace"},{"id":"c","label":"Connect"}]''></au-stepper>'

@@ -1,0 +1,3 @@
+/* Launcher chrome shares the app foundation and inherits its active theme. */
+@import "@arsumbris/style/tokens.css";
+@import "@arsumbris/style/ext.css";

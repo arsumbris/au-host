@@ -1,0 +1,11 @@
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Select tab by number
+    category: Navigation
+fields:
+  #: Visible tab number 1–8; 9 selects the last tab.
+  key: String

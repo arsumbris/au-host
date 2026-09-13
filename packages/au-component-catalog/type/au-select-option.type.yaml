@@ -1,0 +1,12 @@
+# One option in an <au-select>. Serializable DATA — never a framework element (the data-driven rule).
+#: One <au-select> option: value (keys select + matches against the field value), label, an optional
+#: leading au-icon glyph name, and an optional per-item disabled flag.
+fields:
+  #: Stable value the consumer maps back to on `au-change` and matches against the select `value`.
+  value: String
+  #: The option label, shown in the row and (when chosen) echoed in the field.
+  label: String
+  #: Optional leading au-icon glyph NAME (a string, not a framework node), shown in the row + field.
+  icon?: String
+  #: Disable just this option (it stays visible but is not selectable).
+  disabled?: Boolean

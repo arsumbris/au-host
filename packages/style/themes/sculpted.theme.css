@@ -1,0 +1,48 @@
+/* AU Sculpted — opaque graphite, broad face illumination and a soft upper-edge bevel.
+ * User-provided edge-highlight reference; independent AU palette and elevation roles. */
+:root {
+  --au-link-internal: #c9a782;
+  --au-link-external: var(--au-link-internal);
+  --au-pane-edge-image: radial-gradient(ellipse calc(var(--au-radius-panel) * 14) calc(var(--au-radius-panel) * 11) at 0% 0%, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.075) 32%, transparent 78%), radial-gradient(ellipse calc(var(--au-radius-panel) * 14) calc(var(--au-radius-panel) * 11) at 100% 100%, rgb(255 255 255 / 0.19), rgb(255 255 255 / 0.06) 32%, transparent 78%);
+  color-scheme: dark;
+  --au-radius-panel: 18px;
+  --au-pane-focus-color: rgb(255 255 255 / 0.045);
+  --au-color-desk: #050505;
+  --au-color-bg: #090909;
+  --au-color-shell: #111111;
+  --au-color-surface-1: #181818;
+  --au-color-surface-2: #121212;
+  --au-color-surface-3: #242424;
+  --au-ink-1: #e5e5e5;
+  --au-ink-2: #d5d5d5;
+  --au-ink-3: #acacac;
+  --au-ink-4: #999999;
+  --au-ink-5: #555555;
+  --au-chrome-opacity: 1;
+  --au-surface-alpha: 1;
+  --au-material-blur: 0px;
+  --au-material-filter: none;
+  --au-chrome-background-image: linear-gradient(118deg, rgb(255 255 255 / 0.055), rgb(255 255 255 / 0.012) 38%, transparent 70%), radial-gradient(90% 110% at 100% 100%, rgb(255 255 255 / 0.025), transparent 75%);
+  --au-pane-background-image: linear-gradient(118deg, rgb(255 255 255 / 0.022), rgb(255 255 255 / 0.005) 38%, transparent 75%);
+  --au-line-1: rgb(255 255 255 / 0.065);
+  --au-line-2: rgb(255 255 255 / 0.11);
+  --au-line-3: rgb(255 255 255 / 0.18);
+  /* Directional rims express depth; the existing solid fill remains the reading ground. */
+  --au-elev-3-line: inset 0 0 0 1px rgb(255 255 255 / 0.025), inset 0 0 0 2px rgb(0 0 0 / 0.12), 0 6px 16px -12px rgb(0 0 0 / 0.45);
+  --au-elev-4-line: inset 0 1px 2px rgb(0 0 0 / 0.30), inset 0 -1px 0 rgb(255 255 255 / 0.065);
+  --au-elev-5-line: inset 1px 1px 0 rgb(255 255 255 / 0.09), inset -1px -1px 0 rgb(255 255 255 / 0.07), 0 10px 24px -10px rgb(0 0 0 / 0.45);
+  --au-sh-pop: 0 12px 32px -8px rgb(0 0 0 / 0.55);
+  --au-chrome-hover: rgb(255 255 255 / 0.055);
+  --au-chrome-active: rgb(255 255 255 / 0.09);
+  --au-accent-signal: #e5e5e5;
+  --au-accent-atmosphere: rgb(255 255 255 / 0);
+  --au-accent-soft: rgb(255 255 255 / 0.13);
+  --au-accent-ink: #181818;
+  --au-cta-bg: #e5e5e5;
+  --au-cta-ink: #181818;
+  --au-cta-hover: #f2f2f2;
+  --au-cta-pressed: #cecece;
+  --au-selection-bg: rgb(255 255 255 / 0.18);
+  --au-selection-fg: #f0f0f0;
+  --au-focus-outer: #c5c5c5;
+}

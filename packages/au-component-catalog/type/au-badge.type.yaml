@@ -1,0 +1,16 @@
+# <au-badge> — compact passive count, label or status marker.
+#: <au-badge> — a compact sans-serif count, short label or bare status dot. Counts use
+#: tabular digits and rounded ends; labels can wrap and grow with larger text. Semantic tones
+#: tint the surface and foreground using theme roles. Content is the default slot; non-interactive.
+extends: ui-component::component-contract
+fields:
+  #: label / count render the slotted content; dot collapses to a bare marker (no content).
+  variant?: [label, count, dot]
+  #: The status tone. ok / warn / danger paint the fill; ink is the neutral default.
+  tone?: [ink, ok, warn, danger]
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    states: [variant, tone]
+    parts: [badge]
+    preview: '<au-badge>NEW</au-badge> <au-badge variant="count">12</au-badge> <au-badge tone="ok">Ready</au-badge> <au-badge tone="warn">Beta</au-badge> <au-badge tone="danger">3</au-badge> <au-badge variant="dot" tone="danger"></au-badge>'

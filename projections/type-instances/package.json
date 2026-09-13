@@ -1,0 +1,25 @@
+{
+  "name": "@au-projections/type-instances",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/code-syntax": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/preview-content": "link:../../packages/preview-content",
+    "@arsumbris/projection-docs": "workspace:*",
+    "@arsumbris/selection": "link:../../packages/selection",
+    "@arsumbris/type-query": "link:../../packages/type-query",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

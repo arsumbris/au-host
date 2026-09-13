@@ -1,0 +1,8 @@
+# A single ⌘S → save-intent binding that the live-edit test rebinds to ⌘J.
+# The test restores this file and checks that file changes reach the running dispatcher.
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [mod]
+        key: s
+    intent: "[[save-intent::intent]]"

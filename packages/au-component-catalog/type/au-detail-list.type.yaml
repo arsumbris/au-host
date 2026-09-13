@@ -1,0 +1,20 @@
+# <au-detail-list> — the key/value property list for inspector + detail/peek panes.
+#: <au-detail-list> — the key/value property list for inspector + detail/peek panes (the "file-peek"
+#: pattern). DATA-DRIVEN: `items` is a au-detail-item[] the consumer owns. The whole hierarchy rides two
+#: ink steps — a muted term, a bright value — with Geist Mono for identifier values on tabular figures.
+#: Status is tinted value TEXT only (never a rail). Two layouts: `inline` (term left / value right) and
+#: `stacked` (micro-cap term above the value). Non-interactive.
+extends: ui-component::component-contract
+fields:
+  #: The rows. The consumer owns them; the list renders term/value pairs.
+  items?: au-detail-item[]
+  #: inline = term left / value right on one baseline; stacked = micro-cap term above the value.
+  layout?: [inline, stacked]
+  #: Draw an opt-in hairline between adjacent rows. Off by default — whitespace does the grouping.
+  separators?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [list, row, term, value]
+    preview: |
+      <au-detail-list layout="inline" style="width:280px"
+        items='[{"term":"Path","value":"src/index.ts","mono":true},{"term":"Size","value":"12.4 KB","mono":true},{"term":"Status","value":"Modified","tone":"warn"}]'></au-detail-list>

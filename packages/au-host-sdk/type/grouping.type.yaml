@@ -1,0 +1,34 @@
+# Owned by @arsumbris/host-sdk. THE grouping config a composition carries in its `grouping?` field: which
+# grouping container it groups panes into, and whether new document panes arrive grouped. A STANDALONE
+# composition-config aspect, sibling to `intent-routing` and `viewer-defaults`.
+
+# WHY THE CHOICE BELONGS TO THE COMPOSITION. Several containers are grouping containers (tabs, column, a
+# third party's carousel — every `grouping-container` subtype). The substrate must pick one to build a new
+# group with, and picking by name in the framework would re-privilege a container. So the CHOICE is the
+# user's document's, not the framework's.
+
+
+# A COMPOSITION-CONFIG ASPECT: it EXTENDS `composition-config` (same-repo, host-sdk-owned) so
+#   - `readSubtypes(composition-config)` returns it (discoverable, open); a third-party aspect joins by
+#     extending the base;
+#   - the per-projection edit right stays bounded by the UNCHANGED `edits: type<composition-config>*`; a
+#     host surface that authors a grouping default grants itself `edits: [[grouping]]`.
+# It is a first-class composition FIELD, matching `intent-routing`
+# and `viewer-defaults`.
+
+# WHY host-sdk owns it: the host's grouping RESOLUTION references/interprets this config (the same
+# references/interprets criterion that admitted intent routing).
+extends: composition-config
+fields:
+  #: Which grouping container a new group is built with — a center-zone drop wrap, and (with
+  #: `group-new-panes`) a new document's arrival group. A DEF-REF bounded to `grouping-container`, so the
+  #: ENGINE validates the target IS a group container: a value naming a non-grouping container (bento) or
+  #: an absent type is a load error, not a drop that silently does nothing. The value is a wikilink to the
+  #: type-def, e.g. `group-into: "[[tabs]]"`. Absent, and with >=2 grouping containers eligible, a WRAP
+  #: asks the host chooser and a document ARRIVES BARE (never a silent name-sort default).
+  group-into?: type<grouping-container>*
+  #: When true, a newly-opened document pane ARRIVES wrapped in a group (its own tab strip / title) rather
+  #: than bare, grouped into `group-into`. A composition-level policy (the "which" beside the "whether"),
+  #: not a per-container field. Absent = documents open bare. With no `group-into` to resolve the container
+  #: unambiguously, a new document arrives bare rather than asking on every open.
+  group-new-panes?: Boolean

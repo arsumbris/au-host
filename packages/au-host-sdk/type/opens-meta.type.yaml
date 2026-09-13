@@ -1,0 +1,30 @@
+#: Which file content a projection can OPEN — the content-routing axis, distinct from the code locator.
+# Owned by au-host-sdk. Generates the exported `OpensMeta` interface.
+
+# WHY THIS EXISTS, and why it is its OWN meta. A file open must resolve to a VIEWER: the editor opens
+# anything, a markdown reader opens `md`/`markdown`/`mdx`. Which viewer opens which content is a
+# PROPERTY OF THE VIEWER, so it is declared on the viewer's own type-def and folded from the type
+# graph — never a container hardcoding `editor-pane`.
+
+
+
+# It rides its own `opens-meta` rather than `projection-runtime-meta` because that meta is the CODE
+# LOCATOR (`entry` / `export` / `contractVersion`); content routing is a different axis.
+
+# This meta declares only ELIGIBILITY — WHICH viewers CAN open a file — never the decision. The resolver
+# `resolveViewer(file, descriptors, ...)` (container-core) reads it off `ProjectionDescriptor.meta` via
+# `viewersFor` (the eligible set, most-specific-first for DISPLAY order only) and runs an EXPLICIT ladder:
+# the firer's `open-intent.with` > a composition `viewer-defaults` default > the SOLE eligible viewer >
+# else the host CHOOSER asks. A viewer declaring it opens `md` does NOT thereby become md's default; there
+# is no silent most-specific auto-pick.
+
+
+# `*` = any extension (the universal viewer). Otherwise a bare extension, no dot (`md`, not `.md`).
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's nominal
+# marker for meta types. `::au-engine` is a universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  #: The file extensions this viewer opens, no leading dot. `*` means any file (the universal
+  #: fallback). Non-empty: a viewer that declares this meta opens at least one thing.
+  opens: String[+]

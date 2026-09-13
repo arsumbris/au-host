@@ -1,0 +1,19 @@
+# <au-divider> — a 1px hairline rule, horizontal or vertical. No content.
+#: <au-divider> — a 1px hairline rule, horizontal or vertical. `weight` picks subtle/default/strong;
+#: `inset` insets the rule from its container edges.
+extends: ui-component::component-contract
+fields:
+  #: Rule axis. Vertical stretches to its flex parent's cross-size.
+  orientation?: [horizontal, vertical]
+  #: Hairline weight: subtle = line-1, default = line-2, strong = line-3.
+  weight?: [default, subtle, strong]
+  #: Inset the rule from its container edges.
+  inset?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    preview: |
+      <div style="width:220px">
+        <au-divider></au-divider>
+        <au-divider weight="subtle" inset></au-divider>
+        <au-divider weight="strong"></au-divider>
+      </div>

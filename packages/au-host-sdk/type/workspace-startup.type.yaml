@@ -1,0 +1,4 @@
+#: Host startup choice in the entry workspace's workspace-startup.yaml.
+fields:
+  #: Initial layout, used until the user has a valid remembered composition choice. Omit for an empty start.
+  initialComposition?: composition*

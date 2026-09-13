@@ -1,0 +1,30 @@
+# Owned by au-host-sdk (the host mount-contract vocabulary). Generates the exported
+# `CompositionConfig` marker.
+
+
+# Abstract base for composition-scoped configuration aspects. The composition carries
+# intent-routing as a field whose type extends this base, alongside other declared aspects.
+
+# FIELDS-LESS MARKER, so au-host-sdk gains a CATEGORY, not field vocabulary of its own here. The
+# concrete `intent-routing` aspect (also host-sdk-owned, since the host dispatch references/interprets
+# routing) carries the routing fields; a third-party aspect joins by extending this base. host-sdk owns
+# the abstract base AND the routing aspect — the layered-ownership pattern, with routing admitted into
+# the SDK by the references/interprets criterion (unlike range/selection, which the host never interprets).
+
+# TWO JOBS the shared base does:
+#   - the aspect set is DISCOVERABLE, `readSubtypes(composition-config)` — what config a composition
+#     can carry, a type-graph query, no registry. The family is OPEN: a plugin adds an aspect as a new
+#     subtype without touching this base or the composition.
+#   - it is the BOUND for the per-projection edit capability: a projection declares
+#     `edits: type<composition-config>*[]` (the `edits-composition-config-meta`, owned by
+#     `packages/intent`) — which aspects it may write — and the host gates a composition-aspect write
+#     against that set at the warn rung.
+
+# ABSTRACT, so never claimed directly: an aspect claims a concrete subtype, and a composition mixes
+# that subtype in. Editing the structural pool (`root` / `projections`) is NOT a config aspect and is
+# not in this family — it is the container-ops availability axis, gated separately.
+
+abstract: true
+#: The abstract base for a composition's config aspects. The `intent-routing` aspect extends it and is
+#: carried as the composition's `intent-routing` field; the family is discoverable and bounds the
+#: per-projection edit capability.

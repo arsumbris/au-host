@@ -1,0 +1,12 @@
+# STAND-IN type-def, owned by the `selection` package.
+# A selection whose target is a WIKILINK reference dragged out of a document — the
+# reference text `[[target#anchor^block:field]]` minus its display `|alias`, in the
+# engine's wikilink grammar (see the-wikilink-zoo). UNRESOLVED by design: `target` is
+# the reference the reader picked, NOT a path. Resolving it to a concrete file/anchor is
+# the drop side's job (the engine's link resolver), the same way a file-selection's viewer
+# is resolved at drop — so a wikilink joins the drag `content` union without a bare-path
+# special case. The inherited optional `range` carries a sub-region when the reference is
+# dragged with a live text-range.
+extends: selection
+fields:
+  target: String

@@ -1,0 +1,16 @@
+# CLOSE-EMPTY-TAB fixture — a tabs container with one real tab (a file-tree). The test adds an EMPTY tab
+# via the strip's "+", then closes it, asserting it goes away (the reported bug: an empty tab can't close).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^tree]]"
+  - ^: tree
+    type: file-tree::file-tree

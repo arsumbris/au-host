@@ -1,0 +1,35 @@
+# Owned by component-contract. The INTERFACE for `<au-nav-group>` — a titled cluster of nav rows.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, content regions, states, parts. Set-INDEPENDENT: a consumer types against THIS.
+#
+# An eyebrow (composed from `<au-section-header>`) over a default slot of `<au-tree-row>` /
+# `<au-nav-item>` children. Purely structural: it owns the rhythm between the eyebrow and its items and
+# the tight gap between rows. Collapse state is the CALLER's — when collapsed the items slot is not
+# rendered. `label` + `count` are the eyebrow's; `actions` is a slot forwarded to the header. Emits
+# `au-toggle` (composed + bubbling) when the header is activated.
+#: The interface for <au-nav-group>: a titled row cluster. `label` eyebrow + `count`, default-slot
+#: rows, `actions` slot; `collapsible` / `open` / `sans` / `caps`. Emits au-toggle.
+extends: ui-component::component-contract
+fields:
+  #: The eyebrow text.
+  label?: String
+  #: A right-aligned trailing count on the eyebrow.
+  count?: String
+  #: Make the eyebrow a disclosure control; when collapsed the items slot is not rendered.
+  collapsible?: Boolean
+  #: Disclosure state. Default false (closed); a non-collapsible group always shows its items.
+  open?: Boolean
+  #: Step the eyebrow up to the full sans reading face (a named panel section).
+  sans?: Boolean
+  #: Opt the eyebrow into the mono UPPERCASE face.
+  caps?: Boolean
+  #: Put the eyebrow's disclosure chevron at the TRAILING (right) edge instead of leading.
+  chevronEnd?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-toggle]
+    slots: [actions]
+    states: [collapsible, open, sans, caps]
+    parts: [header, items]
+    preview: '<au-nav-group label="au-host" count="42"><au-tree-row kind="folder">app</au-tree-row><au-tree-row level="1" selected>index.ts</au-tree-row></au-nav-group> <au-nav-group label="Backbone" count="8" collapsible></au-nav-group>'

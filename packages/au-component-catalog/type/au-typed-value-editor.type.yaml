@@ -1,0 +1,35 @@
+# <au-typed-value-editor> — a recursive typed-value editor over a RESOLVED shape.
+#
+# PRESENTATIONAL: pass a `schema` (a resolved shape tree from @arsumbris/typed-value) plus the current
+# `value`; the element renders one control per field and emits the collected value. It never reads the
+# graph (resolution is the core's / host wrapper's job) and never fires an intent — it emits a value, the
+# consumer decides what running MEANS. So the command palette, an author-an-instance flow, and the agent
+# tool bridge all share ONE editor.
+#: <au-typed-value-editor> — pass a resolved `schema` + `value`; the element renders a typed form and emits
+#: `au-value-change` per edit + `au-value-complete` on submit. `schema` / `value` are opaque to the type
+#: system (a recursive TS union the engine grammar can't express), so both are `opaque` here — the element's
+#: own TS carries the real `ResolvedShape`.
+extends: ui-component::component-contract
+fields:
+  #: The RESOLVED shape tree to edit (a `ResolvedShape`). Set as a PROPERTY (complex data), not an attribute.
+  #: Opaque to the type system — the element types it as `ResolvedShape`.
+  schema?: opaque
+  #: The current value (a record map, or a scalar). Set as a PROPERTY. Records carry their own `type:`.
+  value?: opaque
+  #: Validation findings to display (a `ValueDiagnostic[]` from the core). Set as a PROPERTY. The element
+  #: never validates — the host runs `validate()` and passes results in; the element maps them to rows.
+  diagnostics?: opaque
+  #: The picker data source for reference / file / any slots: `(slotPath, query) => Promise<EditorOption[]>`.
+  #: A CALLBACK property (not a data field). Absent → references degrade to free text. The host wires it to
+  #: `readInstancesOf` / `readFiles`.
+  resolveOptions?: opaque
+  #: Label for the submit affordance.
+  submitLabel?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-value-change, au-value-complete]
+    parts: [fields, footer]
+    # `schema` is a property-set complex object the gallery's attribute-based synthesis can't build,
+    # so a shell preview stands in; the gallery story feeds a real resolved fixture via the property.
+    preview: |
+      <au-typed-value-editor></au-typed-value-editor>

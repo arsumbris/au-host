@@ -1,0 +1,15 @@
+# A window with the default-style keymap: ⌘S saves and ⌘K toggles the command palette.
+# The test exercises both shortcuts through the active keymap.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^au-window-primary]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^main]]"
+    ^: au-window-primary
+  - ^: main
+    type: editor-pane::editor
+    file: sample.md

@@ -1,0 +1,21 @@
+{
+  "name": "@au-projections/dock",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo dock --module au-host-sdk=@arsumbris/au-host-sdk --module intent=@arsumbris/intent --out src/generated.ts"
+  },
+  "dependencies": {
+    "@arsumbris/container-core": "workspace:*",
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/intent": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

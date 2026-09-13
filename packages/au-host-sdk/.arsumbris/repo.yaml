@@ -1,0 +1,4 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: au-host-sdk
+description: the host mount contract; owns projection / projection-config / composition

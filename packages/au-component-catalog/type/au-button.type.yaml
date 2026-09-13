@@ -1,0 +1,43 @@
+# Owned by component-contract. The INTERFACE for `<au-button>`.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block
+# below carries events-out, content regions, states, and parts.
+#
+# Set-INDEPENDENT: a consumer types against THIS, never against a specific set, so any set
+# satisfying the contract can back it.
+#
+# RENDER-RESILIENCE (a requirement on every implementation, not expressible in the type):
+# `<au-button>` with NO attributes must render sensibly. Required-ness here is a COMPILE-TIME
+# consumer contract via codegen; at runtime any tag can be instantiated bare
+# (`document.createElement` is always valid), which is what lets the dynamic gallery
+# instantiate every discovered tag and what makes a set swap safe.
+#: The interface for <au-button>. A leaf component: data-in props, one event out, default
+#: slot for its label. Set-independent — consumers type against this, never against a set.
+extends: ui-component::component-contract
+fields:
+  # Visual role: solid, ghost, outline and cta use monochrome surfaces.
+  # danger identifies destructive actions through the status palette.
+  # Enum order affects auto-unification and the synthesized gallery sample, so solid comes first.
+  #: Visual role: solid / ghost / outline / cta (monochrome) + danger (a destructive-action extension).
+  variant?: [solid, ghost, outline, cta, danger]
+  #: Size step. sm/md/lg = 28/32/40, parity with au-input. Default md.
+  size?: [sm, md, lg]
+  #: Non-interactive + de-emphasized. Also reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Busy: shows a progress affordance and suppresses activation. Reflected as `loading`.
+  loading?: Boolean
+  # An icon NAME, never a framework element — a React element in a data slot is unrenderable
+  # by a Lit-authored implementation. A consumer needing custom leading content slots it
+  # instead (see `slots` below).
+  #: Leading icon NAME (not a framework element). Slot `leading` for arbitrary content.
+  icon?: String
+  # Do not name a component prop type: generated interfaces use type as their discriminant.
+  # A prop with the same name would produce a duplicate TypeScript property.
+meta:
+  - type: ui-component-meta::component-contract
+    # Composed + bubbling, per the contract rule in ui-component-meta.
+    events: [au-activate]
+    # Default slot is the label; `leading` / `trailing` take arbitrary consumer DOM.
+    slots: [leading, trailing]
+    states: [disabled, loading]
+    parts: [button, label, icon]

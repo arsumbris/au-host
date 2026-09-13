@@ -1,0 +1,10 @@
+# Repo identity + deps (au.engine.repo). force-graph IS a `pane-projection::au-host-sdk`, so
+# au-host-sdk is a real type dep; it fires open-intent on a node click (intent) and follows the
+# active note when `tracksSelection` (selection).
+type: au.engine.repo::au-engine
+name: force-graph
+description: first-party force-directed link-graph projection — the whole vault as an interactive graph
+deps:
+  - name: au-host-sdk
+  - name: selection
+  - name: intent

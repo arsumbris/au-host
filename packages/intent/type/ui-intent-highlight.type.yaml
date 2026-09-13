@@ -1,0 +1,29 @@
+# STAND-IN type-def, owned by the `intent` package (NOT the SDK).
+# "Highlight this element wherever it is shown." BROADCAST: every open projection
+# that handles it highlights ITS OWN copy of the target. Mode-tagged:
+#   - show-if-visible  — passive, highlight only where already on-screen.
+#   - reveal-if-exists — each holder scrolls the target into its OWN viewport
+#                        (per-copy, no single-winner).
+# Fired by the UI or, across the bridge, the agent.
+
+#: Highlight a target wherever it is shown. BROADCAST: every open projection that
+#: handles it highlights ITS OWN copy. `mode` chooses passive highlight vs
+#: scroll-into-view. Fired by the UI or, across the bridge, the agent.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: broadcast
+  # AGENT-FIRABLE. "Show the human what I am talking about" is the reason this intent
+  # exists — the docstring above already names the agent as a firer — and au-mcp's
+  # live-verified flow drives it. Its payload is a selection, so it can only point at
+  # something already on screen; each holder highlights its own copy and nothing mounts.
+  - type: intent-agent-meta
+    firable: true
+fields:
+  #: What to highlight, a selection (a file-selection with an optional range).
+  #: Reuses the selection vocab.
+  target: selection::selection&
+  #: show-if-visible = highlight only where already on-screen (passive);
+  #: reveal-if-exists = each holder scrolls its OWN viewport to bring the target
+  #: into view (per-copy, no single winner).
+  mode: [show-if-visible, reveal-if-exists]

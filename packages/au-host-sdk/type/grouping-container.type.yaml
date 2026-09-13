@@ -1,0 +1,22 @@
+#: A container that can hold N children as ONE node — so it can be a drop-to-group target and the
+#: container a new group is built with. Identity only: what a container IS, like container-projection.
+# Owned by au-host-sdk. A KIND (an abstract subtype of container-projection), NOT a meta.
+
+# Grouping capability is a discoverable container subtype.
+# readSubtypes(grouping-container) finds eligible implementations, and the
+# type<grouping-container>* bound validates composition defaults at load time.
+
+# THE MODULE CONTRACT. A `projection` module must export `mount`; a `grouping-container` module must ALSO
+# export `buildGroup(children: { id, instance }[]) => <its own config>`, which mints an instance holding
+# the children (each child's stable id landing as its `^:` so a moved terminal or editor keeps its session
+# and view-state). The substrate CALLS that export — it never authors the container's own schema (only tabs
+# may build a tabs group). The export is located via the module `projection-runtime-meta` already carries
+# (entry), and named by convention (`buildGroup`), the way `mount` is the default `export`. No second
+# locator meta is needed. Enforcement is the same runtime duck-type as `mount` today; static enforcement is
+# described by the SDK's ProjectionModule and GroupingContainerModule contracts.
+
+
+
+abstract: true
+extends: container-projection
+fields: {}

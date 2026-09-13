@@ -1,0 +1,45 @@
+type: composition::au-host-sdk
+windows:
+  - "[[^^window]]"
+projections:
+  - ^: window
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^layout]]"
+  - ^: layout
+    type: sandwich::sandwich
+    left:
+      type: sandwich-slot::sandwich
+      child: "[[^^files]]"
+      label: Files
+      size: 240
+    center:
+      type: sandwich-slot::sandwich
+      child: "[[^^documents]]"
+      hideHeader: true
+    right:
+      type: sandwich-slot::sandwich
+      sizing: collapsed
+  - ^: files
+    type: file-tree::file-tree
+  - ^: documents
+    type: tabs::tabs
+    tabs:
+      - "[[^^document]]"
+    newTabPosition: after-source
+  - ^: document
+    type: aup-reader::aup-reader
+    file: Welcome.md
+intent-routing:
+  wires:
+    - intent: "[[open-intent::intent]]"
+      mode: strict
+      source: "[[^^files]]"
+      targets:
+        - "[[^^documents]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[aup-reader::aup-reader]]"
+keymaps:
+  - "[[default.keymap]]"

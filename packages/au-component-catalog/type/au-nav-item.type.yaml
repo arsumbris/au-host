@@ -1,0 +1,23 @@
+# Owned by component-contract. The INTERFACE for `<au-nav-item>` — the sidebar / nav-list row.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, content regions, states, parts. Set-INDEPENDENT: a consumer types against THIS.
+#
+# A row is a `<button>` (an activatable affordance): a leading `icon` slot, the default-slot label, and
+# a trailing slot (a count / badge / status dot). Emphasis is by SURFACE + ink weight + a hairline
+# ring, never an accent rail. Emits `au-activate` (composed + bubbling) on press.
+#: The interface for <au-nav-item>: a nav-list row. Leading `icon` slot + default-slot label +
+#: `trailing` slot; `selected` firms it to the current row. Emits au-activate on press.
+extends: ui-component::component-contract
+fields:
+  #: The current / active row — firms to surface-2 + a hairline ring, sets aria-current=page.
+  selected?: Boolean
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state; suppresses activation.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-activate]
+    slots: [icon, trailing]
+    states: [selected, disabled]
+    parts: [button, icon, label, trail]
+    preview: '<au-nav-item selected><au-icon slot="icon" name="file-text"></au-icon>readme.md</au-nav-item> <au-nav-item><au-icon slot="icon" name="folder"></au-icon>projects<au-status-dot slot="trailing" tone="ok"></au-status-dot></au-nav-item> <au-nav-item disabled><au-icon slot="icon" name="lock"></au-icon>archived</au-nav-item>'

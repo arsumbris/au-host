@@ -1,0 +1,76 @@
+# The `tabs` container-projection. A stack of child projections shown as tabs,
+# one active at a time. A PEER container (bento / dock / canvas / sandwich), freely
+# nestable — a "tabbed pane" is a bento pane whose child is a `tabs` instance, so
+# bento owns no tab knowledge.
+
+# A tabs group remains valid with one or zero tabs. No minimum arity is declared.
+# Dissolve behavior is optional and declared by each container.
+
+# EACH TAB IS A UNION: a bare `mountable*` child reference, or a `container-slot` when the
+# POSITION has something to say. tabs adds NO slot subtype of its own — it honours neither a size
+# nor a collapse, so it names the shared base directly and an author can only write
+# what tabs actually acts on.
+
+
+# The preview marker is runtime state; persistence is handled by persistableConfig.
+extends: grouping-container::au-host-sdk
+fields:
+  #: A persistent start view: fills an empty group, then becomes a compact header above its tabs.
+  startView?: pane-projection::au-host-sdk*
+  #: Keep the start view compact when this projection is open elsewhere in the composition.
+  startViewCompactWhen?: type<projection::au-host-sdk>*
+  tabs: <mountable::au-host-sdk* | container-slot::au-host-sdk>[]
+  #: The active tab, named by its child's `^:` id — a SOFT pointer, not a validated ref. Falls back to the
+  #: first tab when absent or unresolved, e.g. when the active tab was a transient preview the substrate
+  #: dropped at serialize. Identity, not position, so a dropped/removed tab never mis-selects a sibling.
+  activeTab?: String
+  #: Placeholder for this group when empty. Other groups keep their own defaults.
+  emptyPlaceholder?: type<placeholder-projection::au-host-sdk>*
+  #: Replace this group's sole configured placeholder on an explicit open-pane action.
+  replaceEmptyPlaceholderOnOpen?: Boolean
+  #: How THIS group opens a file when the fired intent carries NO mode — that is, when the firer
+  #: had no opinion, the normal case for a caller with no preference.
+  #: An EXPLICIT mode on the intent always wins; this only answers the absent case.
+  #: Absent = `transient`, suitable for browsing with a single click,
+  #: so an unconfigured group opens transient tabs.
+  #: Per-instance: a reference panel and a working editor can choose different defaults.
+  #: `preview-pin` is deliberately NOT admissible here, so this enum is a SUBSET of the intent's
+  #: three: it is a GESTURE verb ("pin what I am previewing, peek the next"), which is meaningless
+  #: as a standing default.
+  defaultOpenMode?: [transient, permanent]
+  #: Where a newly opened file tab is inserted relative to its source tab in THIS group.
+  #: If the source is outside the group or no longer present, use the active tab instead.
+  #: An empty group inserts at zero. Existing-file activation and preview reuse stay in place.
+  #: Absent preserves before-source behavior; compositions may explicitly choose after-source.
+  newTabPosition?: [before-source, after-source]
+meta:
+  # Loadable-code metadata for the tabs projection's ESM. `entry` is relative to
+  # the OWNING PACKAGE ROOT (where this type-def lives), so the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # tabs can hold N children as one node, so it is a group target — declared by the KIND
+  # (`extends: grouping-container`), not a meta. The substrate discovers it via
+  # `readSubtypes(grouping-container)` and calls the `buildGroup` export in the module `entry` above (the
+  # grouping-container module contract); it never knows the name `tabs` or this config's shape. NO arity
+  # floor here — tabs' "always ≥2" is enforced in its own module, not the type system.
+  # The intents tabs HANDLES (typed capability). Discovered in the subtypes pass; the
+  # runtime handlers bind at mount. handle() is gated by this declaration.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[keep-tab-intent::intent]]"
+      - "[[next-tab-intent::intent]]"
+      - "[[previous-tab-intent::intent]]"
+      - "[[select-tab-intent::intent]]"
+      - "[[new-tab-intent::intent]]"
+      - "[[open-intent::intent]]"
+      - "[[open-pane-intent::intent]]"
+      - "[[promote-intent::intent]]"
+      - "[[show-pane-intent::intent]]"
+      - "[[reveal-pane-intent::intent]]"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[ui-intent-highlight::intent]]"

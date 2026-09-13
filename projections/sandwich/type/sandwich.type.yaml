@@ -1,0 +1,30 @@
+# Each named region contains a child reference or a sandwich-slot. The slot owns
+# sizing, collapse, and fixity, so those rules survive a change of occupant.
+
+extends: container-projection::au-host-sdk
+#
+# The slot branch is BARE, not `sandwich-slot::sandwich`. Sandwich owns that type, and a
+# `::repo` qualifier naming your own repo is legal but redundant — the bare form is
+# canonical. It is also the only one that builds: codegen reads a qualified name as
+# BORROWED and demands a module mapping for the owner, which for your own repo does not
+# exist. `projection::au-host-sdk` stays qualified because that peer really is another repo.
+fields:
+  left?: <mountable::au-host-sdk* | sandwich-slot>
+  center?: <mountable::au-host-sdk* | sandwich-slot>
+  right?: <mountable::au-host-sdk* | sandwich-slot>
+meta:
+  # Loadable-code metadata for the sandwich projection's ESM. `entry` is relative to
+  # the OWNING PACKAGE ROOT (where this type-def lives), so the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this container HANDLES. `collapse-region` (firer-relative) reaches sandwich as the
+  # firer's enclosing container: it toggles the SIDE region holding the firer (a rail's collapse
+  # toggle collapses its own region), declining the non-collapsible center so the walk continues out.
+  # The `handle()` seam is gated on this declaration (rung 3), so it must be listed.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[reveal-pane-intent::intent]]"
+      - "[[collapse-region::intent]]"
+      - "[[toggle-left-sidebar-intent]]"
+      - "[[toggle-right-sidebar-intent]]"

@@ -1,0 +1,12 @@
+# Repo identity + deps (au.engine.repo).
+#
+# The first-party DEFAULT component set — the immovable FLOOR of the resolution stack. It
+# IMPLEMENTS the catalog's `ui-component` contracts as Lit shadow custom elements and exposes a
+# `register(api)` the host calls. Two type DEPS: `component-contract` for the `component-set` base
+# it extends, and `au-component-catalog` for the `au-button` NAME its `provides` def-ref points at.
+type: au.engine.repo::au-engine
+name: au-component-set
+description: the first-party default component set — Lit shadow custom elements implementing the au-component-catalog names
+deps:
+  - name: component-contract
+  - name: au-component-catalog

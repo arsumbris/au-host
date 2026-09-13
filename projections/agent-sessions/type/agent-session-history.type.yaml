@@ -1,0 +1,16 @@
+extends: pane-projection::au-host-sdk
+fields:
+  profile?: agent-profile::au-mcp-sdk*
+  prompt?: [inherit, raw, minimal, compact-git, clean, context]
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Session history
+    icon: history
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    export: history
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-pane-intent::intent]]"
+      - "[[show-pane-intent::intent]]"

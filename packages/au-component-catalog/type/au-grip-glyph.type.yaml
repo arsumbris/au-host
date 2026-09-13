@@ -1,0 +1,18 @@
+# Owned by component-contract. The INTERFACE for `<au-grip-glyph>` — the ⠿ drag-handle affordance.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# states + the gallery sample. Set-INDEPENDENT: a consumer types against THIS.
+#: The interface for <au-grip-glyph>: the drag-handle affordance on a pane / tab / region label bar.
+#: Stateless — the container wires the pointer drag. Decorative (aria-hidden) unless given a `label`.
+extends: ui-component::component-contract
+fields:
+  #: The in-flight drag state — locked/grabbing visuals. The container sets this while a drag is active.
+  dragging?: Boolean
+  #: De-emphasized; suppresses click and keyboard activation and removes named grips from the tab order.
+  disabled?: Boolean
+  #: Accessible name. Absent or blank → decorative; nonblank → focusable button. Click, Enter and Space activate the consumer-owned action; the container supplies drag and move options.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    states: [dragging, disabled]
+    preview: '<au-grip-glyph></au-grip-glyph> <au-grip-glyph dragging></au-grip-glyph> <au-grip-glyph disabled></au-grip-glyph>'

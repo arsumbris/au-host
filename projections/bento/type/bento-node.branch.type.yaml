@@ -1,0 +1,9 @@
+# A binary split with two child positions by runtime convention.
+# Each position is a mountable reference, a bento-slot, or an inline branch.
+# Mountable children use pool references; slots and branch structure stay inline.
+
+extends: bento-node
+fields:
+  direction: [row, column]
+  ratio: Number
+  children: <mountable::au-host-sdk* | bento-slot | bento-node.branch>[]

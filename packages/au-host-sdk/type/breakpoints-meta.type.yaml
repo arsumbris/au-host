@@ -1,0 +1,29 @@
+#: The compact render sizes a projection can render at.
+# Owned by au-host-sdk. Generates the exported `BreakpointsMeta` interface.
+
+# WHY THIS EXISTS. What a collapsed region should LOOK like depends on the occupant: a rail narrows
+# to its icon-spine and stays mounted, a plain editor has no compact form so it hides. The compact
+# sizes a projection can render at are a PROPERTY OF THE PROJECTION, so they are declared on the
+# projection's own type-def and folded from the type graph, never held in a container's per-occupant
+# table.
+
+# The meta carries only the SIZES. WHICH one a container picks, and any state enum over them, is the
+# container's own dialect (the sandwich's `sizing: free | compact | collapsed` + smallest-pick). A
+# width-collapsing container reads the `width` axis; a height-collapsing one reads `height`.
+
+# `free` (full size) is IMPLICIT and never declared — every projection can be free-sized. This names
+# only the SMALL sizes.
+
+# OPT-IN, never `required`. A projection that declares nothing keeps the plain hide-on-collapse.
+
+# It reaches a CONTAINER through the descriptor the host publishes (`ProjectionDescriptor.meta`), not
+# through an engine read — so a container mounted without engine access still gets a child's sizes.
+# Read via `descriptorBreakpoints` / `projectionBreakpointsLookup`.
+
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's nominal
+# marker for meta types. `::au-engine` is a universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  #: The compact sizes this projection supports. Non-empty: a projection that declares this meta
+  #: supports at least one.
+  breakpoints: breakpoint[+]

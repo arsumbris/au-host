@@ -1,0 +1,17 @@
+# <au-tab> — one tab in an <au-tabs> tablist.
+#: <au-tab> — one tab of an <au-tabs> compound. Nest it as a child of <au-tabs>; it self-assigns the
+#: tablist slot and takes its variant / orientation / active state from the parent. The default slot is
+#: the label; optional `icon` (leading glyph), `badge` (trailing count), and `status` (a trailing
+#: StatusDot — the only hue a tab may carry) slots. Its `value` matches the owning <au-tab-panel>.
+extends: ui-component::component-contract
+fields:
+  #: This tab's value — matches its <au-tab-panel> value and the <au-tabs> value.
+  value?: String
+  #: Disable the tab (skipped by keyboard + pointer).
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default, icon, badge, status]
+    states: [active, disabled]
+    parts: [label]
+    preview: '<au-tab value="org">Org</au-tab>'

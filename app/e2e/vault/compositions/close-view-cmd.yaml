@@ -1,0 +1,30 @@
+# CLOSE-VIEW-CMD fixture — a tabs group with two editor panes, carrying the default-style keymap so ⌘W is
+# bound to close-view-intent. The e2e focuses a tab and presses ⌘W, asserting the focused pane closes AND
+# the window survives (the native ⌘W is suppressed because the gate handled it). ⌘W -> close-view-intent ->
+# the host resolves the focused pane -> requestClosePane -> closePane -> propose -> applyStructural: this
+# exercises the STRUCTURAL commit seam's guarded reap (the dialect seam is covered by close-guard.spec.ts).
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^a]]"
+      - "[[^^b]]"
+  - ^: a
+    type: editor-pane::editor
+    file: sample.md
+  - ^: b
+    type: editor-pane::editor
+    file: other.md

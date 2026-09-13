@@ -1,0 +1,10 @@
+extends: pane-projection::au-host-sdk
+fields:
+  #: Ordered projection identities offered by this hub; only installed surfaces are shown.
+  surfaces?: String[]
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Settings
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

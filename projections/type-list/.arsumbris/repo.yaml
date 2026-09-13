@@ -1,0 +1,9 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: type-list
+description: first-party type-graph projection
+deps:
+  - name: au-host-sdk
+  # type-list fires open-intent, so its type-def declares fires-intent-meta::intent
+  # and the fired intent def-refs cross into the intent repo.
+  - name: intent

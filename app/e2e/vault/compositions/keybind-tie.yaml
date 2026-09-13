@@ -1,0 +1,16 @@
+# KEYBIND-TIE fixture — a booted window carrying a keymap with two ⌘S bindings to different intents. The
+# keybind-dispatch E2E presses ⌘S and asserts the keybind/ask trace plus the host chooser surface, proving
+# an unresolvable within-file tie routes to the chooser rather than silently picking.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-keybind-tie.keymap]]"
+windows:
+  - "[[^^au-window-primary]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^main]]"
+    ^: au-window-primary
+  - ^: main
+    type: editor-pane::editor
+    file: sample.md

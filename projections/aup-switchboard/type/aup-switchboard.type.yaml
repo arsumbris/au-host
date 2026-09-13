@@ -1,0 +1,27 @@
+#: Wire the composition's intents — a visual patch-bay.
+# aup-switchboard IS a pane-projection subtype. It renders the composition's projections as
+# NODES with INPUT ports (the intents each type HANDLES) and OUTPUT ports (the intents it FIRES), and the
+# composition's `intent-wires` as CABLES between them. Drawing a cable (drag an output port to a matching
+# input port) SETS a wire; deleting one removes it — all through `host.compositionEdit`, the app-owned
+# surface that routes to the ONE guarded composition writer. Nodes + ports come from that surface too, so
+# the ports can never disagree with what dispatch enforces. No config, no selection: it reads the very
+# composition it is mounted in. `meta` declares its loadable ESM, resolved through the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name — surfaces on a tab / masthead / "Open with" row instead of the type name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Switchboard
+  # `entry` is relative to the owning package root; the built ESM is./dist/. No `export` → default `mount`.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # EDIT RIGHTS: the switchboard writes the `intent-routing` composition-config aspect (the consolidated
+  # bundle holding wires / defaults / reach / initial-focus) through `compositionEdit`, so it DECLARES it.
+  # The grant is WHOLE-ASPECT (coarse): "edit routing" covers every routing kind together. The host's
+  # composition-aspect edit gate treats the switchboard as an authorized editor of it and warns any
+  # projection that edits an aspect it did not declare.
+
+  - type: edits-composition-config-meta::intent
+    edits:
+      - "[[intent-routing::au-host-sdk]]"

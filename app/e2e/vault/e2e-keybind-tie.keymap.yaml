@@ -1,0 +1,14 @@
+# E2E keymap fixture — TWO keybinds on the SAME chord (⌘S), each firing a DIFFERENT intent, in ONE file.
+# Same keymap (same list order) + both global (same focus specificity) + distinct intents = a genuine tie
+# the resolver cannot break, so it ASKS: the authority routes to the host chooser. Referenced by
+# compositions/keybind-tie.yaml. Proves resolveChord → { kind: 'ask' } → the chooser surface.
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [mod]
+        key: s
+    intent: "[[save-composition-intent::intent]]"
+  - chord:
+      - mods: [mod]
+        key: s
+    intent: "[[delete-composition-intent::intent]]"

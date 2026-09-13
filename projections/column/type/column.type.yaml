@@ -1,0 +1,31 @@
+# Vertical accordion container: children stack top to bottom and can collapse independently.
+# Each item is a child reference or a column-slot. Position-specific collapse, sizing,
+# and fixity belong to the slot and survive occupant changes. Mounting and dragging
+# use the shared substrate. A column retains groups of any arity.
+# The local column-slot branch is unqualified; cross-repository types stay qualified.
+
+extends: grouping-container::au-host-sdk
+fields:
+  items: <mountable::au-host-sdk* | column-slot>[]
+  #: Render each item's grip, label, close and collapse controls. Default true.
+  #: False hides all item headers and displays their content expanded, without changing slot move/remove rules or drop targets.
+  showItemHeaders?: Boolean
+  #: Item controls: always, hover/focus edge handle, or hidden. When present overrides showItemHeaders.
+  #: Hover mode keeps content expanded and does not absorb child tab strips; touch shows the handle.
+  itemHeaders?: [always, hover, hidden]
+  #: Add-pane button presentation. Default always. Hover reveals on pointer hover or keyboard focus; touch keeps it visible. Hidden removes only this button, not drop targets.
+  addButton?: [always, hover, hidden]
+  #: Offer the centre wrap-into-a-group zone on a drop. Absent = true.
+  #: The EMISSION half of a refusal, and the reason it is not `admits`. `admits` is per-slot and
+  #: refuses AFTER the zone was offered; this suppresses the zone entirely, and it covers children
+  #: authored LATER, which arrive in a bare slot no per-slot rule governs. Both layers are wanted.
+  allowWrap?: Boolean
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The grouping-container kind declares this as a group target. The substrate calls
+  # this module's buildGroup export; the column retains groups of any arity.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[reveal-pane-intent::intent]]"

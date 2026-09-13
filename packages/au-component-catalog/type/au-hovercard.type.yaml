@@ -1,0 +1,15 @@
+# <au-hovercard> — the ephemeral peek shell (look-only).
+#: <au-hovercard> — the peek shell for cmd-hover previews: a raised surface (surface-1 + hairline + pop
+#: shadow, panel radius) with a soft projected-out pop-in. `origin` sets where the pop-in emanates FROM
+#: so it grows out of the anchor. LOOK ONLY — the host preview overlay owns positioning + the claim;
+#: content is the default slot.
+extends: ui-component::component-contract
+fields:
+  #: Where the pop-in emanates FROM (the transform-origin), so it grows out of the anchor side.
+  origin?: [top-center, bottom-center, top-left, bottom-left, center]
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    states: [origin]
+    parts: [card]
+    preview: '<au-hovercard style="width:320px"><div style="padding:10px 12px;font-weight:600">README.md</div><div style="padding:10px 12px;opacity:0.85">The note preview renders here — supplied by the caller.</div></au-hovercard>'

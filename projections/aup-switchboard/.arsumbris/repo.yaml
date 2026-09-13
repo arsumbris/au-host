@@ -1,0 +1,15 @@
+# Repo identity + deps (au.engine.repo). Additive first-party projection — the intent SWITCHBOARD, a
+# visual patch-bay that wires the composition's intents. Its type-def claims `pane-projection::au-host-sdk`
+# plus the au-host-sdk metas, so `au-host-sdk` is the one type crossing. It fires/handles NO intents (it
+# is a config editor over `host.compositionEdit`, not an intent participant), so `intent` is NOT a type
+# crossing and not a dep — the intent NAMES it shows are opaque strings from the composition, never a
+# `::repo` type reference here. `@arsumbris/host-app` is a CODE import only (the `HostApp` cast to reach
+# the app-owned `compositionEdit`), not a type crossing.
+type: au.engine.repo::au-engine
+name: aup-switchboard
+description: intent switchboard pane-projection — a visual patch-bay for the composition's intent wires (dogfood)
+deps:
+  - name: au-host-sdk
+  # The switchboard EDITS the `intent-wires` composition-config aspect (it writes wires) and declares that
+  # capability via `edits-composition-config-meta` — both owned by `intent`, so it is a declared peer.
+  - name: intent

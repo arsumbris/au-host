@@ -1,0 +1,24 @@
+# A window-root column containing one bento with an editor.
+# Unwrapping the column lifts the bento into the window content position and preserves its editor.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^col]]"
+    ^: w
+  - ^: col
+    type: column::column
+    items:
+      - "[[^^grid]]"
+  - ^: grid
+    type: bento::bento
+    root: "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

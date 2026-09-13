@@ -1,0 +1,15 @@
+# status-bar IS a `status-projection` (the status role): a compact, read-only status indicator
+# (vault + daemon status + engine version) over the host's daemon capability. The role IS the type,
+# so a status bar discovers it via `readSubtypes('status-projection')` and offers it as a candidate
+# (never auto-injected). A single surface — the default `mount` export. Mountable in any pane too
+# (the kind is design intent, not a site lock).
+extends: status-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Status
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

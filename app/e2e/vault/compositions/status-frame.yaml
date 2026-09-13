@@ -1,0 +1,19 @@
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^dock]]"
+  - ^: dock
+    type: dock::dock
+    center: "[[^^editor]]"
+    bottom: ["[[^^bar]]"]
+  - ^: editor
+    type: editor-pane::editor
+    file: sample.md
+  - ^: bar
+    type: bar::bar
+    end:
+      - view:
+          type: status-bar::status-bar

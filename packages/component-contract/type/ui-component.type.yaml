@@ -1,0 +1,20 @@
+# Owned by component-contract. The open BASE for a single component's INTERFACE.
+#
+# CONTRACT-ONLY, exactly like `intent`: there are no persisted `ui-component` instances and
+# the engine never validates a "component instance". The ephemeral "instance" is the props
+# payload a consumer passes to `<au-button …>`, type-checked at COMPILE time via codegen.
+#
+# A concrete component is a SUBTYPE whose TYPE NAME is the custom-element tag (`au-button`).
+# Its FIELDS are the props (data-in); a `ui-component-meta` block carries the non-field half
+# (events-out, content regions, states, parts).
+#
+# The type name must satisfy the engine type-name regex, so lowercase + hyphens are fine
+# (`au-dropdown`) but DOTS are not — dots are the sealed `parent.subtype` convention.
+#
+# A tag (`fields: []`): it contributes identity only, so every prop is declared by the subtype.
+#: The open base for a single UI component's INTERFACE. Contract-only — no persisted
+#: instances; the type-def exists to drive CODEGEN (typed consumer props) and DISCOVERY
+#: (which tags exist, which set provides each). The subtype's name IS the element tag.
+# Abstract: the base component kind. Only concrete component subtypes are realized.
+abstract: true
+fields: {}

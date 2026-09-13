@@ -1,0 +1,16 @@
+# Owned by the `intent` package.
+# "Close the focused view." A HOST-GLOBAL command: the host itself handles it on the synthetic gate-exempt
+# command node — it resolves the focused pane (via the focus channel) and requests its removal. The removal
+# runs through the shared commit core, so the close-guard consensus runs at the reap (a dirty view can veto
+# or save first). Routed + ambient, host node the sole owner of this type, so it always claims. No params.
+# The chord (⌘W) is one removable keymap record, NOT hardcoded — the lifecycle hangs off this COMMAND, so
+# rebinding or unbinding the chord moves or removes the shortcut without touching the removal.
+#: Close the focused view. A host-handled command.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Close view
+    category: View

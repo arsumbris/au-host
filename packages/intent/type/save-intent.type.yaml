@@ -1,0 +1,17 @@
+# Owned by the `intent` package.
+# The GENERIC CONTEXTUAL save. One intent, resolved by FOCUS: the focused editor saves its file (claiming
+# when focused), else the host saves the composition. Routed + ambient, so the existing focus-MRU + claim
+# dispatch picks the handler and asks only on a genuine tie. The HOST always handles it (saves the active
+# composition), so ⌘S works with no editor present. The editor's own handler claims when focused;
+# without that handler, ⌘S saves the composition. There is no hard coupling.
+# The explicit `save-composition-intent` exists for the palette; ⌘S fires this contextual one.
+#: Save the focused thing — the focused editor saves its file, else the host saves the composition.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Save
+    icon: save
+    category: File

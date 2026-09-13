@@ -1,0 +1,24 @@
+# Owned by component-contract. The INTERFACE for `<au-breadcrumb>` — a path / segment nav.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out. `items` is DATA (a au-breadcrumb-item[]); the LAST item is the current page, earlier items
+# are interactive buttons riding the ink-3 → ink-1 ladder. Past `maxItems` the middle folds to an `…`.
+#: The interface for <au-breadcrumb>: a path nav over `items` (au-breadcrumb-item[]). Earlier crumbs are
+#: buttons (emit `au-navigate {index, value, label}`), the last is the current page. `maxItems` collapses
+#: the middle to an ellipsis.
+#: Hover and press use shared chrome interaction fills; keyboard focus uses the shared inset outline.
+extends: ui-component::component-contract
+fields:
+  #: The path, root → leaf. The consumer owns it; the last item is the current page.
+  items?: au-breadcrumb-item[]
+  #: The divider between segments.
+  separator?: [slash, chevron]
+  #: Collapse the middle to an `…` once the path exceeds this many segments (keeps first + last N).
+  maxItems?: Number
+  #: Accessible name for the nav landmark.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-navigate]
+    parts: [list, link, current, crumb, ellipsis]
+    preview: '<au-breadcrumb separator="slash"></au-breadcrumb>'

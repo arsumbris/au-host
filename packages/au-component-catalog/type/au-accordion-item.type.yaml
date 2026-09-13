@@ -1,0 +1,35 @@
+# Owned by component-contract. The INTERFACE for `<au-accordion-item>` — one collapsible disclosure.
+#
+# The type NAME is the custom-element tag. A header (icon · label/sublabel · `meta` slot · chevron) over a
+# measured collapsible panel (the default slot). STANDALONE-CAPABLE: with no <au-accordion> parent it
+# toggles its own `open` (a lone disclosure); inside a group the group drives `open`. The group propagates
+# `variant` / `density` onto it, so authors set those on the group, not per item.
+#: The interface for <au-accordion-item>: one disclosure — header (icon + label + meta slot + chevron) over
+#: a collapsible panel (default slot). Standalone or grouped. Emits `au-toggle {value, open}`.
+extends: ui-component::component-contract
+fields:
+  #: Stable identity — drives open state, keys the group, wires header↔panel aria.
+  value?: String
+  #: The header label (title line).
+  label?: String
+  #: Optional leading au-icon glyph NAME (a string).
+  icon?: String
+  #: A muted second line under the label.
+  sublabel?: String
+  #: Non-toggleable, dimmed, aria-disabled.
+  disabled?: Boolean
+  #: Resting selected posture — a surface lift (never a leading bar).
+  selected?: Boolean
+  #: Whether the panel is open. Standalone it self-toggles; in a group the group drives it.
+  open?: Boolean
+  #: Container treatment — normally SET BY THE GROUP. `flush` (default) / `card` / `inline`.
+  variant?: [flush, card, inline]
+  #: Row rhythm — normally SET BY THE GROUP. `compact` / `default` / `relaxed`.
+  density?: [compact, default, relaxed]
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-toggle]
+    states: [open, disabled, selected]
+    slots: [default, meta, leading, actions]
+    parts: [trigger, icon, title, sublabel, meta, chevron, panel, panel-content]
+    preview: '<au-accordion-item label="Native tool allowlist" open></au-accordion-item>'

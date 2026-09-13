@@ -1,0 +1,10 @@
+type: au.engine.repo::au-engine
+name: reader
+description: Your files beside a quiet reading surface.
+deps:
+  - name: au-host-sdk
+  - name: intent
+  - name: sandwich
+  - name: tabs
+  - name: file-tree
+  - name: aup-reader

@@ -1,0 +1,19 @@
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+slot-defaults:
+  placeholder: "[[placeholder-picker::placeholder-picker]]"
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^layout]]"
+  - ^: layout
+    type: sandwich::sandwich
+    left: "[[^^documents]]"
+    center: "[[^^tree]]"
+  - ^: documents
+    type: tabs::tabs
+    tabs: []
+  - ^: tree
+    type: file-tree::file-tree

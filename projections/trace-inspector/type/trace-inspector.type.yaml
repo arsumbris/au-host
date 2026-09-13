@@ -1,0 +1,12 @@
+#: The host event-substrate trace inspector.
+# trace-inspector IS a `pane-projection`: a dev/observability pane that reads the host event substrate's
+# timeline view (read / subscribe) and renders it GROUPED BY CAUSE — one dispatch pass, its fire, candidate
+# set, declines, resolutions and claim, under one heading. A category filter and a Chrome-trace (Perfetto)
+# export ride along. No config, no intents fired — it only reads the views.
+
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

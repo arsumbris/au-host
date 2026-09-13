@@ -1,0 +1,15 @@
+extends: pane-projection::au-host-sdk
+fields:
+  profile?: agent-profile::au-mcp-sdk*
+  prompt?: [inherit, raw, minimal, compact-git, clean, context]
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: New session
+    icon: terminal
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-pane-intent::intent]]"
+      - "[[show-pane-intent::intent]]"

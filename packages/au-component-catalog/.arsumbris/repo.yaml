@@ -1,0 +1,15 @@
+# Repo identity + deps (au.engine.repo).
+#
+# The interface CATALOG: the known component NAMES (`ui-component` subtypes: au-button, ...) plus
+# their codegen'd consumer types. This is what a CONSUMER (a projection) depends on to write typed
+# `<au-button>` — never on an implementation. Depends on component-contract for the `ui-component`
+# base its subtypes extend.
+type: au.engine.repo::au-engine
+name: au-component-catalog
+description: the first-party component NAME catalog — ui-component interface subtypes + their codegen'd types
+deps:
+  - name: component-contract
+  # The catalog's own PROJECTION type-defs cross into au-host-sdk: `aup-component-catalog` extends
+  # `pane-projection::au-host-sdk` + projection metas, and `au-chord-input` types `chord?: keystroke::au-host-sdk[]`.
+  # The peer gate needs the dep declared (package.json already deps it; this is the type-graph half).
+  - name: au-host-sdk

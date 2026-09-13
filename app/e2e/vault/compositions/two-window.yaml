@@ -1,0 +1,24 @@
+# A composition declaring a second non-primary window.
+# Loading it mounts the primary content in main and realizes the secondary surface
+# through realizePersistedWindows, without requiring a float gesture.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w0]]"
+  - "[[^^w1]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed0]]"
+    ^: w0
+  - type: window::au-host-sdk
+    content: "[[^^ft]]"
+    ^: w1
+  - ^: ed0
+    type: editor-pane::editor
+    file: sample.md
+  - ^: ft
+    type: file-tree::file-tree

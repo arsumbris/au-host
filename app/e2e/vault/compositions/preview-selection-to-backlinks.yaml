@@ -1,0 +1,39 @@
+# PREVIEW-SELECTION-TO-BACKLINKS fixture (transient-pool) — proves a TRANSIENT preview tab's
+# published selection reaches a SIBLING Backlinks pane through the LIVE preview edge in the one pool.
+#
+# The shape makes the preview edge the ONLY path (so an unrelated selection cannot satisfy the assertion):
+#   sandwich
+#     left:   file-tree (Files)   — its OWN file-selection publish bubbles file-tree → sandwich,
+#                                    NEVER into the center group, so it can't stand in for the preview.
+#     center: tabs G              — holds Backlinks; the file-tree's open-intent routes HERE (the single
+#                                    open-capable container), opening a transient preview editor tab in G.
+# Backlinks follows G, so only a selection published from WITHIN G reaches it. The preview editor opens
+# sample.md and publishes its file-selection (editor auto-publishes on open); it reaches Backlinks ONLY
+# because the fix keeps the preview's edge LIVE in the pool (its logical parent is G). Revert the fix and
+# the preview orphans to the window root, off G's bubble path → Backlinks never receives → this fails.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+# md is eligible for both editor-pane and aup-reader (host-bundle discovery); the rung-2 default keeps the
+# open deterministic → editor-pane, so the preview tab is an editor whose selection Backlinks tracks.
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^g]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: g
+    type: tabs::tabs
+    tabs:
+      - "[[^^bl]]"
+  - ^: bl
+    type: backlinks::backlinks

@@ -1,0 +1,9 @@
+# E2E keymap fixture — a single global keybind: ⌘S / Ctrl+S fires the host-handled save-composition-intent.
+# Referenced by compositions/keybind-fire.yaml via its `keymaps` list. Proves the live keybind path:
+# keydown → window-local gate → authority resolve → fire, asserted over the `keybind` event category.
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [mod]
+        key: s
+    intent: "[[save-composition-intent::intent]]"

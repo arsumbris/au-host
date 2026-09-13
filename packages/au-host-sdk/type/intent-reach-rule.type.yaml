@@ -1,0 +1,24 @@
+# Owned by @arsumbris/host-sdk. ONE ambient-reachability rule = one (node, intent) with its
+# ambient flag. Listed in a composition's `intent-routing.reach` field. Reifies a
+# (node, intent) -> flag map entry, because the type system has no dynamic-key map — the same
+# idiom `intent-wire` / `intent-default` use.
+
+# `node` is an INSTANCE reference (`projection*`, a pool `[[^^id]]`), the same vocabulary a
+# wire's `source` / `targets` use. `intent` is a def-ref to the intent subtype. Same-repo bare
+# now (`projection` and `intent` are both host-sdk-owned).
+
+#
+# Recipients resolve through a seeded set, override-or-constrain rules and a pickable strategy.
+fields:
+  #: The node whose ambient reachability this rule sets, a pool `[[^^id]]` reference. Its type-def must
+  #: DECLARE the `intent` below as a handled input port (`handles-intent-meta`) — you can only close a port
+  #: the node actually has.
+  node: projection*
+  #: The intent this rule governs, a def-ref to an `intent` subtype (`intent: "[[open-intent::intent]]"`).
+  #: Same-repo bare here (`intent` is the host-sdk base). Engine-validated against the type graph.
+  intent: type<intent>*
+  #: The node's reachability for this intent. `wire-only`: it receives the intent ONLY via an explicit wire,
+  #: and ambient / MRU delivery skips it. `ambient`: the default — ambient delivery reaches it (same as no
+  #: rule), kept as an explicit value so the record is self-describing. (String-valued, NOT `on`/`off`, which
+  #: YAML coerces to booleans.)
+  reachability: [ambient, wire-only]

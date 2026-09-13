@@ -1,0 +1,6 @@
+# Schema-12 repo identity (au.engine.repo). style owns the theme type-def + design
+# tokens and borrows nothing, so no deps. Needed because members resolved via the
+# device repos.yaml path: must be identity-verifiable repos, not implicit folders.
+type: au.engine.repo::au-engine
+name: style
+description: the design-token + theme package; owns the theme type-def (themes are stored as CSS, discovered as instances)

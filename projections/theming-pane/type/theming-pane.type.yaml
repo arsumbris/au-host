@@ -1,0 +1,14 @@
+# theming-pane IS a `pane-projection`: a full-surface UI that discovers every themeable
+# `--au-*` token by walking the CSSOM (`@property` -> CSSPropertyRule), groups them by the
+# naming convention, and lets the user edit each one live (applied as inline --au-* on :root).
+# Base tokens + every in-scope projection's own tokens (eager-loaded via customTokenEntry) appear.
+# A single surface — the default `mount` export.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Appearance
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

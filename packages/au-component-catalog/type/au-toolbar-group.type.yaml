@@ -1,0 +1,15 @@
+# <au-toolbar-group> — a flex cluster of controls inside an <au-toolbar>.
+#: <au-toolbar-group> — a flex cluster of related controls inside an <au-toolbar>. `default` breathes
+#: (space-2), `tight` hugs (space-1).
+extends: ui-component::component-contract
+fields:
+  #: Item gap inside the cluster: default = space-2 (8), tight = space-1 (4).
+  gap?: [default, tight]
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    preview: |
+      <au-toolbar-group gap="tight" style="display:inline-flex">
+        <au-icon-button label="Bold">B</au-icon-button>
+        <au-icon-button label="Italic">I</au-icon-button>
+      </au-toolbar-group>

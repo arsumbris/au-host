@@ -1,0 +1,63 @@
+# focal-tree IS a projection subtype : a `pane-projection` that lays a file's REFERENCE
+# NEIGHBORHOOD as a FOCAL tree — the focus at center, the neighborhood on concentric rings, and
+# clicking a node CONTINUOUSLY ANIMATES the focus to it (edge-constrained, stability-invariant).
+# Shares the radial-tree contract; differs in the focal layout + the animated re-root.
+
+extends: pane-projection::au-host-sdk
+fields:
+  # The seed file whose neighborhood is shown (the initial focus). Optional + fillable, like radial-tree.
+  root?: String
+  # Hop count of the neighborhood walk (default 2 at runtime — a focal view wants a navigable local graph).
+  depth?: Number
+  # Which edges to walk: `out` | `in` | `both` (default `both`).
+  direction?: String
+  # The switchboard controls intent wiring. Re-rooting fires an open synchronously,
+# and inbound opens are handled by the projection.
+# Re-root animation duration in milliseconds; runtime default is 450.
+  animationMs?: Number
+  # PROGRESSIVE EXPANSION: after a re-root SETTLES, load the new focus's own neighborhood and merge it
+  # in, so the graph grows as you navigate (monotonic — nothing is removed or re-parented).
+  # Default true at runtime; toggleable in the view.
+  expand?: Boolean
+  # Last ring drawn in full. A region past it shows as ONE cluster node (count, not clickable) and
+  # unfolds as the focus nears. Default 3 at runtime.
+  visibleDepth?: Number
+  # Growth cap: expansion stops once the loaded tree reaches this many nodes. Default 600 at runtime.
+  maxNodes?: Number
+  # Hop count of the read fired when a re-root settles (separate from the seed `depth`, so a view can
+  # seed wide and grow cheaply, or the reverse). Default 2 at runtime.
+  expandDepth?: Number
+  # LAYOUT SHAPE. Ring spacing in px (default 120), and the geometric falloff per ring (default 1 =
+  # even). Below 1 each ring outward is narrower: near context spreads, far context compresses.
+  shellWidth?: Number
+  shellWidthFactor?: Number
+  # How hard a wedge's angular share follows subtree size: 0 = every wedge equal, 1 = fully
+  # proportional. Default 0.5 (sqrt) at runtime.
+  wedgeWeightExp?: Number
+  # READABILITY. How many rings out still carry a text label (default 1), and the dot size as a
+  # fraction of the layout's computed node radius (default 0.5).
+  labelDepth?: Number
+  nodeScale?: Number
+  # Which reference kinds the walk follows: `navigational` | `contributing` | `field`. Default all.
+  kinds?: [String]
+  # Max nodes ONE neighborhood read may return (default 250), distinct from the total `maxNodes` cap.
+  readMaxNodes?: Number
+  # STRUCTURE OVERLAY: draw the depth rings / each node's angular sector. Both default false.
+  showShells?: Boolean
+  showWedges?: Boolean
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    customTokenEntry:
+      - ./focal-tree.tokens.css
+  # radial-tree's rationale applies: handles open-intent so it is openable from other sources.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

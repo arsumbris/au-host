@@ -1,0 +1,26 @@
+# A SAMPLE richer notification, proving the type-keyed CONTENT SLOT: a PROGRESS notification.
+# Extends `ui-notification` (so it fans out over the same broadcast) and adds a `percent` field.
+# Its `notification-content-meta` locator points at this package's `renderProgress` export, which
+# the host loads and draws INTO its toast frame — so firing THIS type shows a progress bar, while
+# the base `ui-notification` uses the host default renderer. The FIRER selects content by choosing
+# which type to fire.
+extends: ui-notification::intent
+meta:
+  # Broadcast, like the base (the constructor threads `kind` onto the fired payload).
+  - type: intent-routing-meta::au-host-sdk
+    kind: broadcast
+  # The content renderer the host loads for THIS notification type.
+  - type: notification-content-meta::intent
+    entry: ./dist/index.js
+    export: renderProgress
+  # AGENT-FIRABLE, declared LITERALLY even though the parent `ui-notification` already says so.
+  # The host's `fireIntent` gate does NOT walk ancestors for this block, matching the engine's own
+  # `required:` satisfaction rule (an ancestor's surfaced meta does not satisfy an obligation). A
+  # subtype ADDS fields, so inheriting permission would grant it for a payload the parent never
+  # declared — and a third party's subtype of a firable intent would be firable before anyone read
+  # it. Saying it here is one line; the alternative is a silent grant.
+  - type: intent-agent-meta::intent
+    firable: true
+fields:
+  # Completion percentage (0-100). The renderer draws a bar from it.
+  percent: Number

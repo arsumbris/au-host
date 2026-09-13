@@ -1,0 +1,46 @@
+# Owned by component-contract. The loadable-code locator a `component-set` subtype carries.
+#
+# MIRRORS `projection-runtime-meta` (au-host-sdk) deliberately — same fields, same handshake
+# discipline, read the same way: off the subtype's type-def via the engine (`subtypes` ->
+# `meta_blocks`), never off an instance, because it is type-level metadata.
+#
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+#
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The ESM entry, relative to the owning package root.
+  #: ESM entry that registers the set's elements, relative to the package root.
+  entry: String
+  # The component-contract version the set's code was built against. Gated against
+  # COMPONENT_CONTRACT_VERSION at the handshake (checkComponentSetMeta) by STRICT EQUALITY.
+  #: Contract version the set was built against; strict-equality gated at the handshake.
+  contractVersion: Number
+  # The named module export the host calls to register the set's elements (default `register`).
+  #
+  # A set NEVER self-registers on import and never calls `customElements.define` itself: it
+  # hands the host raw classes through the api, and the HOST decides which registry they land
+  # in. That indirection is what lets one set be defined globally at boot while another is
+  # previewed in a scoped registry at the same time.
+  #: The export the host calls to register elements; default `register`.
+  export?: String
+  # The `ui-component` contracts this set implements, as def-refs.
+  #
+  # Engine-VALIDATED referential integrity for free (mirrors `handles-intent-meta.handles`): a
+  # wrong-closure target is a load error, not a silent misroute. Drives per-tag coverage and
+  # the resolution cascade — which tags this set provides, and therefore whether it is a
+  # purely-additive plugin set (auto-activates) or a base-overriding look (needs selection).
+  #: The ui-component contracts this set implements. Drives per-tag coverage and resolution.
+  provides: type<ui-component>*[]
+  # Token-declaration stylesheet(s), relative to the owning package root. Each is a
+  # DECLARATIONS-ONLY CSS file (`@property` rules + `:root` custom-property defaults, optional
+  # prefers-color-scheme wrappers) — NOT component styles. The host eager-loads these at document
+  # level for ALL discovered sets (active or not) so a theming pane can enumerate the set's own
+  # `--au-<component>-*` tokens via the CSSOM. VERBATIM reuse of `projection-runtime-meta`'s field
+  # (same host path, `loadTokenSheets`) — a component surfaces its tokens exactly as a projection does.
+  # Most sets omit it. Non-empty when present.
+  #: Token-declaration stylesheet(s) for the set's `--au-<component>-*` tokens; theming-pane discovers them.
+  customTokenEntry?: String[+]

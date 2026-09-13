@@ -1,0 +1,109 @@
+# The first-party DEFAULT set as a `component-set` subtype (owned by au-component-set).
+#
+# Its TYPE NAME `default-set` is the well-known FLOOR the host resolution recognizes
+# (`DEFAULT_SET_TYPE` in component-registry.ts). It carries a `component-set-runtime-meta` locator:
+# the host discovers it via `readSubtypes('component-set')`, loads `./dist/index.js`, and calls the
+# `register` export, which defines the Lit elements into the host-chosen registry.
+#
+# `provides` is a def-ref list into the catalog (cross-repo, hence the `au-component-catalog` dep in
+# repo.yaml) — it drives per-tag coverage + the resolution cascade.
+#: The first-party default component set (the resolution FLOOR). A subtype carrying a
+#: runtime-meta locator; the host loads it and calls register() to define its Lit elements.
+extends: component-set::component-contract
+fields: {}
+meta:
+  - type: component-set-runtime-meta::component-contract
+    entry: ./dist/index.js
+    contractVersion: 1
+    # Declarations-only sheet for the set's `--au-<component>-*` tokens. The host eager-loads it so
+    # the theming pane discovers every component's knobs via the CSSOM. Read from the
+    # package root (source, not dist) — it is CSS the host fetches + validates, not bundled code.
+    customTokenEntry:
+      - ./component-set.tokens.css
+    provides:
+      - "[[au-icon::au-component-catalog]]"
+      - "[[au-icon-button::au-component-catalog]]"
+      - "[[au-grip-glyph::au-component-catalog]]"
+      - "[[au-close-button::au-component-catalog]]"
+      - "[[au-chevron::au-component-catalog]]"
+      - "[[au-pane-frame::au-component-catalog]]"
+      - "[[au-pane-header::au-component-catalog]]"
+      - "[[au-splitter::au-component-catalog]]"
+      - "[[au-tab-strip-cell::au-component-catalog]]"
+      - "[[au-tab-bar::au-component-catalog]]"
+      - "[[au-status-dot::au-component-catalog]]"
+      - "[[au-input::au-component-catalog]]"
+      - "[[au-nav-item::au-component-catalog]]"
+      - "[[au-tree-row::au-component-catalog]]"
+      - "[[au-section-header::au-component-catalog]]"
+      - "[[au-nav-group::au-component-catalog]]"
+      - "[[au-workspace-mark::au-component-catalog]]"
+      - "[[au-workspace-switcher::au-component-catalog]]"
+      - "[[au-button::au-component-catalog]]"
+      - "[[au-card::au-component-catalog]]"
+      - "[[au-badge::au-component-catalog]]"
+      - "[[au-tree::au-component-catalog]]"
+      - "[[au-tree-item::au-component-catalog]]"
+      - "[[au-chip::au-component-catalog]]"
+      - "[[au-command-palette::au-component-catalog]]"
+      - "[[au-typed-value-editor::au-component-catalog]]"
+      - "[[au-tag::au-component-catalog]]"
+      - "[[au-pill::au-component-catalog]]"
+      - "[[au-divider::au-component-catalog]]"
+      - "[[au-spinner::au-component-catalog]]"
+      - "[[au-scroll-area::au-component-catalog]]"
+      - "[[au-empty-state::au-component-catalog]]"
+      - "[[au-code-block::au-component-catalog]]"
+      - "[[au-diff-line::au-component-catalog]]"
+      - "[[au-list-row::au-component-catalog]]"
+      - "[[au-table::au-component-catalog]]"
+      - "[[au-table-head::au-component-catalog]]"
+      - "[[au-table-body::au-component-catalog]]"
+      - "[[au-table-row::au-component-catalog]]"
+      - "[[au-table-header-cell::au-component-catalog]]"
+      - "[[au-table-cell::au-component-catalog]]"
+      - "[[au-field::au-component-catalog]]"
+      - "[[au-segmented-control::au-component-catalog]]"
+      - "[[au-color-picker::au-component-catalog]]"
+      - "[[au-checkbox::au-component-catalog]]"
+      - "[[au-switch::au-component-catalog]]"
+      - "[[au-radio-group::au-component-catalog]]"
+      - "[[au-textarea::au-component-catalog]]"
+      - "[[au-number-input::au-component-catalog]]"
+      - "[[au-select::au-component-catalog]]"
+      - "[[au-banner::au-component-catalog]]"
+      - "[[au-accordion::au-component-catalog]]"
+      - "[[au-accordion-item::au-component-catalog]]"
+      - "[[au-output-log::au-component-catalog]]"
+      - "[[au-tooltip::au-component-catalog]]"
+      - "[[au-toggle-chip::au-component-catalog]]"
+      - "[[au-toast::au-component-catalog]]"
+      - "[[au-menu::au-component-catalog]]"
+      - "[[au-menu-item::au-component-catalog]]"
+      - "[[au-modal::au-component-catalog]]"
+      # Additional component implementations.
+      - "[[au-swatch::au-component-catalog]]"
+      - "[[au-code-sample::au-component-catalog]]"
+      - "[[au-meter::au-component-catalog]]"
+      - "[[au-skeleton::au-component-catalog]]"
+      - "[[au-slider::au-component-catalog]]"
+      - "[[au-breadcrumb::au-component-catalog]]"
+      - "[[au-toolbar::au-component-catalog]]"
+      - "[[au-toolbar-group::au-component-catalog]]"
+      - "[[au-toolbar-spacer::au-component-catalog]]"
+      - "[[au-detail-list::au-component-catalog]]"
+      - "[[au-drop-zone::au-component-catalog]]"
+      - "[[au-pane-target::au-component-catalog]]"
+      - "[[au-stepper::au-component-catalog]]"
+      - "[[au-pagination::au-component-catalog]]"
+      - "[[au-combobox::au-component-catalog]]"
+      - "[[au-drawer::au-component-catalog]]"
+      - "[[au-kbd::au-component-catalog]]"
+      - "[[au-chord-input::au-component-catalog]]"
+      - "[[au-tabs::au-component-catalog]]"
+      - "[[au-tab::au-component-catalog]]"
+      - "[[au-tab-panel::au-component-catalog]]"
+      - "[[au-popover::au-component-catalog]]"
+      - "[[au-settings-section::au-component-catalog]]"
+      - "[[au-hovercard::au-component-catalog]]"
+      - "[[au-viewer-switch::au-component-catalog]]"

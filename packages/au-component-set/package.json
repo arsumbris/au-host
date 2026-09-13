@@ -1,0 +1,22 @@
+{
+  "name": "@arsumbris/au-component-set",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "audit:coverage": "node scripts/audit-coverage.mjs --check"
+  },
+  "dependencies": {
+    "@arsumbris/component-contract": "workspace:*",
+    "lit": "^3.3.0",
+    "@arsumbris/style": "workspace:*"
+  },
+  "devDependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/typed-value": "workspace:*",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

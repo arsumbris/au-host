@@ -1,0 +1,23 @@
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^stack]]"
+  - ^: stack
+    type: column::column
+    itemHeaders: always
+    items:
+      - type: column-slot::column
+        child: "[[^^reader]]"
+        size: 850
+      - type: column-slot::column
+        child: "[[^^second]]"
+        size: 150
+  - ^: reader
+    type: aup-reader::aup-reader
+    file: sample.md
+  - ^: second
+    type: aup-reader::aup-reader
+    file: other.md

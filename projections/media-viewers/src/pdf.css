@@ -1,0 +1,11 @@
+/* Reading tools remain visible and wrap in small focus panes. PDF page colors are document content. */
+.mv-pdf-root .mv-tools{flex-wrap:wrap;overflow:visible;gap:var(--au-space-3)}
+.mv-pdf-control-group{display:flex;align-items:center;gap:var(--au-space-1);min-width:0;flex-wrap:wrap}
+.mv-pdf-page-input{width:calc(var(--au-space-1) * 13)}
+.mv-pdf-query{width:calc(var(--au-space-1) * 36);max-width:100%}
+.mv-pdf-count,.mv-pdf-matches{font-variant-numeric:tabular-nums;color:var(--au-ink-3)}
+.mv-pdf-reader{position:relative;width:100%;height:100%;min-width:0;min-height:0;--pdfViewer-padding-bottom:var(--au-space-3);--page-margin:0 auto var(--au-space-3);--page-border:none}
+.mv-pdf-scroll{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--au-line-2) transparent}
+.mv-pdf-reader iframe{width:100%;height:100%;border:0;display:block}
+.mv-pdf-scroll:focus-visible{outline:1px solid var(--au-focus-outer);outline-offset:-1px}
+.mv-pdf-root .mv-status:empty{display:none}

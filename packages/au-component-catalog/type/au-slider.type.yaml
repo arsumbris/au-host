@@ -1,0 +1,29 @@
+# Owned by component-contract. The INTERFACE for `<au-slider>` — a native range, premium-restyled.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. Form-associated: the value crosses into a native <form>. The ink fill (ink-2,
+# monochrome) tracks the thumb 1:1 across the travel.
+#: Ink-role fallbacks match the base palette without token stylesheets.
+#: The interface for <au-slider>: a native <input type=range>, token-painted — a thin track, an ink-2
+#: fill on the traversed portion, a lifted thumb (scale cue, never a hue). Form-associated. Emits
+#: `au-input` (live) + `au-change` (commit). `label` is the accessible name.
+extends: ui-component::component-contract
+fields:
+  #: The current value.
+  value?: Number
+  #: Range minimum.
+  min?: Number
+  #: Range maximum.
+  max?: Number
+  #: Step increment.
+  step?: Number
+  #: Non-interactive + dimmed. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Accessible name for the slider.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-input, au-change]
+    states: [disabled]
+    parts: [input]
+    preview: '<au-slider value="42" min="0" max="100" label="Opacity" style="width:220px"></au-slider>'

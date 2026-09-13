@@ -1,0 +1,10 @@
+# Owned by au-host-sdk. A full content surface — what a bento pane or a window
+# root hosts (an editor pane, a file-tree, a backlinks view). A `projection` subtype.
+# A SHAPE / design-intent declaration, NOT a runtime site lock: it still mounts into
+# ANY element via the site-agnostic mount contract, and never learns its site. The
+# host reads the kind as a matching hint (a pane picker offers pane-projections).
+
+# Abstract: a projection kind. Only concrete pane subtypes are instantiated.
+abstract: true
+extends: projection
+fields: {}

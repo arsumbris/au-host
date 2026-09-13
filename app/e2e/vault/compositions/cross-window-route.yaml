@@ -1,0 +1,28 @@
+# A sandwich with tabs and an editor at left and a file-tree at center.
+# Float the tabs, then click a file in main’s tree. The sole open handler is in the
+# secondary window, so the authority must claim and commit remotely and the file must render there.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabs]]"
+    center: "[[^^tree]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

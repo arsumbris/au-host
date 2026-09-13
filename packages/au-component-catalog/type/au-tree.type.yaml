@@ -1,0 +1,26 @@
+# <au-tree> — the GRAIN-REDUCED container half. Instead of a `renderNode` render-prop, the consumer
+# emits `<au-tree-item>` children from its OWN loop (React .map / Svelte {#each} / vanilla for) and
+# slots them in. This hands the structural loop back to the consumer (native keying / virtualization)
+# and never calls consumer code to render. `<au-tree>` + `<au-tree-item>` are TWO ui-component
+# contracts with independent container and item responsibilities.
+#: <au-tree> — the grain-reduced container. The consumer slots <au-tree-item> children it emits from
+#: its own loop; the tree provides structure. Items emit au-select on pointer or keyboard activation.
+#: Uses shared tree typography and registry-aligned font defaults without a theme sheet; keyboard focus, arrow navigation, Home/End and type-ahead are supplied by the tree.
+extends: ui-component::component-contract
+fields: {}
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-select]
+    parts: [tree]
+    # A grain-reduced container is meaningless alone — showcase it WITH nested, collapsible items.
+    preview: |
+      <au-tree>
+        <au-tree-item label="src" expanded>
+          <au-tree-item label="index.ts" selected></au-tree-item>
+          <au-tree-item label="components" expanded>
+            <au-tree-item label="button.ts"></au-tree-item>
+            <au-tree-item label="card.ts"></au-tree-item>
+          </au-tree-item>
+        </au-tree-item>
+        <au-tree-item label="README.md"></au-tree-item>
+      </au-tree>

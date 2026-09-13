@@ -1,0 +1,15 @@
+# Owned by the `intent` package.
+# "Save the active composition." A HOST-GLOBAL command: the host itself handles it (a synthetic
+# gate-exempt command node), not a projection — composition management is a host-app capability, modeled
+# as an intent so it joins the ONE command model. Routed +
+# ambient, with the host node the sole owner of this type, so it always claims. No params.
+#: Save the active composition to its file. A host-handled command.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Save composition
+    icon: save
+    category: Composition

@@ -1,0 +1,8 @@
+# Owned by au-host-sdk (the keybinds vocabulary). A NAMED ENUM — the chord modifiers a `keystroke` holds.
+
+#: A chord modifier. `mod` is the platform accelerator, so one keybind is cross-platform.
+shape:
+  - mod       #: the platform accelerator — ⌘ on macOS, Ctrl elsewhere
+  - ctrl      #: raw Control, distinct from `mod` on macOS
+  - alt       #: Alt / Option
+  - shift     #: Shift

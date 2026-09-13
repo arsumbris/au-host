@@ -1,0 +1,17 @@
+# BARE-EDITOR fixture — a window whose content is a BARE editor (no container). Used to probe how a
+# root pane is wrapped, and to repro the wrap-in-tabs-then-bento bug at a bare-pane root.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed]]"
+    ^: w
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

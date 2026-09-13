@@ -1,0 +1,20 @@
+{
+  "name": "@arsumbris/au-host-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@arsumbris/au-engine-sdk": "link:../../../au-engine-sdk",
+    "@arsumbris/au-host-sdk": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
+  }
+}

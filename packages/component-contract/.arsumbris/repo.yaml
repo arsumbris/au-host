@@ -1,0 +1,13 @@
+# Repo identity + deps (au.engine.repo).
+#
+# The swappable UI-COMPONENT contract. A SEPARATE contract from the projection/mount
+# contract in au-host-sdk, which stays projection-only — no au-host-sdk mechanism
+# interprets these types, so by the substrate-vocabulary criterion they are their own
+# package. Named `component-contract`, NOT `ui-contract`: projections are UI too, and
+# they are not part of this contract.
+#
+# NO deps on purpose. Every def-ref here is INTRA-package (`provides: type<ui-component>*[]`
+# points at this package's own catalog), so there is no cross-repo type edge to declare.
+type: au.engine.repo::au-engine
+name: component-contract
+description: the swappable UI-component contract; owns ui-component, component-set, their metas, and the interface catalog

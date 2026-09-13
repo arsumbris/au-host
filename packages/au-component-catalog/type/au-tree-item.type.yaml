@@ -1,0 +1,25 @@
+# <au-tree-item> — the GRAIN-REDUCED item half. The consumer emits one per row from its own loop.
+# `label` is the row text; NESTED `<au-tree-item>` children (in the default slot) make it a collapsible
+# branch — a disclosure toggle appears when it has children, and `expanded` shows/hides them. This is
+# where "arbitrary tree depth" is met WITHOUT a container render-prop: the consumer nests items.
+#: <au-tree-item> — a grain-reduced tree row. `label` for the text; nest <au-tree-item> children to
+#: make a collapsible branch (`expanded` shows them). Emitted by the consumer's loop inside <au-tree>.
+#: Dense rows use shared spacing/indent and resting, reading, quiet and selected ink roles.
+#: Disclosure toggles on pointer press; keyboard focus, arrow navigation, Home/End and type-ahead are supplied by the tree.
+extends: ui-component::component-contract
+fields:
+  #: Row text. Render-resilient: absent renders empty.
+  label?: String
+  #: Marks the row selected (styling + a11y).
+  selected?: Boolean
+  #: For a branch (has nested children), whether the children are shown. Ignored for a leaf.
+  expanded?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    states: [selected, expanded]
+    parts: [item, label, children]
+    preview: |
+      <au-tree-item label="src" expanded>
+        <au-tree-item label="index.ts"></au-tree-item>
+        <au-tree-item label="button.ts"></au-tree-item>
+      </au-tree-item>

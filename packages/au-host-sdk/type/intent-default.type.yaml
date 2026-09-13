@@ -1,0 +1,40 @@
+# Owned by @arsumbris/host-sdk. ONE declared routing rule for a composition:
+# "route this intent to these role-kinds." Reifies what a map entry (intent ->
+# targets) would hold, because the type system has NO dynamic-key map shape — the
+# same idiom `intent-wire` uses. Listed in a composition's `intent-routing.defaults` field.
+
+#
+
+
+# The key field is named `intent`, not `type`: `type` is the reserved identity-claim
+# key inside a record. A ROLE is a projection KIND (the compositor's role-as-kind);
+# a node plays a role iff its instance-type closure includes that kind, so a rule
+# targets KINDS, not node instances — a singleton target gets its own kind. Only
+# routed-AMBIENT intents (open / reveal) are scoped; firer-relative / broadcast ignore
+# these rules.
+fields:
+  # The intent this rule targets, a def-ref to an `intent` subtype
+  # (`intent: "[[open-intent::intent]]"`). Same-repo bare (`intent` is the host-sdk base).
+  # Engine-validated: a typo is a validation error, not a silent misroute — the payoff of
+  # reifying the map key as a field.
+  intent: type<intent>*
+  # The target role-kinds, recency-picked at dispatch. Each is a def-ref to a
+  # projection KIND (`roles: ["[[editor-pane]]"]`); a node plays a role iff its
+  # type-closure includes that kind. Same-repo bare (`projection` is the host-sdk base).
+  # Non-empty: a rule with no targets is meaningless.
+  roles: type<projection>*[+]
+  # How the rule scopes the ambient candidate set. `priority` (the default when
+  # absent): the declared targets first (recency-ordered), then the global capable
+  # set as a fallback. `whitelist`: ONLY the declared targets; a non-target capable
+  # container is excluded, and a rule whose targets are all unmounted falls through
+  # unclaimed. `block`: EXCLUDE the declared targets from the candidate set (the
+  # subtractive rule — the `NEVER` that priority/whitelist cannot express); the rest
+  # of the capable set routes as usual.
+  mode?: [priority, whitelist, block]
+  # OPTIONAL firer condition. When present, the rule applies ONLY when the firing
+  # projection plays this role-kind (its instance-type closure includes it); a
+  # non-matching firer makes the rule inert for that fire. Absent: the rule applies to
+  # any firer. Lets a rule read "a reader's open NEVER routes to a reader"
+  # (`source: "[[reader]]"`, `roles: ["[[reader]]"]`, `mode: block`). A projection
+  # KIND def-ref, same-repo bare like `roles`.
+  source?: type<projection>*

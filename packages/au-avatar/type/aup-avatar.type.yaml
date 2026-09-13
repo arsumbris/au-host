@@ -1,0 +1,40 @@
+#: An interactive 3D companion. Umbra is the default faceless logo companion. Also choose the sphere, a capybara on a floating carpet, a wizard sphere, a plush puppy, or a folded paper wizard.
+extends: pane-projection::au-host-sdk
+fields:
+  #: Character renderer: umbra (default), sphere, capybara, wizard, schnappa or heinrich.
+  character?: [umbra, sphere, capybara, wizard, schnappa, heinrich]
+  #: Show the room background, floor and grid. Absent = true.
+  backdrop?: Boolean
+  #: Companion size as a fraction of the pane's available height, 0.25–0.95.
+  size?: Number
+  #: Companion secondary motion amount, 0–1.
+  motion?: Number
+  #: Seconds of inactivity before curling up, 5–180.
+  idleSeconds?: Number
+  followCursor?: Boolean
+  glasses?: Boolean
+  scarf?: Boolean
+  bubbles?: Boolean
+  reducedMotion?: Boolean
+  startSleeping?: Boolean
+  #: Accepted in imported presets; does not render ambient glow.
+  umbraGlow?: Number
+  #: Accepted in imported presets; does not render ambient shadow.
+  umbraShadow?: Number
+  #: Umbra highlight gradient detail, 0–1. Default1.
+  umbraDetail?: Number
+  #: Umbra band transition softness, 0.001–0.12. Default0.045.
+  umbraSoftness?: Number
+  #: Umbra brightness, 0.5–1.5. Default1.
+  umbraBrightness?: Number
+  #: Umbra light/material orientation in degrees, -180–180. Default0.
+  umbraLightAngle?: Number
+  #: Six-digit hex coat color.
+  bodyColor?: String
+  #: Six-digit hex carpet color.
+  rugColor?: String
+meta:
+  # TypeScript over the SDK, built to ./dist/index.js like every projection.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

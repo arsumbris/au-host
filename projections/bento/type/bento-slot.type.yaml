@@ -1,0 +1,23 @@
+# Owned by the bento projection. The slot type for a bento pane position. It adds NOTHING
+# to the shared `container-slot`, and exists anyway for two reasons that are not
+# speculative.
+
+# It KEEPS FOREIGN SLOTS OUT. Bento's child union names `bento-slot`, so a `sandwich-slot`
+# carrying `size` cannot be written at a bento position — bento sizes its splits through
+# `bento-node.branch.ratio`, and a `size` here would be a value nothing honours. Naming
+# the shared base instead would admit every container's slot subtype by closure. Verified
+# against a live daemon: a sibling container's slot subtype IS refused at a named branch.
+
+# And it GIVES A LATER BENTO-ONLY FIELD A HOME, additively, without reopening the union.
+
+# THE SLOT IS THE LEAF. A slot record holds one child and carries its own `^:` id.
+# A separate leaf record would add a second nested wrapper for one ruled child.
+# That union is THREE branches at every child position: a bare `mountable*` reference (the
+# child), a `bento-slot`, or a `bento-node.branch` split — the mountable child reference-only,
+# the slot and the branch inline (bento's own dialect).
+
+
+#: A bento pane position. Adds nothing to the shared slot: bento sizes its splits through
+#: `bento-node.branch.ratio`, so it honours no size or collapse of its own.
+extends: container-slot::au-host-sdk
+fields: {}

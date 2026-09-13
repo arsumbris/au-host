@@ -1,0 +1,29 @@
+# Owned by component-contract. The INTERFACE for `<au-status-dot>` — the status indicator dot.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries the
+# non-field half. Set-INDEPENDENT: a consumer types against THIS, never against a specific set.
+#
+# A dot is DECORATIVE beside text that already says the state (a tab, a header), and IS the state when
+# it is the only carrier (a tree row's dirty marker). Decorative by default (`aria-hidden`); a `label`
+# makes it the signal (role=img).
+#: The interface for <au-status-dot>: a small status dot. tone (ink/ok/warn/danger), variant (filled/ring),
+#: an optional glow halo + pulse. Decorative by default; `label` names it when the dot IS the signal.
+extends: ui-component::component-contract
+fields:
+  #: Colour role. `ink` (neutral, default), `ok` (positive/live), `warn` (transitional), `danger` (error/stopped).
+  #: The full status range so a status indicator (engine/mcp: ready/starting/stopped) reads without hand-rolling.
+  tone?: [ink, ok, warn, danger]
+  #: `filled` solid dot (default) or `ring` hollow stale-indicator.
+  variant?: [filled, ring]
+  #: Size step. Default md.
+  size?: [sm, md, lg]
+  #: Soft halo around the dot — the sync-pulse glow.
+  glow?: Boolean
+  #: Animate the glow as an expanding radar pulse (static under reduced motion).
+  pulse?: Boolean
+  #: Accessible name. Omitted → decorative (aria-hidden); present → role=img, the dot IS the signal.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [dot]
+    preview: '<au-status-dot></au-status-dot> <au-status-dot tone="ok"></au-status-dot> <au-status-dot tone="warn"></au-status-dot> <au-status-dot tone="danger"></au-status-dot> <au-status-dot variant="ring"></au-status-dot> <au-status-dot tone="ok" glow pulse label="Live"></au-status-dot> <au-status-dot size="lg"></au-status-dot>'

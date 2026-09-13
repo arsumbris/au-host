@@ -1,0 +1,21 @@
+type: composition::au-host-sdk
+windows:
+  - "[[^^window]]"
+slot-defaults:
+  placeholder: "[[placeholder-picker::placeholder-picker]]"
+projections:
+  - ^: window
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^grid]]"
+  - ^: grid
+    type: bento::bento
+    root: "[[^^documents]]"
+  - ^: documents
+    type: tabs::tabs
+    activeTab: document
+    tabs:
+      - "[[^^document]]"
+  - ^: document
+    type: editor-pane::editor
+    file: sample.md

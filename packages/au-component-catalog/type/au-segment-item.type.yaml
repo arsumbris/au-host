@@ -1,0 +1,10 @@
+# One segment in an <au-segmented-control>. Serializable DATA — never a framework element (the
+# data-driven rule).
+#: One <au-segmented-control> segment: value (keys select), label, and an optional au-icon glyph name.
+fields:
+  #: Stable value the consumer maps back to on `au-change` and matches against `value`.
+  value: String
+  #: The segment label.
+  label: String
+  #: Optional leading au-icon glyph NAME (a string, not a framework node).
+  icon?: String

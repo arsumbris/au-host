@@ -1,0 +1,25 @@
+# Owned by component-contract. The INTERFACE for `<au-color-picker>` — the colour-editing control.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, states, parts. An OVERLAY component: its popover claims a `host.overlay` layer.
+#: Axis controls compose au-slider and emit color strings through the picker contract.
+#: Field text fallbacks match the base ink palette; transparency checkerboard styling is separate.
+#: The interface for <au-color-picker>: a swatch trigger opening an OKLCH popover (hex + L/C/H/A
+#: sliders). Emits `au-change {value}` (an oklch() string). The popover claims host.overlay.
+extends: ui-component::component-contract
+fields:
+  #: The current colour — an `oklch()` string (authored token notation) or a hex (`#rrggbb`/`#rrggbbaa`).
+  #: A non-colour value (e.g. a `var(--au-*)`) still renders the swatch; the sliders sit at neutral.
+  value?: String
+  #: Show the alpha slider, including live changes while the popup is open. Default true. Reflected as the `alpha` state.
+  alpha?: Boolean
+  #: Trigger swatch size. sm/md/lg. Default md.
+  size?: [sm, md, lg]
+  #: Accessible name for the trigger + popover.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change]
+    states: [alpha, open]
+    parts: [trigger]
+    preview: '<au-color-picker value="oklch(0.7 0.16 30)"></au-color-picker> <au-color-picker value="oklch(0.6 0.14 250)" size="lg"></au-color-picker> <au-color-picker value="#8a2be2"></au-color-picker>'

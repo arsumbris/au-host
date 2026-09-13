@@ -1,0 +1,95 @@
+/* Dissolve — the launcher→app crossfade presentation. The launcher layer fades + scales OUT while the
+ * app layer fades + rises IN underneath, on the duration the mist shares (--au-dissolve-dur). Motion is
+ * transform + opacity ONLY (compositor-friendly), on the kit's entrance easing (--au-e-soft). Reduced
+ * motion snaps (durations collapse via the tokens; travel is dropped). Tokens only — the transform
+ * offsets/scales are motion character, not spacing. */
+
+.au-dissolve {
+  --au-dissolve-dur: var(--au-m-cinema);
+  --au-dissolve-stagger: 70ms;
+
+  position: relative;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Both layers fill the box and stack, with the launcher above the app. A single grid
+ * cell stretches its child across both axes so the host app fills the layer. */
+.au-dissolve__layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  min-block-size: 0;
+}
+
+/* The single child (the host `.app`, or the launcher wrapper) is a GRID ITEM, which defaults to
+ * `min-width/height: auto` (= its content's min-content). A composition with wide content would force
+ * that min-content and blow PAST the frame (the item can't shrink below it), leaving panes off the
+ * right edge. `min-*-size: 0` lets the item resolve to the cell (the window) instead, so overflow
+ * clips/scrolls INSIDE each pane rather than widening the whole app. */
+.au-dissolve__layer > * {
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+.au-dissolve__app {
+  z-index: 0;
+}
+
+.au-dissolve__launcher {
+  z-index: 1;
+}
+
+/* Fade the launcher over an already-painted host. No full-window blur or content
+ * scaling: text stays stable and the existing readiness signal owns the handoff. */
+.au-dissolve__launcher {
+  opacity: 1;
+  transform: none;
+  /* A non-none filter would also disable native dragging through this layer. */
+  filter: none;
+  transition:
+    opacity var(--au-dissolve-dur) var(--au-e-soft),
+    transform var(--au-dissolve-dur) var(--au-e-soft);
+}
+
+.au-dissolve[data-phase='entering'] .au-dissolve__launcher,
+.au-dissolve[data-phase='done'] .au-dissolve__launcher {
+  opacity: 0;
+  /* A small departure ties the fade to the shared spacing rhythm. */
+  transform: translateY(var(--au-space-2));
+  filter: none;
+  pointer-events: none;
+}
+
+/* Keep the app opaque, stationary and painted beneath the launcher throughout the
+ * transition. Revealing it through the launcher fade avoids exposing the body background. */
+.au-dissolve__app {
+  opacity: 1;
+  transform: none;
+  transition: transform var(--au-dissolve-dur) var(--au-e-soft) var(--au-dissolve-stagger);
+  pointer-events: none;
+}
+
+.au-dissolve[data-phase='entering'] .au-dissolve__app,
+.au-dissolve[data-phase='done'] .au-dissolve__app {
+  transform: none;
+}
+
+.au-dissolve[data-phase='done'] .au-dissolve__app {
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-dissolve__launcher,
+  .au-dissolve__app {
+    transition: none;
+  }
+  .au-dissolve[data-phase='entering'] .au-dissolve__launcher,
+  .au-dissolve[data-phase='done'] .au-dissolve__launcher {
+    transform: none;
+    filter: none;
+  }
+  .au-dissolve__app {
+    transform: none;
+  }
+}

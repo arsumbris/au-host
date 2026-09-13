@@ -1,0 +1,25 @@
+# The composition viewer-defaults aspect selects a viewer per file kind.
+# It has separate edit permissions from intent-routing: a viewer picker can receive
+# edits: [[viewer-defaults]] without permission to change routing.
+
+# A COMPOSITION-CONFIG ASPECT: it EXTENDS `composition-config` (same-repo, host-sdk-owned) so
+#   - `readSubtypes(composition-config)` returns it (discoverable, open); a third-party aspect joins by
+#     extending the base;
+#   - the per-projection edit right stays bounded by the UNCHANGED `edits: type<composition-config>*` — the
+#     picker's host surface grants itself `edits: [[viewer-defaults]]` and the bound matches.
+# Only THIS aspect extends composition-config; the element record `viewer-default` is an ordinary list
+# element, never gated directly.
+
+# WHY host-sdk owns it: the host's viewer RESOLUTION references/interprets this config (the same
+# references/interprets criterion that admitted intent routing), unlike `opens-meta`, which stays a
+# per-viewer capability declaration the host never turns into a decision.
+
+#
+
+extends: composition-config
+#: The per-file-kind default viewer config a composition carries as its `viewer-defaults` field: which
+#: viewer opens each kind by default.
+fields:
+  #: The default viewer per file kind, one `viewer-default` record each (kind -> viewer). A composition
+  #: with none pickers on every ambiguous open until a default is authored.
+  defaults?: viewer-default[]

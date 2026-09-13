@@ -1,0 +1,27 @@
+# Owned by component-contract. The INTERFACE for `<au-icon-button>` — the square icon affordance.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, states, parts, and the gallery sample. Set-INDEPENDENT: a consumer types against THIS.
+#
+# The glyph is the DEFAULT slot content (an `<au-icon>`), so there is no icon-name prop here — the
+# consumer composes the glyph, which keeps the button set-agnostic about the icon shape table.
+#: The interface for <au-icon-button>: a square button whose visible label is a slotted glyph.
+#: `label` is the accessible name (required in practice). Emits `au-activate` on press.
+extends: ui-component::component-contract
+fields:
+  #: Accessible name — the visible label is a glyph, so a name is required for a11y.
+  label: String
+  #: Square side step. xs/sm/md/lg = 6/7/8/10 spacing units (24/28/32/40px at base density); sm/md/lg share <au-button>'s metrics. Default md.
+  size?: [xs, sm, md, lg]
+  #: Hover treatment. `chrome` (shared chrome hover wash) or `panel` (surface fill, for raised panels). Default chrome.
+  surface?: [chrome, panel]
+  #: Non-interactive + de-emphasized. Also reflected as the `disabled` state; suppresses activation.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    # Composed + bubbling, per the contract rule in ui-component-meta.
+    events: [au-activate]
+    states: [disabled]
+    parts: [button]
+    # The glyph is the default slot; the gallery cannot synthesize it, so show a real composition.
+    preview: '<au-icon-button label="Menu"><au-icon name="more-vertical"></au-icon></au-icon-button> <au-icon-button label="Close" size="sm"><au-icon name="close"></au-icon></au-icon-button> <au-icon-button label="Settings" surface="panel"><au-icon name="gear"></au-icon></au-icon-button>'

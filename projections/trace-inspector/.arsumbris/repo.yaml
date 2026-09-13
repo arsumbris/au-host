@@ -1,0 +1,6 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: trace-inspector
+description: first-party trace inspector pane — reads the host event substrate timeline, grouped by cause
+deps:
+  - name: au-host-sdk

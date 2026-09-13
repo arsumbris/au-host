@@ -1,0 +1,22 @@
+# <au-chord-input> — a keybind chord-capture field: focus + press a shortcut, emits the structured keystroke.
+#: <au-chord-input> — a keybind CHORD-CAPTURE field. Focus it and press a shortcut; it canonicalizes the
+#: keydown (the shared au-host-sdk canonicalizer, so a captured chord matches what the dispatcher produces),
+#: shows it as an <au-kbd> chip, and emits `au-chord-change` with the structured keystroke record the keymap
+#: editor writes. While focused it marks itself `data-au-keycapture` so the keybind gate yields every keystroke
+#: to it (⌘S included). v1 captures a SINGLE keystroke (one chord step). The `chord` value is a PROPERTY
+#: (complex data), never an attribute. Field frame + focus ring mirror au-input; the chord renders via au-kbd.
+extends: ui-component::component-contract
+fields:
+  #: The current chord value, a list of keystroke records. Set as a PROPERTY (complex data). Omit for empty.
+  chord?: keystroke::au-host-sdk[]
+  #: Placeholder shown when empty and not capturing. Default "Set a shortcut".
+  placeholder?: String
+  #: Disable capture and focus. Default false.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-chord-change]
+    states: [capturing, disabled]
+    parts: [field, chord, placeholder]
+    preview: |
+      <au-chord-input placeholder="Set a shortcut"></au-chord-input>

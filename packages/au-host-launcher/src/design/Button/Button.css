@@ -1,0 +1,199 @@
+/* Button — the text action. variant solid | ghost | outline | cta · size sm | md | lg.
+ *
+ * RHYTHM. Height is a whole multiple of the 4px base step (space-1, density-aware): sm/md/lg =
+ * 7/8/10 × space-1 = 28/32/40. Inline padding + gap ride the space ladder; font rides the type
+ * ladder; radius from --au-radius-md; every transition from the motion tokens. No raw px anywhere
+ * (border-box keeps the 1px hairline off the outer height).
+ *
+ * MONOCHROME EMPHASIS. `cta` is the one filled/loud button (off-white --au-cta-*). `solid` is the
+ * quiet default (surface fill + hairline), `outline` is hairline-only, `ghost` is chromeless; the
+ * latter two lift on hover via --au-accent-soft (a surface wash, not a hue).
+ *
+ * @scope-safe: only `.au-btn` + [data-*] + real state pseudos, each mirrored by its data-force-*
+ * twin so the gallery StatesMatrix can freeze a column. */
+
+.au-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--au-space-2);
+  position: relative;
+  height: calc(var(--au-space-1) * 8);
+  padding-inline: var(--au-space-3);
+  border: 0;
+  border-radius: var(--au-radius-md);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-base);
+  line-height: var(--au-lh-base);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-snug);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  background: var(--au-color-surface-2);
+  color: var(--au-ink-1);
+  transition:
+    background-color var(--au-m-fast) var(--au-e-std),
+    color var(--au-m-fast) var(--au-e-std),
+    border-color var(--au-m-fast) var(--au-e-std),
+    transform var(--au-m-fast) var(--au-e-std);
+}
+
+/* press — a restrained tactile give (transform only, all variants). */
+.au-btn:active,
+.au-btn[data-force-active] {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-btn:active,
+  .au-btn[data-force-active] {
+    transform: none;
+  }
+}
+
+.au-btn__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-2);
+}
+
+/* ── size ──────────────────────────────────────────────────────────────────────────────────── */
+.au-btn[data-size='sm'] {
+  height: calc(var(--au-space-1) * 7);
+  padding-inline: var(--au-space-2);
+  gap: var(--au-space-1);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+.au-btn[data-size='lg'] {
+  height: calc(var(--au-space-1) * 10);
+  padding-inline: var(--au-space-4);
+  font-size: var(--au-t-body);
+  line-height: var(--au-lh-body);
+}
+
+/* ── variant: solid (quiet default) ───────────────────────────────────────────────────────── */
+.au-btn[data-variant='solid'] {
+  background: var(--au-color-surface-2);
+  border: 1px solid var(--au-line-2);
+  color: var(--au-ink-1);
+}
+.au-btn[data-variant='solid']:hover,
+.au-btn[data-variant='solid'][data-force-hover] {
+  background: var(--au-color-surface-3);
+  border-color: var(--au-line-3);
+}
+.au-btn[data-variant='solid']:active,
+.au-btn[data-variant='solid'][data-force-active] {
+  background: var(--au-color-surface-1);
+}
+
+/* ── variant: ghost (chromeless) ──────────────────────────────────────────────────────────── */
+.au-btn[data-variant='ghost'] {
+  background: none;
+  color: var(--au-ink-2);
+}
+.au-btn[data-variant='ghost']:hover,
+.au-btn[data-variant='ghost'][data-force-hover] {
+  background: var(--au-accent-soft);
+  color: var(--au-ink-1);
+}
+.au-btn[data-variant='ghost']:active,
+.au-btn[data-variant='ghost'][data-force-active] {
+  background: var(--au-selection-bg);
+  color: var(--au-ink-1);
+}
+
+/* ── variant: outline (hairline) ──────────────────────────────────────────────────────────── */
+.au-btn[data-variant='outline'] {
+  background: none;
+  border: 1px solid var(--au-line-2);
+  color: var(--au-ink-1);
+}
+.au-btn[data-variant='outline']:hover,
+.au-btn[data-variant='outline'][data-force-hover] {
+  background: var(--au-accent-soft);
+  border-color: var(--au-line-3);
+}
+.au-btn[data-variant='outline']:active,
+.au-btn[data-variant='outline'][data-force-active] {
+  background: var(--au-selection-bg);
+}
+
+/* ── variant: cta (the one loud, off-white filled button) ─────────────────────────────────── */
+.au-btn[data-variant='cta'] {
+  background: var(--au-cta-bg);
+  color: var(--au-cta-ink);
+}
+.au-btn[data-variant='cta']:hover,
+.au-btn[data-variant='cta'][data-force-hover] {
+  background: var(--au-cta-hover);
+}
+.au-btn[data-variant='cta']:active,
+.au-btn[data-variant='cta'][data-force-active] {
+  background: var(--au-cta-pressed);
+}
+
+/* ── focus ────────────────────────────────────────────────────────────────────────────────── */
+.au-btn:focus-visible,
+.au-btn[data-force-focus] {
+  outline: 2px solid var(--au-focus-outer);
+  outline-offset: 2px;
+}
+
+/* ── disabled ─────────────────────────────────────────────────────────────────────────────── */
+.au-btn:disabled,
+.au-btn[data-force-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── loading (label hidden, token-timed spinner rides in) ─────────────────────────────────── */
+.au-btn[data-loading],
+.au-btn[data-force-loading] {
+  cursor: progress;
+  pointer-events: none;
+}
+.au-btn[data-loading] .au-btn__label,
+.au-btn[data-force-loading] .au-btn__label {
+  visibility: hidden;
+}
+.au-btn[data-loading]::after,
+.au-btn[data-force-loading]::after {
+  content: '';
+  position: absolute;
+  width: var(--au-t-base);
+  height: var(--au-t-base);
+  border-radius: var(--au-radius-pill);
+  border: 2px solid var(--au-line-3);
+  border-top-color: var(--au-ink-1);
+  animation: au-btn-spin var(--au-m-cinema) linear infinite;
+}
+.au-btn[data-variant='cta'][data-loading]::after,
+.au-btn[data-variant='cta'][data-force-loading]::after {
+  border-color: var(--au-cta-pressed);
+  border-top-color: var(--au-cta-ink);
+}
+
+@keyframes au-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-btn {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-btn[data-loading]::after,
+  .au-btn[data-force-loading]::after {
+    animation: none;
+  }
+}

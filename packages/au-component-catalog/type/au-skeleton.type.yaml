@@ -1,0 +1,27 @@
+# Owned by component-contract. The INTERFACE for `<au-skeleton>` — the calm loading placeholder.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in). A skeleton is display-only:
+# no events, one shared transform-only shimmer sweep. `label` promotes it to an accessible loading
+# region; otherwise it is decorative (aria-hidden).
+#: The interface for <au-skeleton>: the calm loading placeholder (the silhouette of content coming).
+#: Neutral ink-channel bars (never hued, never a leading accent bar) carrying one shared shimmer sweep.
+#: variant text / block / rect / circle. `label` makes it an accessible loading region.
+extends: ui-component::component-contract
+fields:
+  #: Shape mirrored from the real content: text (pill line), block/rect (media box), circle (avatar/dot).
+  variant?: [text, block, rect, circle]
+  #: CSS length or % sizing the bar (text) or box; also the diameter of a circle. A number is px.
+  width?: String
+  #: CSS length for a box height; ignored for text; a circle mirrors width. A number is px.
+  height?: String
+  #: text only — number of stacked line-bars; the last is auto-ragged so text reads unevenly.
+  lines?: Number
+  #: Corner radius token for block/rect (default chip). Ignored for text (pill) and circle (pill).
+  radius?: [pill, panel, row, chip, sm, md, none]
+  #: When set, the root becomes an accessible loading region (role=status + aria-busy) announcing this.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [stack, bar, shape]
+    states: [data-force-static]
+    preview: '<au-skeleton variant="text" lines="3" label="Loading…" style="width:220px"></au-skeleton>'

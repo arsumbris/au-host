@@ -1,0 +1,14 @@
+# Owned by the `intent` package.
+# "Delete the selected composition." A host-global command (see save-composition-intent), handled by the
+# host command node. No params — acts on the currently-selected composition. Routed + ambient, host node
+# the sole owner.
+#: Delete the selected composition file. A host-handled command.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Delete composition
+    icon: trash
+    category: Composition

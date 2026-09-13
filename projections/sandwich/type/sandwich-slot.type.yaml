@@ -1,0 +1,31 @@
+# Owned by the sandwich projection. The slot type for sandwich's three regions, extending
+# the shared `container-slot` with exactly what SANDWICH honours: a region has an extent
+# along the cross axis, and a collapsed state.
+
+# Position-specific size and collapse for a sandwich region. They remain attached
+# to the region when its occupant changes. Fixed and admits are inherited slot rules.
+
+# WHY THIS IS A SUBTYPE rather than fields on the shared base. Bento sizes its splits
+# through `bento-node.branch.ratio`, tabs has neither size nor collapse, and dock sizes
+# its edges by CSS grid. Putting `size` on the base would let an author declare a value
+# nothing honours — a promise the model silently fails to keep. Per-container subtyping
+# makes the honoured set visible in the type, for every declared layout field.
+# Verified against a live daemon: sandwich's union branch REFUSES a `column-slot`.
+
+
+#: A sandwich region: the shared slot rules, plus the size and sizing state sandwich renders.
+extends: container-slot::au-host-sdk
+fields:
+  #: The region's FREE-state extent along sandwich's cross axis, in px. Absent = sandwich's default.
+  #: Read only when `sizing` is `free`; a `compact` region takes the child's declared width instead.
+  size?: Number
+  #: How the region is sized. `free` renders the child at `size` (the drag width); `compact` sizes
+  #: the region to the child's smallest declared width (`breakpoints-meta`), so the child renders its
+  #: own compact form, falling back to `collapsed` when the child declares none; `collapsed` hides the
+  #: child behind sandwich's strip. Absent = `free`. A collapsed region still has its occupant and rules.
+  sizing?: [free, compact, collapsed]
+
+  #: Minimum free-state width in pixels; compact and collapsed states keep their own extents.
+  minSize?: Number
+  #: Keep a compact collapse control visible when the region header is hidden.
+  showCollapseControl?: Boolean

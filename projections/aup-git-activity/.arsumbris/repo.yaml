@@ -1,0 +1,7 @@
+type: au.engine.repo::au-engine
+name: aup-git-activity
+deps:
+  - name: au-host-sdk
+  # aup-git-activity fires open-intent (a changed file opens in the editor), so its
+  # type-def declares fires-intent-meta and the fired intent def-refs into the intent repo.
+  - name: intent

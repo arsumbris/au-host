@@ -1,0 +1,28 @@
+# <au-drop-zone> — the pane-drag landing indicator. A display-only overlay docked over the receiving slot.
+#: <au-drop-zone> — the pane-drag landing indicator. An absolute, display-only overlay (aria-hidden,
+#: pointer-events:none) docked over the receiving slot: a hairline receiver frame + a directional
+#: ink-wash band that slides between the five zones (top/right/bottom/left/center) on the transport
+#: ease. Direction lives in the band's position + sheen, never a colored bar. Mirrors the container
+#: substrate's DropZone vocabulary. Drive `zone` as the drag moves; clearing `zone` fades the band
+#: while it holds its last geometry. The default slot overrides the action caption with source and
+#: destination identity. Captions use compact sans UI type and small rounded corners. The caption sits inside the landing band, truncates within its bounds, and hides in very narrow bands.
+extends: ui-component::component-contract
+fields:
+  #: The landing zone the band highlights. Absent = a drag is in flight but the cursor sits between zones (band holds + fades).
+  zone?: [center, top, right, bottom, left]
+  #: A drag is in flight. False removes the overlay entirely. Default true.
+  active?: Boolean
+  #: Show the action label chip ("Split up" / "Add tab" …). Default true.
+  label?: Boolean
+  #: Edge-band thickness as a fraction of the slot (center is always the middle 50% box). Default 0.25.
+  edgeRatio?: Number
+  #: Corner radius of the overlay, matching the host slot. A CSS length or var(). Default var(--au-radius-md).
+  radius?: String
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    parts: [frame, band, label]
+    preview: |
+      <div style="position:relative;width:220px;height:130px;border:1px solid var(--au-line-1);border-radius:var(--au-radius-md);overflow:hidden;isolation:isolate">
+        <au-drop-zone zone="right" active></au-drop-zone>
+      </div>

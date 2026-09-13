@@ -1,0 +1,15 @@
+# Owned by au-host-sdk (the keybinds vocabulary). ONE keybind: a chord plus the intent it fires, with
+# optional focus narrowing. Lives in a `keymap` file's `keybinds` list. A chord resolves to this intent,
+# which then rides the existing command/intent fire path.
+
+#: One keybind: the chord that triggers it, and the intent (command) it fires.
+fields:
+  #: The chord, an ordered SEQUENCE of keystrokes. One step is the common case; several form a chord
+  #: sequence (⌘K ⌘S).
+  chord: keystroke[+]
+  #: The command to fire — a def-ref to an `intent` subtype, cross-repo capable. Crossing a peer's intent
+  #: needs the keymap's repo to declare that dep (the peer gate).
+  intent: type<intent>*
+  #: Optional focus narrowing for THIS keybind, overriding the keymap file's own `when`. The keybind is
+  #: active only while a projection of one of these types holds focus.
+  when?: type<projection>*[]

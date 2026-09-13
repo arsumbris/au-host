@@ -1,0 +1,36 @@
+/* radial-tree token declarations — DECLARATIONS ONLY (no component styles).
+ *
+ * Discovered + eager-loaded by the host via `projection-runtime-meta.customTokenEntry`,
+ * so a theming pane can enumerate radial-tree's own `--au-radial-tree-*` tokens (grouped
+ * "Radial tree") even when the view is not mounted.
+ *
+ * Defaults are concrete so the look is stable. A token MAY instead default to a base token
+ * to inherit the app palette, e.g. `:root { --au-radial-tree-node: var(--au-color-accent); }`.
+ * Custom properties inherit through any isolation boundary, so these reach the view regardless.
+ */
+@property --au-radial-tree-bg          { syntax: "<color>";  inherits: true; initial-value: transparent; }
+@property --au-radial-tree-root        { syntax: "<color>";  inherits: true; initial-value: #e8e6f0; }
+@property --au-radial-tree-node        { syntax: "<color>";  inherits: true; initial-value: #8a86a8; }
+/* outbound (references FROM the focal file) vs inbound (references INTO it) hemispheres */
+@property --au-radial-tree-out         { syntax: "<color>";  inherits: true; initial-value: #6ea8fe; }
+@property --au-radial-tree-in          { syntax: "<color>";  inherits: true; initial-value: #f0a868; }
+@property --au-radial-tree-dup         { syntax: "<color>";  inherits: true; initial-value: #c678dd; }
+/* edge stroke, and its per-kind tints */
+@property --au-radial-tree-edge        { syntax: "<color>";  inherits: true; initial-value: #3a3a46; }
+@property --au-radial-tree-edge-field  { syntax: "<color>";  inherits: true; initial-value: #4a5a7a; }
+@property --au-radial-tree-label       { syntax: "<color>";  inherits: true; initial-value: #b8b6c8; }
+@property --au-radial-tree-label-size  { syntax: "<length>"; inherits: true; initial-value: 11px; }
+
+/* Graph roles remain independently overridable while their defaults follow the app theme. */
+:root {
+  --au-radial-tree-bg: transparent;
+  --au-radial-tree-node: var(--au-ink-3);
+  --au-radial-tree-out: var(--au-color-accent);
+  --au-radial-tree-in: var(--au-color-warn);
+  --au-radial-tree-dup: var(--au-color-danger);
+  --au-radial-tree-edge: var(--au-line-2);
+  --au-radial-tree-edge-field: var(--au-color-accent);
+  --au-radial-tree-label: var(--au-ink-2);
+  --au-radial-tree-label-size: var(--au-t-2xs);
+  --au-radial-tree-root: var(--au-ink-1);
+}

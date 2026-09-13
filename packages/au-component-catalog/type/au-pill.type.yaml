@@ -1,0 +1,19 @@
+# <au-pill> — the status pill of the label family. Content is the default slot; non-interactive.
+#: <au-pill> — a read-only status or metadata label with an optional decorative dot and theme-derived tone.
+#: Content remains readable at narrow widths. Draft emphasizes, muted recedes, and pulse marks activity unless reduced motion is requested.
+extends: ui-component::component-contract
+fields:
+  #: Show a leading status dot.
+  dot?: Boolean
+  #: Draft emphasis — brightens the dot + text.
+  draft?: Boolean
+  #: Recede the text one ink step.
+  muted?: Boolean
+  #: Optional semantic or accent tint; the label must communicate the state independently of color.
+  tone?: [neutral, accent, ok, warn, danger]
+  #: Gently pulse the visible dot for an active state. Muted and reduced-motion states remain static.
+  pulse?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [dot, label]
+    preview: '<au-pill>Research</au-pill> <au-pill dot tone="ok">Ready</au-pill> <au-pill dot tone="accent" pulse>Syncing</au-pill> <au-pill draft dot>Draft</au-pill> <au-pill muted>Archived</au-pill>'

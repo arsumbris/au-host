@@ -1,0 +1,38 @@
+# Owned by component-contract. The INTERFACE for `<au-input>` — the single-line text field.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out, states, parts. Set-INDEPENDENT: a consumer types against THIS.
+#
+# FORM-ASSOCIATED: `<au-input>` is a form-associated custom element (ElementInternals), so its `value`
+# participates in a native `<form>` and reset, across the shadow boundary. It emits `au-input` (per
+# keystroke) and `au-change` (on commit), both composed + bubbling.
+#
+# The native input type is `inputType`, NOT `type` — `type` is the codegen discriminant, a
+# contract-authoring rule for every ui-component.
+#: The interface for <au-input>: a single-line text field. Form-associated (its value joins a native
+#: form); error paints the danger ring; borderless strips its chrome for a composing frame.
+extends: ui-component::component-contract
+fields:
+  #: The field's value (form-associated: participates in a native form + reset).
+  value?: String
+  #: Placeholder text shown when empty.
+  placeholder?: String
+  #: The native input type (text / password / email / number / …). Default text. (Not `type` — reserved.)
+  inputType?: String
+  #: Size step. sm/md/lg = 28/32/40, parity with au-button. Default md.
+  size?: [sm, md, lg]
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Paint the error border + focus ring (danger) and set aria-invalid. Reflected as `error`.
+  error?: Boolean
+  #: Strip the field's own chrome (border/fill/radius/ring) for a field inside a frame that draws the
+  #: boundary — a combobox popover, a command-palette card. The frame + caret carry focus.
+  borderless?: Boolean
+  #: Native spellcheck on the inner field. Defaults on; set off for a filename / pattern / code field.
+  spellcheck?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-input, au-change]
+    states: [disabled, error]
+    parts: [input]
+    preview: '<au-input placeholder="Filter…"></au-input> <au-input value="typed text"></au-input> <au-input error value="bad"></au-input> <au-input disabled placeholder="disabled"></au-input> <au-input size="sm" placeholder="small"></au-input>'

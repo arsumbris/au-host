@@ -1,0 +1,20 @@
+# Owned by component-contract. The open BASE for an implementation SET.
+#
+# A set is a package that IMPLEMENTS `ui-component` contracts by registering their custom
+# elements. A real set is a SUBTYPE carrying a `component-set-runtime-meta` block — the same
+# subtype-plus-runtime-meta-locator shape `projection` uses, and the exact shape already
+# shipping for notification content renderers.
+#
+# Discovered via `readSubtypes('component-set')`; the code is resolved instance-free through
+# the type owner (the subtype's `source.file` -> package root) plus `meta.entry`.
+#
+# NO instances. The active-set choice is a per-machine stored id, like the active theme.
+#
+# A TAG (`fields: []`): a set carries no INSTANCE data — there are no instances. Everything a
+# set declares rides the type-level `component-set-runtime-meta` block on the subtype.
+#: The open base for a component-set: a package implementing ui-component contracts. Real sets
+#: are subtypes carrying a component-set-runtime-meta locator. A tag — no instances, no fields;
+#: the active set is a per-machine stored id.
+# Abstract: the base component-set kind. Only concrete set subtypes are instantiated.
+abstract: true
+fields: {}

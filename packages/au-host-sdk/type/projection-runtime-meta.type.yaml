@@ -1,0 +1,34 @@
+# Owned by au-host-sdk. Generates the exported `ProjectionRuntimeMeta` interface.
+# The meta record each projection subtype carries in its `meta:` to declare its
+# loadable code. Read off the subtype's type-def via the engine (`readType` ->
+# `meta_blocks`), never off an instance — it is type-level metadata.
+#
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+#
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The ESM entry, relative to the owning package root.
+  entry: String
+  # The mount-contract version the projection's code was built against.
+  # Gated against MOUNT_CONTRACT_VERSION at the handshake (checkProjectionMeta).
+  contractVersion: Number
+  # The named module export the host mounts (default `mount`). Lets several
+  # kind-typed surfaces share ONE entry: the loader loads the module once per
+  # `entry` and mounts `module[export]`. So an editor's pane + status item ship in
+  # one module (exports `pane` + `status`) and may share module-level state.
+  export?: String
+  # Token-declaration stylesheet(s), relative to the owning package root. Each is a
+  # DECLARATIONS-ONLY CSS file (`@property` rules + `:root` custom-property defaults,
+  # optional prefers-color-scheme wrappers) — NOT component styles. The host eager-loads
+  # these at document level for ALL in-scope projections (mounted or not) so a theming
+  # pane can discover a projection's own `--au-<projection>-*` tokens via the CSSOM.
+  # Most projections omit it. Non-empty when present.
+  customTokenEntry?: String[+]
+  # Shared dependencies this projection was built against: served specifier plus semver range.
+  # Optional and non-empty when present. The current handshake does not enforce these ranges.
+  # A projection may bundle an isolated dependency and omit it from this declaration.
+  sharedDeps?: shared-dep-range[+]

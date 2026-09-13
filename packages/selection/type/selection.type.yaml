@@ -1,0 +1,10 @@
+# STAND-IN type-def, owned by the first-party `selection` package (NOT the SDK).
+#
+# The base selection type: what a view has picked. Composes a target (pinned by the
+# subtype) plus an optional sub-region `range`. Medium-agnostic, open for extension.
+# `range: range&` accepts any range subtype, inline or referenced — the range
+# package is a dependency. A consumer narrows to the selection subtypes it knows, via is-a.
+# Abstract: the base selection tag. Only concrete selection subtypes (file-selection, ...) are instantiated.
+abstract: true
+fields:
+  range?: range::range&

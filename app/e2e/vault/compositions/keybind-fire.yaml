@@ -1,0 +1,13 @@
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-keybind-fire.keymap]]"
+windows:
+  - "[[^^au-window-primary]]"
+projections:
+  - ^: au-window-primary
+    content: "[[^^main]]"
+    primary: true
+    type: window::au-host-sdk
+  - ^: main
+    type: editor-pane::editor
+    file: sample.md

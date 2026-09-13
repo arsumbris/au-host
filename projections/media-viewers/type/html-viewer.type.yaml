@@ -1,0 +1,15 @@
+extends: pane-projection::au-host-sdk
+fields:
+  file?: String
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: HTML preview
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    export: html
+    contractVersion: 7
+  - type: opens-meta::au-host-sdk
+    opens: [html, htm]
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"

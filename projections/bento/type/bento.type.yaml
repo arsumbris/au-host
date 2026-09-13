@@ -1,0 +1,43 @@
+# bento IS a projection subtype. Its fields ARE the layout config; an
+# instance of `bento` is a bento composition.
+# `root` holds the layout tree: the same three-branch union every child position takes — a
+# `mountable*` reference (a single-pane bento is one bare `[[^^id]]`), a `bento-slot` when the
+# position has rules, or a nested `bento-node.branch` split (inline). The mountable child is
+# REFERENCE-ONLY; only bento's OWN dialect (the branch splits, the slot wrappers) stays inline.
+# A floated pane is a first-class `window` pool record whose parent is the window node —
+# NOT a bento-tracked member — so bento carries no `detached` field.
+# bento is a SPATIAL container (a wrap target under the "Arrange" family), NOT a grouping-container: a
+# center-drop onto a bento pane still WRAPS (it does not add-into the bento), because `spatial-container`
+# is a SIBLING of grouping-container, so `isGroupingKind('bento')` stays false. bento's `buildGroup`
+# (module export) mints a two-leaf branch (a split).
+
+extends: spatial-container::au-host-sdk
+fields:
+  root: <mountable::au-host-sdk* | bento-slot | bento-node.branch>
+  # "Do new document panes arrive grouped?" is a composition-level policy,
+  # `composition.grouping.group-new-panes` (beside `group-into`), so the "whether" sits with the "which"
+  # and off a layout container's config. Bento READS it from the substrate grouping provider.
+
+meta:
+  # Loadable-code metadata for bento's own ESM. Read off this type-def via the
+  # engine (type owner -> meta.entry), not a manifest.json. `entry` is relative to
+  # the OWNING PACKAGE ROOT (where the type-def lives), so the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents bento HANDLES (typed capability). Discovered in the subtypes pass; the
+  # runtime handlers bind at mount. handle() is gated by this declaration.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[reveal-pane-intent::intent]]"
+      - "[[open-intent::intent]]"
+      - "[[open-pane-intent::intent]]"
+      - "[[show-pane-intent::intent]]"
+      - "[[split-right-intent::intent]]"
+      - "[[split-down-intent::intent]]"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[ui-intent-highlight::intent]]"

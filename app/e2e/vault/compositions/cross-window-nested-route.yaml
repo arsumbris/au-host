@@ -1,0 +1,31 @@
+# A sandwich with bento → tabs → editor at left and a file-tree at center.
+# Float the bento, then open a file from main. The nested tabs is the only open handler;
+# it must receive the remote claim and commit and render the preview.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^grid]]"
+    center: "[[^^tree]]"
+  - ^: grid
+    type: bento::bento
+    root: "[[^^tabs]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

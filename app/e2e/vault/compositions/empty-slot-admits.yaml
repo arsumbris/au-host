@@ -1,0 +1,25 @@
+# A slot admits an editor but no placeholder; the open floor can fill it.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+slot-defaults:
+  placeholder: "[[placeholder-picker::placeholder-picker]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^treeL]]"
+    center:
+      ^: center-slot
+      type: sandwich-slot::sandwich
+      admits:
+        - "[[editor-pane::editor]]"
+  - ^: treeL
+    type: file-tree::file-tree

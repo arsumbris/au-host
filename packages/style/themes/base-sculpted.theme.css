@@ -1,0 +1,4 @@
+/* Warm Base surfaces with diagonal specular edge lighting. */
+:root {
+  --au-pane-edge-image: radial-gradient(ellipse calc(var(--au-radius-panel) * 14) calc(var(--au-radius-panel) * 11) at 0% 0%, oklch(0.97 0.006 80 / 0.18), oklch(0.97 0.006 80 / 0.06) 32%, transparent 78%), radial-gradient(ellipse calc(var(--au-radius-panel) * 14) calc(var(--au-radius-panel) * 11) at 100% 100%, oklch(0.97 0.006 80 / 0.15), oklch(0.97 0.006 80 / 0.045) 32%, transparent 78%);
+}

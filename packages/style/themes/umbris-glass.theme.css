@@ -1,0 +1,50 @@
+/* Translucent chrome with opaque graphite reading surfaces. */
+:root {
+  --au-link-internal: #c9a782;
+  --au-link-external: var(--au-link-internal);
+  --au-pane-edge-image: none;
+  --au-pane-focus-color: var(--au-line-3);
+  --au-elev-3-line: inset 0 0 0 1px var(--au-line-1);
+  --au-pane-background-image: linear-gradient(118deg, oklch(1 0 0 / 0.018), transparent 65%);
+  --au-chrome-background-image: linear-gradient(118deg, oklch(1 0 0 / 0.035), oklch(1 0 0 / 0.008) 40%, transparent 70%);
+  --au-color-desk:      oklch(0.05  0 0);
+  --au-color-bg:        oklch(0.10  0 0);
+  --au-color-shell:     oklch(0.135 0 0);
+  --au-chrome-opacity: 0.5;
+  --au-surface-alpha: 0.6;
+  --au-material-blur: 16px;
+  --au-material-filter: blur(var(--au-material-blur)) url("#au-backdrop-opaque") brightness(0.3);
+  --au-chrome-hover: oklch(1 0 0 / 0.045);
+  --au-chrome-active: oklch(1 0 0 / 0.075);
+  --au-color-surface-1: oklch(0.18  0 0);
+  --au-color-surface-2: oklch(0.14  0 0);
+  --au-color-surface-3: oklch(0.225 0 0);
+
+  /* Distinct secondary and muted text for graphite floating surfaces. */
+  --au-ink-3: #b1aca2;
+  --au-ink-4: #a09c92;
+  --au-code-comment: var(--au-ink-4);
+
+  --au-line-1: oklch(1 0 0 / 0.05);
+  --au-line-2: oklch(1 0 0 / 0.07);
+  --au-line-3: oklch(1 0 0 / 0.11);
+
+  --au-accent-signal:     oklch(0.92 0 0);
+  --au-accent-atmosphere: oklch(0.92 0 0 / 0.10);
+  --au-accent-soft:       oklch(0.92 0 0 / 0.22);
+  --au-accent-ink:        oklch(0.30 0 0);
+
+  --au-cta-bg:      oklch(0.92 0 0);
+  --au-cta-ink:     oklch(0.10 0 0);
+  --au-cta-hover:   oklch(0.96 0 0);
+  --au-cta-pressed: oklch(0.86 0 0);
+
+  --au-selection-bg: oklch(0.92 0 0 / 0.22);
+  --au-selection-fg: oklch(0.96 0 0);
+  --au-focus-outer:  oklch(0.92 0 0);
+
+  --au-radius-frame: 15px;
+  --au-radius-panel: 10px;
+  --au-radius-row:    8px;
+  --au-radius-chip:   6px;
+}

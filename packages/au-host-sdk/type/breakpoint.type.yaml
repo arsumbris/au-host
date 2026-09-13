@@ -1,0 +1,13 @@
+#: One compact render size, in px. Owned by au-host-sdk. Generates the exported `Breakpoint` interface.
+#
+# No label: a container matches on the AXIS it governs (a width-collapsing container reads `width`),
+# so a free-text id would buy nothing. A plain record, NOT a meta — only `breakpoints-meta` mixes in
+# the engine's meta marker.
+#
+# Both axes optional; a breakpoint declares at least one (an all-empty one is inert). A projection
+# declares only the axes on which it has a compact form.
+fields:
+  #: The px width a width-collapsing container (e.g. the sandwich) sizes the position to.
+  width?: Number
+  #: The px height a height-collapsing container sizes the position to.
+  height?: Number

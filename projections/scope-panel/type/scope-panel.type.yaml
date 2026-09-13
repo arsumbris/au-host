@@ -1,0 +1,15 @@
+# scope-panel IS a `pane-projection`: a full-surface UI over each workspace member's FILE SCOPE.
+# It reads the `ignores` surface (`readIgnores`, per member: editable `.auignore` patterns, the
+# seeded default excludes, the unconditional floor, and — with resolve:true — the boundary-level
+# effect) and re-scopes a member through the `set_ignores` mutation (host.scope.setIgnores).
+# Configless: the type-def IS the projection;
+# it reads the live workspace, nothing to persist. A single surface — the default `mount` export.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Scope
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

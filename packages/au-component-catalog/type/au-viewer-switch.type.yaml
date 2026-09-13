@@ -1,0 +1,24 @@
+# Owned by component-contract. The INTERFACE for `<au-viewer-switch>` — the file-pane viewer switcher.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# states, parts, and the gallery sample.
+#: The interface for <au-viewer-switch>: the split affordance that re-shows a file in another projection.
+#: The PRIMARY button switches to the viewer that renders the file (its name, or "Open with" for a
+#: choice) and emits `au-activate`; the CHEVRON (shown when `has-more`) opens the secondary group of
+#: file-consumers (radial/focal) and emits `au-more`. Names no projection; the projection labels it and
+#: runs the `viewerSwitchSets` / `runViewerSwitch` helper. The document-action pill look; placement is the projection's.
+extends: ui-component::component-contract
+fields:
+  #: The primary button's visible text and accessible label. The sole rendering viewer's name, or "Open with" (default) for a choice.
+  primaryLabel?: String
+  #: Show the chevron for the secondary group (file-consumers that are not viewers). Default off.
+  hasMore?: Boolean
+  #: Non-interactive + de-emphasized; suppresses both actions.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    # Composed + bubbling, per the contract rule in ui-component-meta.
+    events: [au-activate, au-more]
+    states: [disabled]
+    parts: [group, primary, more]
+    preview: '<au-viewer-switch primary-label="Editor"></au-viewer-switch> <au-viewer-switch primary-label="Reader" has-more></au-viewer-switch> <au-viewer-switch has-more disabled></au-viewer-switch>'

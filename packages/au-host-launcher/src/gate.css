@@ -1,0 +1,515 @@
+@import '@arsumbris/style/status-pill.css';
+/*
+ * Launcher setup-form structure for workspace picking, scaffolding and service setup.
+ * Launcher.tsx and McpSetup.tsx consume these classes; setup.css supplies theme-specific overrides.
+ * Palette, fonts and radii use shared --au-* tokens.
+ */
+
+/* Generic setup classes must not style matching workspace content. */
+@scope (.au-launcher-setup) {
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-2);
+}
+
+.config label {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2-5);
+}
+
+.config label span {
+  width: 70px;
+  color: var(--au-color-muted);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+
+.config input {
+  flex: 1;
+  background: var(--au-color-bg);
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm);
+  color: var(--au-color-text);
+  padding: var(--au-space-1-5) var(--au-space-2);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+
+.config input:focus {
+  outline: none;
+  border-color: var(--au-color-accent);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2-5);
+}
+
+.status-detail {
+  color: var(--au-color-muted);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  font-family: var(--au-font-mono);
+}
+
+/* Boot gate: a centered card over the full frame, shown until the engine is up
+   and the human enters. */
+.gate {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--au-space-6);
+  /* The window-drag handle for the start screen: with `hiddenInset` there is no OS title bar, and the gate
+     has no `.host-strip`, so the window could not be moved from here. The centered CARD carves itself back
+     out (below), so the background — including the top strip above the card — drags the window; the OS
+     traffic lights stay clickable over it. Mirrors the app bar's `.host-strip` drag seam. */
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 640px;
+  /* The card and everything in it (both states use `.gate-card`, incl. LoadingCard) is interactive, so it
+     is carved out of the drag region — a press activates a control instead of starting a window move. */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.gate-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--au-space-2-5);
+}
+
+.gate-head h1 {
+  margin: 0;
+  font-size: var(--au-t-lead);
+  line-height: var(--au-lh-lead);
+  font-weight: var(--au-w-strong);
+}
+
+.gate-modes {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+}
+
+.gate-modes button.active {
+  border-color: var(--au-color-accent);
+  color: var(--au-color-accent);
+}
+
+.gate-recents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-1);
+}
+.gate-recents-label {
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--au-color-muted);
+}
+.gate-recents-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--au-space-1-5);
+}
+.gate-recent {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--au-space-1-5);
+  background: none;
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-chip);
+  color: var(--au-color-text);
+  cursor: pointer;
+  padding: var(--au-space-1) var(--au-space-2-5);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  max-width: 100%;
+}
+.gate-recent:hover {
+  border-color: var(--au-color-accent);
+}
+.gate-recent.active {
+  border-color: var(--au-color-accent);
+  color: var(--au-color-accent);
+}
+.gate-recent-name {
+  font-weight: var(--au-w-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gate-recent-mode {
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--au-color-muted);
+}
+/* A recents entry whose folder is still there but is not a repo — almost always a workspace from
+   the pre-folder-repo model. Kept visible (hiding it reads as "the host lost my workspace"), dimmed
+   and labelled so it is obviously actionable rather than broken. */
+.gate-recent.stale {
+  border-style: dashed;
+  opacity: 0.75;
+}
+.gate-recent.stale .gate-recent-mode {
+  color: var(--au-color-warn);
+}
+
+.gate-info-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--au-color-muted);
+  cursor: pointer;
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  padding: var(--au-space-0-5) 0;
+}
+.gate-info-toggle:hover {
+  color: var(--au-color-text);
+}
+.gate-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-2);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  color: var(--au-color-muted);
+}
+.gate-info-block {
+  padding: var(--au-space-2) var(--au-space-2-5);
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm);
+  background: var(--au-color-bg);
+}
+.gate-info-block.active {
+  border-color: color-mix(in srgb, var(--au-color-accent) 55%, transparent);
+}
+.gate-info-block b {
+  color: var(--au-color-text);
+}
+.gate-info-block code {
+  font-family: var(--au-font-mono);
+  color: var(--au-color-accent);
+}
+.gate-info-block ul {
+  margin: var(--au-space-1) 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+}
+
+.gate-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-1-5);
+  margin-top: var(--au-space-1);
+  padding: var(--au-space-2) var(--au-space-2-5);
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm);
+  background: var(--au-color-bg);
+}
+.gate-deps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-1);
+}
+.gate-deps-head {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  color: var(--au-color-muted);
+}
+.gate-deps-head b {
+  color: var(--au-color-accent);
+}
+.gate-deps-head .spacer {
+  flex: 1;
+}
+.gate-deps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm);
+}
+.gate-deps-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  padding: var(--au-space-0-5) var(--au-space-2);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  font-family: var(--au-font-mono);
+}
+.gate-deps-list li.missing {
+  color: var(--au-color-muted);
+}
+.gate-dep-mark {
+  width: 12px;
+  flex: 0 0 auto;
+}
+.gate-deps-list li.found .gate-dep-mark {
+  color: var(--au-color-ok);
+}
+.gate-dep-name {
+  color: var(--au-color-text);
+  flex: 0 0 auto;
+}
+.gate-deps-list li.missing .gate-dep-name {
+  color: var(--au-color-muted);
+}
+.gate-dep-path {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  color: var(--au-color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+/* Nested checklist: a bundle row (block) holding its header row + an indented children list. */
+.gate-deps-list > li {
+  display: block;
+  padding: 0;
+}
+.gate-dep-row {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  padding: var(--au-space-0-5) var(--au-space-2);
+}
+.gate-dep-kind {
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--au-color-muted);
+}
+.gate-dep-children {
+  list-style: none;
+  margin: 0 0 var(--au-space-0-5);
+  padding: 0;
+}
+.gate-dep-children li {
+  padding-left: 26px;
+}
+
+/* A dependency name that matched more than one folder: needs an explicit pick. */
+.gate-deps-list li.ambiguous {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.gate-deps-list li.ambiguous .gate-dep-mark {
+  color: var(--au-color-warn);
+}
+.gate-dep-choices {
+  flex: 1 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+  padding: var(--au-space-0-5) 0 var(--au-space-1) var(--au-space-5);
+}
+.gate-dep-warn {
+  color: var(--au-color-warn);
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+}
+.gate-dep-choice {
+  display: flex;
+  align-items: baseline;
+  gap: var(--au-space-2);
+  color: var(--au-color-text);
+  cursor: pointer;
+}
+.gate-dep-choice input {
+  flex: 0 0 auto;
+}
+/* The readable label: the last two path segments (…/parent/name), which is what distinguishes
+   same-named matches (two dirs named the same under different parents). */
+.gate-dep-choice-short {
+  flex: 0 0 auto;
+  color: var(--au-color-text);
+  font-weight: var(--au-w-strong);
+}
+/* The full absolute path, muted + secondary (the short label already disambiguates). */
+.gate-dep-choice-full {
+  flex: 1;
+  min-width: 0;
+  color: var(--au-color-muted);
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.gate-root {
+  color: var(--au-color-muted);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+
+.gate-root code {
+  font-family: var(--au-font-mono);
+  color: var(--au-color-text);
+}
+
+.gate-missing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-1-5);
+  padding: var(--au-space-2) var(--au-space-2-5);
+  border: 1px solid color-mix(in srgb, var(--au-color-warn) 45%, transparent);
+  border-radius: var(--au-radius-sm);
+  background: color-mix(in srgb, var(--au-color-warn) 8%, transparent);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+
+.gate-missing-head {
+  color: var(--au-color-warn);
+}
+
+.gate-missing-names {
+  font-family: var(--au-font-mono);
+  color: var(--au-color-text);
+  word-break: break-word;
+}
+
+.gate-missing-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2-5);
+}
+
+.gate-missing-msg {
+  color: var(--au-color-muted);
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+}
+
+.gate-enter {
+  align-self: flex-start;
+  border-color: var(--au-color-accent);
+  color: var(--au-color-accent);
+  font-weight: var(--au-w-strong);
+}
+
+.projection-hint {
+  color: var(--au-color-muted);
+  font-weight: var(--au-w-body);
+}
+
+.log {
+  margin: 0;
+  background: var(--au-color-bg);
+  border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm);
+  padding: var(--au-space-2-5);
+  height: 240px;
+  overflow: auto;
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  color: var(--au-color-muted);
+  white-space: pre-wrap;
+}
+
+/* Agent (MCP) tool-paths setup, in the boot gate. */
+.mcp-setup {
+  margin-top: var(--au-space-2-5);
+  padding-top: var(--au-space-2-5);
+  border-top: 1px solid var(--au-color-border);
+}
+
+.mcp-setup-head {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  width: 100%;
+  background: none;
+  border: none;
+  padding: var(--au-space-1) 0;
+  color: var(--au-color-text);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  cursor: pointer;
+}
+
+.mcp-setup-caret {
+  color: var(--au-color-muted);
+  width: 12px;
+}
+
+.mcp-setup-summary {
+  margin-left: auto;
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+}
+.mcp-setup-summary.ok {
+  color: var(--au-color-ok);
+}
+.mcp-setup-summary.bad {
+  color: var(--au-color-muted);
+}
+
+.mcp-setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-2-5);
+  margin-top: var(--au-space-2);
+}
+
+.mcp-check {
+  font-size: var(--au-t-2xs);
+  line-height: var(--au-lh-2xs);
+  min-width: 84px;
+}
+.mcp-check.ok {
+  color: var(--au-color-ok);
+}
+.mcp-check.bad {
+  color: var(--au-color-warn);
+}
+.mcp-check.muted {
+  color: var(--au-color-muted);
+}
+
+.mcp-setup-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--au-space-2);
+}
+
+/* The combined engine+mcp one-click, the gate's primary "bring it all up" action. */
+.gate-start-workspace {
+  align-self: stretch;
+  background: color-mix(in srgb, var(--au-color-accent) 16%, transparent);
+  border-color: var(--au-color-accent);
+  color: var(--au-color-accent);
+  font-weight: var(--au-w-strong);
+  padding: var(--au-space-2) var(--au-space-3);
+}
+
+}

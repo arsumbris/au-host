@@ -1,0 +1,7 @@
+# <au-table-body> — the body rowgroup of <au-table>.
+#: <au-table-body> — the body rowgroup of <au-table>. Slot <au-table-row>s of <au-table-cell>.
+extends: ui-component::component-contract
+fields: {}
+meta:
+  - type: ui-component-meta::component-contract
+    preview: '<au-table><au-table-body><au-table-row><au-table-cell>Body cell</au-table-cell></au-table-row></au-table-body></au-table>'

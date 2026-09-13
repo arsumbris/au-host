@@ -1,0 +1,24 @@
+# STAND-IN type-def, owned by the `intent` package.
+# "Promote me to permanent." Fired by a transient view (e.g. an editor on first
+# edit) for ITSELF; its container promotes the firer's tab/node. No fields — the
+# firer is implicit (the channel delivers the firer's identity to the handler).
+
+# Routing metadata rides the type-def: routed + firer-relative. The constructor threads it onto the fired
+# payload.
+#: Promote the FIRING view from transient to permanent. Fired by a transient view
+#: for ITSELF (e.g. an editor on first edit); the firer's container promotes its
+#: tab/node. No payload: the firer is implicit (the channel delivers its identity).
+#: Routed + firer-relative.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: firer-relative
+  # NOT agent-firable, and for a structural reason rather than caution. This intent is
+  # `firer-relative` and means "promote ME": the handler acts on whoever fired it. An agent
+  # fires from the socket, which enters the tree at the ROOT and has no node identity, so
+  # there is nothing for the intent to be relative TO. Declared `false` rather than omitted
+  # so the answer is on the record instead of falling out of the default.
+  - type: intent-agent-meta
+    firable: false
+fields: {}

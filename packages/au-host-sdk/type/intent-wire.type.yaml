@@ -1,0 +1,34 @@
+# Owned by @arsumbris/host-sdk. ONE explicit routing = one (source, intent) connection with
+# its recipients + mode. Listed in a composition's `intent-routing.wires` field. Reifies what a
+# map entry ((source, intent) -> recipients) would hold, because the type system has NO
+# dynamic-key map shape — the same idiom `intent-default` uses.
+
+# `source` and `targets` are INSTANCE references (`projection*`, value a pool `[[^^id]]`), the
+# same reference vocabulary a composition names its children with — NOT the def-ref role-KIND
+# form `intent-default` uses. A wire binds specific pool RECORDS, not roles. Same-repo bare now
+# (`projection` and `intent` are both host-sdk-owned).
+
+# ONE wire per (source, intent): the overlay edits the existing record, never appends a
+# second, so there is no runtime precedence to resolve (a validator warns on a duplicate).
+
+#
+
+fields:
+  #: The firing projection record, a pool `[[^^id]]` reference. Its type-def must DECLARE the
+  #: `intent` below as an output port (`fires-intent-meta`); the overlay draws a cable only
+  #: from a declared fired intent.
+  source: projection*
+  #: The fired intent, a def-ref to an `intent` subtype (`intent: "[[open-intent::intent]]"`).
+  #: Engine-validated against the type graph — a typo is a validation error, not a silent
+  #: misroute, the payoff of reifying the map key as a field. Same-repo bare (`intent` is the
+  #: host-sdk base); a specific command is `::intent`-qualified at the value.
+  intent: type<intent>*
+  #: The recipient projection records, pool `[[^^id]]` references. Non-empty: a wire with no
+  #: recipients is meaningless. The wire's targets ARE the recipients, replacing the default
+  #: selection — a `once` intent WIDENS to the whole set, an `all` intent NARROWS to it.
+  targets: projection*[+]
+  #: How a `once` (routed) intent's wire disposes a non-claim. `strict` (the default when
+  #: absent): deliver to the recipients ONLY; none handling falls to the existing `unhandled`
+  #: report (fail CLOSED, never widened). `fallback`: then the default MRU walk, EXCLUDING the
+  #: recipients already tried. IGNORED for an `all` (broadcast) intent, which never claims.
+  mode?: [strict, fallback]

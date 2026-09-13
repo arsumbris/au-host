@@ -1,0 +1,8 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: backlinks
+deps:
+  - name: au-host-sdk
+  # backlinks fires open-intent, so its type-def declares fires-intent-meta::intent
+  # and the fired intent def-refs cross into the intent repo — a real type crossing.
+  - name: intent

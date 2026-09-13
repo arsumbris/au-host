@@ -1,0 +1,10 @@
+#: Toggle between quiet container frames and fully visible wrapper headers. A local view preference;
+#: the composition and its nesting remain unchanged.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Toggle container nesting
+    category: View

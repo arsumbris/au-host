@@ -1,0 +1,18 @@
+#: A read-only view of the composition's own structure: what nests in what, and which positions carry rules.
+#
+# layout-inspector IS a `pane-projection`. It is a DEV TOOL, and it is a PROJECTION rather than host
+# code on purpose: the framework's claim is that we build first-party things the way an external
+# author would, so an inspector only WE could ship would be the "we are privileged" failure the
+# moldability bar exists to catch. A third party can now ship their own, or replace this one, by
+# declaring another `pane-projection` — no host change.
+#
+# NO CONFIG. What it shows is derived live from the running composition, never authored. A field
+# here would be a setting on a debug view, which is the mis-homed-preference shape.
+#
+# `meta` declares its loadable code, resolved via the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

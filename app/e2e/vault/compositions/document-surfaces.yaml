@@ -1,0 +1,20 @@
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^shell]]"
+  - ^: shell
+    type: sandwich::sandwich
+    left: "[[^^sidebar-reader]]"
+    center: "[[^^grid]]"
+  - ^: sidebar-reader
+    type: aup-reader::aup-reader
+    file: sample.md
+  - ^: grid
+    type: bento::bento
+    root: "[[^^center-reader]]"
+  - ^: center-reader
+    type: aup-reader::aup-reader
+    file: other.md

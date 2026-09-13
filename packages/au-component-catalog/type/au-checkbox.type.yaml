@@ -1,0 +1,28 @@
+# Owned by component-contract. The INTERFACE for `<au-checkbox>` — the checkbox form control.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. Set-INDEPENDENT: a consumer types against THIS.
+#
+# FORM-ASSOCIATED: `<au-checkbox>` is a form-associated custom element (ElementInternals), so its checked
+# state participates in a native `<form>` + reset, across the shadow boundary. It emits `au-change`
+# (detail `{ checked }`, composed + bubbling) on toggle.
+#: The interface for <au-checkbox>: a checkbox — a token box with a check (checked) or dash
+#: (indeterminate) glyph, an optional label. Form-associated. Emits `au-change {checked}`.
+extends: ui-component::component-contract
+fields:
+  #: Whether the box is checked. Form-associated (participates in a native form + reset).
+  checked?: Boolean
+  #: The "mixed" state — the box shows a dash and reports aria mixed. A user toggle clears it.
+  indeterminate?: Boolean
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Box size step. `md` (default), `sm` (dense lists), `lg` (roomy). The glyph scales.
+  size?: [sm, md, lg]
+  #: Text beside the box (the whole control is the clickable label). Omitted → set an aria-label.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change]
+    states: [checked, indeterminate, disabled]
+    parts: [box, check, dash, label]
+    preview: '<au-checkbox label="Restore panes on launch"></au-checkbox> <au-checkbox checked label="Confirm before delete"></au-checkbox> <au-checkbox indeterminate label="Some selected"></au-checkbox> <au-checkbox disabled label="Locked"></au-checkbox>'

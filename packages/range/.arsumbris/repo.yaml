@@ -1,0 +1,4 @@
+# Schema-12 repo identity (au.engine.repo). `range` is referenced (selection -> range::range&).
+type: au.engine.repo::au-engine
+name: range
+description: first-party range vocabulary; owns range + text-range

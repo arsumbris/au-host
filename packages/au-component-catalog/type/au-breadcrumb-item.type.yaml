@@ -1,0 +1,14 @@
+# One segment in an <au-breadcrumb>. Serializable DATA — never a framework element (the data-driven
+# rule). The LAST item in the list is the current page; earlier items are interactive buttons unless
+# `interactive: false`.
+#: One <au-breadcrumb> segment: label, an optional leading au-icon glyph NAME, an optional value, and
+#: an interactive flag (earlier crumbs are buttons by default).
+fields:
+  #: The visible segment text.
+  label: String
+  #: Optional leading au-icon glyph NAME (a string, not a framework node).
+  icon?: String
+  #: A stable value the consumer maps back to on `au-navigate`.
+  value?: String
+  #: An earlier crumb is an interactive button by default; set false for a quiet static crumb.
+  interactive?: Boolean

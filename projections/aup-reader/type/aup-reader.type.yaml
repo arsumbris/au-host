@@ -1,0 +1,83 @@
+#: Read Markdown, typed YAML, and source files.
+# Eligibility advertises readable source formats; viewer choice uses the existing resolution ladder.
+extends: pane-projection::au-host-sdk
+fields:
+  file?: String
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Reader
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The content this viewer opens (content-routing axis), on its OWN meta — NOT on the code
+  # locator above. opens-meta makes this reader ELIGIBLE to open markdown
+  # (opens-meta is ELIGIBILITY, not the decision — md resolves through the ladder: a composition
+  # viewer-default, else the host chooser) and file-tree's "Open with" lists it.
+
+  - type: opens-meta::au-host-sdk
+    opens:
+      - md
+      - markdown
+      - mdx
+      - js
+      - mjs
+      - cjs
+      - ts
+      - mts
+      - cts
+      - jsx
+      - tsx
+      - yaml
+      - yml
+      - yamls
+      - json
+      - jsonc
+      - json5
+      - css
+      - scss
+      - less
+      - html
+      - htm
+      - xhtml
+      - py
+      - pyi
+      - rs
+      - c
+      - h
+      - cc
+      - cpp
+      - cxx
+      - hpp
+      - hh
+      - sql
+      - xml
+      - svg
+      - go
+      - sh
+      - bash
+      - zsh
+      - toml
+      - java
+      - cs
+      - kt
+      - kts
+      - scala
+      - sc
+      - dart
+      - rb
+      - rake
+      - swift
+      - ps1
+      - psm1
+      - psd1
+      - dockerfile
+      - txt
+      - ""
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"
+      - "[[promote-intent::intent]]"
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"
+      - "[[ui-intent-highlight::intent]]"

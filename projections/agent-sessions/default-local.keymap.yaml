@@ -1,0 +1,14 @@
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [mod]
+        key: s
+    intent: "[[save-intent::intent]]"
+  - chord:
+      - mods: [mod]
+        key: k
+    intent: "[[toggle-command-palette-intent::intent]]"
+  - chord:
+      - mods: [mod]
+        key: w
+    intent: "[[close-view-intent::intent]]"

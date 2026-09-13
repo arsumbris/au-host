@@ -1,0 +1,19 @@
+{
+  "name": "@arsumbris/selection",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo selection --module range=@arsumbris/range --out src/generated.ts"
+  },
+  "dependencies": {
+    "@arsumbris/range": "link:../range"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

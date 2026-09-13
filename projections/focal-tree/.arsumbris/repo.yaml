@@ -1,0 +1,9 @@
+# Schema-12 repo identity + deps (au.engine.repo). A pane-projection subtype: deps au-host-sdk
+# (kind hierarchy owner) + intent (its type-def declares handles-intent-meta::intent + [[open-intent::intent]]
+# in a TYPE position → the peer gate).
+type: au.engine.repo::au-engine
+name: focal-tree
+description: first-party focal reference-neighborhood projection
+deps:
+  - name: au-host-sdk
+  - name: intent

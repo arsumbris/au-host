@@ -1,0 +1,7 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: bento
+description: first-party bento window-manager projection; owns the bento-node family
+deps:
+  - name: au-host-sdk
+  - name: intent

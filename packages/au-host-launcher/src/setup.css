@@ -1,0 +1,293 @@
+/* Pre-workspace controls intentionally stay plain React: the workspace owns the
+   shared custom-element registry. All visual roles come from the app foundation. */
+.au-launcher-setup {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  display: flex;
+  padding: var(--au-space-8) var(--au-space-6);
+  color: var(--au-ink-2);
+  font-family: var(--au-font-sans);
+}
+.au-launcher-setup .gate {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: none;
+  width: min(100%, 40rem);
+  min-width: 0;
+  margin: auto;
+  padding: 0;
+}
+.au-launcher-setup .gate-card {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-4);
+  width: 100%;
+  max-width: none;
+  max-height: 70dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--au-space-6);
+  background-color: var(--au-color-surface-1);
+  background-image: var(--au-pane-background-image);
+  border: 1px solid var(--au-line-2);
+  border-radius: var(--au-radius-panel);
+  box-shadow: var(--au-elev-3-line);
+  color: var(--au-ink-2);
+  animation: au-setup-enter var(--au-m-base) var(--au-e-soft) both;
+}
+.au-launcher-setup .gate-head {
+  flex-direction: column;
+  gap: var(--au-space-2);
+  margin-bottom: var(--au-space-2);
+}
+.au-launcher-setup .gate-head h2 {
+  margin: 0;
+  color: var(--au-ink-1);
+  font: var(--au-w-medium) var(--au-t-lead) / var(--au-lh-lead) var(--au-font-sans);
+  text-wrap: balance;
+}
+.au-launcher-setup .app-subtitle,
+.au-launcher-setup .projection-hint { color: var(--au-ink-3); }
+.au-launcher-setup .app-subtitle {
+  font-size: var(--au-t-body);
+  line-height: var(--au-lh-body);
+}
+.au-launcher-setup code { color: var(--au-ink-3); overflow-wrap: anywhere; }
+.au-launcher-setup .config { gap: var(--au-space-3); }
+.au-launcher-setup .config label { flex-wrap: wrap; gap: var(--au-space-2); }
+.au-launcher-setup .config label > span:first-child {
+  width: 100%;
+  color: var(--au-ink-2);
+  font-weight: var(--au-w-medium);
+}
+.au-launcher-setup input:not([type='radio']):not([type='checkbox']) {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: calc(var(--au-space-1) * 9);
+  background: var(--au-color-bg);
+  color: var(--au-ink-1);
+  border: 1px solid var(--au-line-2);
+  border-radius: var(--au-radius-md);
+  padding: var(--au-space-2) var(--au-space-3);
+  font: var(--au-t-xs) / var(--au-lh-xs) var(--au-font-mono);
+  transition: border-color var(--au-m-fast) var(--au-e-std), box-shadow var(--au-m-fast) var(--au-e-std);
+}
+.au-launcher-setup input::placeholder { color: var(--au-ink-4); }
+.au-launcher-setup input:focus-visible {
+  outline: none;
+  border-color: var(--au-focus-outer);
+  box-shadow: var(--au-focus-ring);
+}
+.au-launcher-setup button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--au-space-1) * 8);
+  gap: var(--au-space-2);
+  padding: var(--au-space-1-5) var(--au-space-3);
+  background: var(--au-color-surface-2);
+  color: var(--au-ink-2);
+  border: 1px solid var(--au-line-2);
+  border-radius: var(--au-radius-md);
+  font: var(--au-w-medium) var(--au-t-xs) / var(--au-lh-xs) var(--au-font-sans);
+  cursor: pointer;
+  transition: background-color var(--au-m-fast) var(--au-e-std), color var(--au-m-fast) var(--au-e-std), box-shadow var(--au-m-fast) var(--au-e-std);
+}
+.au-launcher-setup button:hover:not(:disabled) { background: var(--au-chrome-hover); color: var(--au-ink-1); }
+.au-launcher-setup button:disabled { opacity: var(--au-opacity-disabled); cursor: default; }
+.au-launcher-setup :is(button, summary):focus-visible { outline: none; box-shadow: var(--au-focus-ring); }
+.au-launcher-setup .au-launcher-setup__back,
+.au-launcher-setup .gate-info-toggle,
+.au-launcher-setup .mcp-setup-head {
+  align-self: flex-start;
+  background: transparent;
+  border-color: transparent;
+  color: var(--au-ink-3);
+  box-shadow: none;
+}
+.au-launcher-setup .au-launcher-setup__back { margin-inline-start: calc(-1 * var(--au-space-3)); }
+.au-launcher-setup .gate-info-toggle { padding-inline: var(--au-space-2); }
+.au-launcher-setup .gate-disclosure {
+  border-top: 1px solid var(--au-line-1);
+  padding-top: var(--au-space-3);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+}
+.au-launcher-setup .gate-disclosure > summary {
+  padding: var(--au-space-1-5) var(--au-space-2);
+  border-radius: var(--au-radius-sm);
+  color: var(--au-ink-3);
+  cursor: pointer;
+}
+.au-launcher-setup .gate-disclosure > summary:hover { background: var(--au-chrome-hover); color: var(--au-ink-1); }
+.au-launcher-setup .gate-disclosure[open] > summary { margin-bottom: var(--au-space-3); color: var(--au-ink-2); }
+.au-launcher-setup .gate-disclosure-body { display: flex; flex-direction: column; gap: var(--au-space-4); }
+.au-launcher-setup .gate-recents-list { max-height: 10rem; overflow: auto; }
+.au-launcher-setup .gate-recent { box-shadow: none; }
+.au-launcher-setup .gate-recent.active { background: var(--au-chrome-active); }
+.au-launcher-setup .gate-missing,
+.au-launcher-setup .gate-create-body,
+.au-launcher-setup .gate-info-block {
+  background: var(--au-elev-1-fill);
+  border-radius: var(--au-radius-md);
+  padding: var(--au-space-3);
+}
+.au-launcher-setup .gate-create-body { gap: var(--au-space-4); }
+.au-launcher-setup .gate-deps { gap: var(--au-space-2); }
+.au-launcher-setup :is(.gate-deps-head, .gate-missing-actions, .status-row) { flex-wrap: wrap; }
+.au-launcher-setup .status-detail { flex-basis: 100%; overflow-wrap: anywhere; }
+.au-launcher-setup .gate-start-workspace { min-height: calc(var(--au-space-1) * 10); }
+.au-launcher-setup .gate-enter {
+  align-self: stretch;
+  min-height: calc(var(--au-space-1) * 10);
+  background: var(--au-cta-bg);
+  color: var(--au-cta-ink);
+  border-color: transparent;
+}
+.au-launcher-setup .gate-enter:hover:not(:disabled) { background: var(--au-cta-hover); color: var(--au-cta-ink); }
+.au-launcher-setup .error {
+  color: var(--au-color-danger);
+  background: var(--au-elev-1-fill);
+  border: 1px solid var(--au-color-danger);
+  border-radius: var(--au-radius-md);
+  padding: var(--au-space-3);
+  overflow-wrap: anywhere;
+}
+.au-launcher-setup .log { height: 12rem; color: var(--au-ink-3); background: var(--au-color-bg); }
+@keyframes au-setup-enter {
+  from { opacity: 0; transform: translateY(var(--au-space-2)); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 480px) {
+  .au-launcher-setup { padding: var(--au-space-8) var(--au-space-3); }
+  .au-launcher-setup .gate-card {
+  position: relative;
+  isolation: isolate; padding: var(--au-space-4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .au-launcher-setup .gate-card {
+  position: relative;
+  isolation: isolate; animation: none; }
+  .au-launcher-setup :is(button, input) { transition: none; }
+}
+@media (forced-colors: active) {
+  .au-launcher-setup :is(button, summary, input):focus-visible { outline: 2px solid Highlight; }
+}
+
+/* Same decorative edge contract as the shared PaneFrame; never an interaction ring. */
+.au-launcher-setup .gate-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background-image: var(--au-pane-edge-image);
+  mask: linear-gradient(white 0 0) content-box, linear-gradient(white 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .au-launcher-setup .gate-card { background-image: none; }
+  .au-launcher-setup .gate-card::before { display: none; }
+}
+
+@media (max-height: 560px) {
+  .au-launcher-setup .gate-card { max-height: none; }
+}
+
+.au-launcher-setup .gate-disclosure { interpolate-size: allow-keywords; }
+.au-launcher-setup .gate-disclosure::details-content {
+  block-size: 0;
+  opacity: 0;
+  overflow: clip;
+  transition: block-size var(--au-m-base) var(--au-e-std),
+    opacity var(--au-m-fast) var(--au-e-std),
+    content-visibility var(--au-m-base) allow-discrete;
+}
+.au-launcher-setup .gate-disclosure[open]::details-content { block-size: auto; opacity: 1; }
+.au-launcher-setup button:active:not(:disabled) { background: var(--au-chrome-active); }
+.au-launcher-setup .gate-enter:active:not(:disabled) { background: var(--au-cta-pressed); }
+.au-launcher-setup .gate-disclosure > summary {
+  transition: color var(--au-m-fast) var(--au-e-std), background-color var(--au-m-fast) var(--au-e-std), box-shadow var(--au-m-fast) var(--au-e-std);
+}
+@media (prefers-reduced-motion: reduce) {
+  .au-launcher-setup .gate-disclosure::details-content,
+  .au-launcher-setup .gate-disclosure > summary { transition: none; }
+}
+.au-launcher-setup .gate-info { display: block; }
+.au-launcher-setup .gate-info-body { display: grid; gap: var(--au-space-2); }
+
+/* Recovery uses the same compact field, row and scroll metrics as workspace creation. */
+.au-launcher-setup .gate-card { padding: var(--au-space-5); }
+.au-launcher-setup .gate-head { gap: var(--au-space-2); margin-block: var(--au-space-3) var(--au-space-5); }
+.au-launcher-setup .gate-head .app-subtitle { font: var(--au-t-xs)/var(--au-lh-xs) var(--au-font-sans); color: var(--au-ink-3); }
+.au-launcher-setup .gate-disclosure { padding-block: var(--au-space-2); }
+.au-launcher-setup .gate-disclosure > summary { padding: var(--au-space-3); margin-block: var(--au-space-1); border-radius: var(--au-radius-row); }
+.au-launcher-setup :is(button,input,summary):focus { outline: none; box-shadow: none; }
+.au-launcher-setup :is(button,input,summary):focus-visible { outline: 1px solid var(--au-focus-outer); outline-offset: 2px; }
+.au-launcher-setup .gate-start-workspace { align-self: flex-end; width: auto; min-height: calc(var(--au-space-1) * 9); padding: var(--au-space-2) var(--au-space-4); }
+.au-launcher-setup .gate-missing { display: grid; gap: var(--au-space-3); padding: var(--au-space-3); border-color: var(--au-line-3); }
+.au-launcher-setup .gate-missing :is(.gate-missing-hint,.gate-missing-names,.gate-missing-actions) { margin: 0; font: var(--au-t-xs)/var(--au-lh-body) var(--au-font-sans); }
+.au-launcher-setup .gate-card { scrollbar-gutter: stable; scrollbar-width: auto; scrollbar-color: auto; overflow-anchor: none; }
+.au-launcher-setup .gate-card::-webkit-scrollbar { width: var(--au-space-4); }
+.au-launcher-setup .gate-card::-webkit-scrollbar-track { margin: var(--au-space-2); }
+.au-launcher-setup .gate-card::-webkit-scrollbar-thumb { border: var(--au-space-1) solid transparent; border-radius: var(--au-radius-pill); background: var(--au-ink-4); background-clip: padding-box; }
+
+/* Recovery rows and disclosures share one alignment grid. */
+.au-launcher-setup .gate-card { gap: var(--au-space-3); padding: var(--au-space-5); font: var(--au-t-xs)/var(--au-lh-xs) var(--au-font-sans); }
+.au-launcher-setup .gate-head { margin-block: var(--au-space-3); }
+.au-launcher-setup .gate-disclosure > summary {
+  list-style: none; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--au-space-3); min-height: calc(var(--au-space-1) * 9);
+  padding: var(--au-space-3); margin: var(--au-space-1) 0;
+}
+.au-launcher-setup .gate-disclosure > summary::-webkit-details-marker { display: none; }
+.au-launcher-setup .gate-disclosure[open] > summary { margin-bottom: var(--au-space-1); }
+.au-launcher-setup .starter-chevron { width: var(--au-space-4); height: var(--au-space-4); flex: 0 0 auto; transition: transform var(--au-m-base) var(--au-e-std); }
+.au-launcher-setup details[open] > summary .starter-chevron { transform: rotate(180deg); }
+.au-launcher-setup .gate-disclosure::details-content { interpolate-size: allow-keywords; block-size: 0; opacity: 0; overflow: clip; transition: block-size var(--au-m-base) var(--au-e-std), opacity var(--au-m-fast) var(--au-e-std), content-visibility var(--au-m-base) allow-discrete; }
+.au-launcher-setup .gate-disclosure[open]::details-content { block-size: auto; opacity: 1; }
+.au-launcher-setup .gate-recents-body { display: grid; gap: var(--au-space-3); padding: var(--au-space-3); }
+.au-launcher-setup .gate-recents-body > input { width: 100%; font-family: var(--au-font-sans); }
+.au-launcher-setup .gate-recents-list { display: flex; flex-flow: column nowrap; gap: var(--au-space-1); max-height: 16rem; overflow-x: hidden; padding: var(--au-space-1) var(--au-space-2) var(--au-space-1) var(--au-space-1); scrollbar-gutter: stable; }
+.au-launcher-setup button.gate-recent { flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; width: 100%; min-width: 0; text-align: left; padding: var(--au-space-3); gap: var(--au-space-3); border: 1px solid transparent; border-radius: var(--au-radius-row); background: transparent; font-weight: normal; }
+.au-launcher-setup button.gate-recent.active { background: var(--au-chrome-active); border-color: var(--au-line-3); }
+.au-launcher-setup button.gate-recent.stale { opacity: 1; border-style: solid; }
+.au-launcher-setup .gate-recent-label { display: grid; gap: var(--au-space-1); flex: 1; min-width: 0; }
+.au-launcher-setup .gate-recent-name { white-space: normal; overflow-wrap: anywhere; font-weight: var(--au-w-medium); }
+.au-launcher-setup .gate-recent-label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--au-ink-4); font: var(--au-t-2xs)/var(--au-lh-xs) var(--au-font-sans); }
+.au-launcher-setup .gate-recent-state { flex: 0 0 auto; color: var(--au-ink-3); font-size: var(--au-t-2xs); }
+.au-launcher-setup .gate-info-body { display: grid; gap: var(--au-space-3); padding: var(--au-space-3); color: var(--au-ink-3); line-height: var(--au-lh-body); }
+.au-launcher-setup .gate-info-body p, .au-launcher-setup .gate-info-body dl { margin: 0; }
+.au-launcher-setup .gate-info-body dl { display: grid; gap: var(--au-space-2); }
+.au-launcher-setup .gate-info-body dt { color: var(--au-ink-2); font-weight: var(--au-w-medium); }
+.au-launcher-setup .gate-info-body dd { margin: 0 0 var(--au-space-2); }
+.au-launcher-setup .gate-disclosure-body { padding: var(--au-space-3); }
+.au-launcher-setup .status-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--au-space-2); padding: var(--au-space-3); border: 1px solid var(--au-line-2); border-radius: var(--au-radius-row); }
+.au-launcher-setup .status-row .status-detail { flex-basis: 100%; color: var(--au-ink-3); overflow-wrap: anywhere; }
+.au-launcher-setup .status-row .spacer { flex: 1; }
+.au-launcher-setup .mcp-setup-head { display: flex; align-items: center; gap: var(--au-space-3); }
+.au-launcher-setup .mcp-setup-summary { margin-left: auto; }
+.au-launcher-setup .mcp-setup-body { display: grid; gap: var(--au-space-4); padding: var(--au-space-3); }
+.au-launcher-setup .mcp-setup .config label { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--au-space-2); }
+.au-launcher-setup .mcp-setup .config label > span { width: auto; grid-column: 1 / -1; }
+.au-launcher-setup .mcp-setup-actions { display: flex; gap: var(--au-space-2); flex-wrap: wrap; }
+.au-launcher-setup .mcp-setup-actions .spacer { flex: 1; }
+.au-launcher-setup .log { box-sizing: border-box; max-width: 100%; padding: var(--au-space-3); border: 1px solid var(--au-line-2); border-radius: var(--au-radius-row); font: var(--au-t-2xs)/var(--au-lh-xs) var(--au-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.au-launcher-setup :is(.gate-recents-list,.log) { scrollbar-width: auto; scrollbar-color: auto; }
+.au-launcher-setup :is(.gate-recents-list,.log)::-webkit-scrollbar { width: var(--au-space-4); height: var(--au-space-4); }
+.au-launcher-setup :is(.gate-recents-list,.log)::-webkit-scrollbar-track { margin: var(--au-space-2); }
+.au-launcher-setup :is(.gate-recents-list,.log)::-webkit-scrollbar-thumb { border: var(--au-space-1) solid transparent; border-radius: var(--au-radius-pill); background: var(--au-ink-4); background-clip: padding-box; }
+@media (max-width:480px) { .au-launcher-setup .gate-recent-state { display: none; } .au-launcher-setup .gate-recents-body, .au-launcher-setup .gate-disclosure-body, .au-launcher-setup .mcp-setup-body { padding-inline: var(--au-space-1); } }
+@media (prefers-reduced-motion:reduce) { .au-launcher-setup .gate-disclosure::details-content, .au-launcher-setup .starter-chevron { transition: none; } }
+
+/* A scroll-content pseudo element moves its edge through the controls. Keep the
+   recovery frame on its stationary border/shadow; the surface sheen remains. */
+.au-launcher-setup .gate-card::before { display: none; }

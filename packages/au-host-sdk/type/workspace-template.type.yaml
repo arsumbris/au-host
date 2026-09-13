@@ -1,0 +1,8 @@
+fields:
+  path: String
+  name: String
+  description: String
+  highlights?: String[]
+  preview?: workspace-template-preview
+  #: Composition wikilink resolved from the created workspace, not the manifest. Omit for an empty start.
+  initialComposition?: String

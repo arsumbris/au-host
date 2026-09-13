@@ -1,0 +1,19 @@
+{
+  "name": "@arsumbris/style",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./ext.css": "./ext.css",
+    "./fonts.css": "./fonts.css",
+    "./document-controls.css": "./document-controls.css",
+    "./status-pill.css": "./status-pill.css",
+    "./surface-material": "./surface-material.ts",
+    "./default-theme": "./default-theme.ts",
+    "./document-scroll": "./document-scroll.ts"
+  },
+  "scripts": {
+    "typecheck": "node --experimental-transform-types scripts/check-initial-values.ts && node --experimental-transform-types scripts/check-token-floors.ts"
+  }
+}

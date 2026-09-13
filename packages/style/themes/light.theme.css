@@ -1,0 +1,82 @@
+/* Neutral light surfaces with dark text, syntax and status roles. */
+:root {
+  --au-link-internal: #805735;
+  --au-link-external: var(--au-link-internal);
+  --au-pane-edge-image: none;
+  --au-pane-focus-color: var(--au-line-3);
+  --au-elev-3-line: inset 0 0 0 1px var(--au-line-1);
+  --au-pane-background-image: linear-gradient(118deg, oklch(0 0 0 / 0.012), transparent 65%);
+  color-scheme: light;
+  --au-chrome-background-image: linear-gradient(118deg, oklch(1 0 0 / 0.6), transparent 65%);
+
+  --au-color-bg:        #f3f3f3;
+  --au-color-desk:      #dedede;
+  --au-color-shell:     #eaeaea;
+  --au-color-surface-1: #ffffff;
+  --au-color-surface-2: #f0f0f0;
+  --au-color-surface-3: #fafafa;
+
+  --au-ink-1: #181818;
+  --au-ink-2: #292929;
+  --au-ink-3: #484848;
+  --au-ink-4: #626262;
+  --au-ink-5: #999999;
+
+  --au-line-1: rgba(24, 24, 24, 0.08);
+  --au-line-2: rgba(24, 24, 24, 0.12);
+  --au-line-3: rgba(24, 24, 24, 0.16);
+
+  --au-accent-signal:     #181818;
+  --au-accent-atmosphere: rgba(0, 0, 0, 0);
+  --au-accent-soft:       rgba(24, 24, 24, 0.06);
+  --au-accent-ink:        #f3f3f3;
+
+  --au-cta-bg:      #181818;
+  --au-cta-ink:     #f3f3f3;
+  --au-cta-hover:   #292929;
+  --au-cta-pressed: #050403;
+
+  --au-selection-bg: rgba(24, 24, 24, 0.12);
+  --au-selection-fg: #181818;
+  --au-focus-outer:  #484848;
+
+  --au-color-ok: #216a42;
+  --au-color-warn: #795000;
+  --au-color-danger: #a22e38;
+  --au-color-anchor: #70448f;
+  --au-color-cyan: #216762;
+  --au-code-keyword: #70448f;
+  --au-code-string: #3e681f;
+  --au-code-function: #235c8b;
+  --au-code-type: #216762;
+  --au-code-number: #83531d;
+  --au-code-property: #465e81;
+  --au-chrome-hover: rgba(24, 24, 24, 0.045);
+  --au-chrome-active: rgba(24, 24, 24, 0.075);
+
+  /* Categorical graph nodes remain legible on light pane surfaces. */
+  --au-graph-repo-1: #a6540d;
+  --au-graph-repo-2: #375fb0;
+  --au-graph-repo-3: #466d1b;
+  --au-graph-repo-4: #80571d;
+  --au-graph-repo-5: #774bad;
+  --au-graph-repo-6: #146e9a;
+  --au-graph-repo-7: #b53953;
+  --au-graph-repo-8: #656710;
+  --au-graph-kind-note: #375fb0;
+  --au-graph-kind-instance: #466d1b;
+  --au-graph-kind-type-def: #774bad;
+  --au-graph-kind-asset: #80571d;
+
+  /* Activity categories use the same readable light-theme roles as graph nodes. */
+  --au-git-activity-tree-1: #375fb0;
+  --au-git-activity-tree-2: #466d1b;
+  --au-git-activity-tree-3: #80571d;
+  --au-git-activity-tree-4: #774bad;
+  --au-git-activity-tree-5: #a6540d;
+  --au-git-activity-tree-6: #146e9a;
+
+  --au-sh-pop: 0 12px 32px -8px rgba(24, 24, 24, 0.16), 0 2px 6px rgba(24, 24, 24, 0.08);
+  --au-sh-glass:  0 0 0 1px rgba(24, 24, 24, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 24px 64px -16px rgba(24, 24, 24, 0.22);
+  --au-sh-header: 0 1px 0 rgba(24, 24, 24, 0.06), 0 8px 24px -16px rgba(24, 24, 24, 0.14);
+}

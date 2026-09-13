@@ -1,0 +1,30 @@
+# PANE-ACTIONS-MENU fixture — a window → bento split of two editors. The test asserts a bento pane header
+# carries ONE ⋯ "Pane actions" overflow menu that opens the occupant-level actions (swap / split / wrap /
+# pop-out), instead of a row of inline glyph buttons.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^grid]]"
+    ^: w
+  - ^: grid
+    type: bento::bento
+    root:
+      type: bento-node.branch::bento
+      direction: row
+      ratio: 0.5
+      children:
+        - "[[^^a]]"
+        - "[[^^b]]"
+  - ^: a
+    type: editor-pane::editor
+    file: sample.md
+  - ^: b
+    type: editor-pane::editor
+    file: sample.md

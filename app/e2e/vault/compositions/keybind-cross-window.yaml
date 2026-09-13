@@ -1,0 +1,32 @@
+# KEYBIND-CROSS-WINDOW fixture — window → sandwich (LEFT: a tabs group holding an editor, floatable via the
+# pane-actions menu; CENTER: a file-tree). The keymap (⌘S → save-composition-intent) is active. The
+# floated-window keybind E2E floats the LEFT tabs into its own OS window, presses ⌘S THERE, and asserts the
+# fire lands at the authority — the surface gate → forward → authority resolve path. The main window never
+# sees the keydown, so a fire proves the cross-window (surface) path, guarding the main-window-only trap.
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-keybind-fire.keymap]]"
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabs]]"
+    center: "[[^^tree]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

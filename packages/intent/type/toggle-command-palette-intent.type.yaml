@@ -1,0 +1,13 @@
+# Owned by the `intent` package.
+# TOGGLE the command palette open/closed. The palette is host CHROME, so the host is the sole handler; it is
+# modelled as an intent (routed + ambient) so the palette-open is a real, bindable, discoverable COMMAND like
+# any other. Firing it toggles the palette open or closed.
+#: Toggle the command palette open or closed.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Toggle command palette
+    category: View

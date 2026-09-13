@@ -1,0 +1,11 @@
+# One option in an <au-radio-group>. Serializable DATA — never a framework element (the data-driven
+# rule).
+#: One <au-radio-group> option: value (keys select + matches against the group value), label, and an
+#: optional per-item disabled flag.
+fields:
+  #: Stable value the consumer maps back to on `au-change` and matches against the group `value`.
+  value: String
+  #: The option label, shown beside its ring.
+  label: String
+  #: Disable just this option (the group can also disable every option at once).
+  disabled?: Boolean

@@ -1,0 +1,30 @@
+# Shared action-bar layout. Children own focus and selected-state presentation.
+#: Group related actions with native Tab navigation. Child controls retain their own arrow-key
+#: behavior; this layout deliberately uses group semantics, not a composite toolbar. Choose
+#: scroll for one unbroken action row or wrap for responsive rows. Floating material follows
+#: the shared theme; selected paint belongs to the controls.
+extends: ui-component::component-contract
+fields:
+  #: Bar height on the 4px grid: compact/dense/chrome = 28/32/40.
+  size?: [dense, compact, chrome]
+  #: docked = pane chrome on one hairline; floating = the elevated contextual pill.
+  variant?: [docked, floating]
+  #: Explicit overflow: scroll preserves one row; wrap grows into multiple rows.
+  overflow?: [scroll, wrap]
+  #: Dim + inert (no selection / read-only pane); the bar stays visible.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    states: [disabled]
+    preview: |
+      <au-toolbar aria-label="Editor" style="width:360px">
+        <au-toolbar-group gap="tight">
+          <au-icon-button label="Undo"><au-icon name="back"></au-icon></au-icon-button>
+          <au-icon-button label="Redo"><au-icon name="forward"></au-icon></au-icon-button>
+        </au-toolbar-group>
+        <au-divider orientation="vertical"></au-divider>
+        <au-icon-button label="Bold" aria-pressed="true">B</au-icon-button>
+        <au-toolbar-spacer></au-toolbar-spacer>
+        <au-icon-button label="Search"><au-icon name="search"></au-icon></au-icon-button>
+      </au-toolbar>

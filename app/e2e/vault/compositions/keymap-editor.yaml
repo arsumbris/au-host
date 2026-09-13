@@ -1,0 +1,12 @@
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+projections:
+  - ^: w
+    content: "[[^^ed]]"
+    primary: true
+    type: window::au-host-sdk
+  - ^: ed
+    type: keymap-editor::keymap-editor
+windows:
+  - "[[^^w]]"

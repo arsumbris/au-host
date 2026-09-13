@@ -1,0 +1,201 @@
+/* The launcher STAGE: a full-viewport ground that layers the Mist atmosphere behind the
+ * launcher. The Mist canvas (`.au-mist`) covers the stage at z-index 0; the launcher sits above it.
+ * The launcher's own ground is transparent by design, so the mist reads through. */
+
+.au-launcher-stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* An opaque theme ground for the launcher / boot transition. The mist canvas above it is
+     semi-transparent, so without this the host layer sitting UNDER the launcher (in the dissolve)
+     shows straight through — two loaders at once. Opaque here means the launcher fully occludes the
+     host until it dissolves away. The mist still reads over it. */
+  background: var(--au-color-bg);
+  background-image: var(--au-chrome-background-image);
+  /* Blank space must receive pointer events too, including Umbra's window-level gaze input. */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.au-launcher-window-drag {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--au-space-8);
+  z-index: 2;
+  /* Keep native window movement in the top inset, clear of the centered task surface. */
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+/* Boot controls remain interactive. */
+.au-launcher-boot__progress,
+.au-launcher-boot__escape {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.au-launcher-stage > .au-launcher {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* The boot progress, centered over the mist while a launch starts the engine + mcp. */
+.au-launcher-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--au-space-4);
+  padding: var(--au-space-8);
+}
+.au-launcher-boot__progress {
+  width: min(440px, 100%);
+}
+.au-launcher-boot__escape {
+  background: none;
+  border: 0;
+  color: var(--au-ink-4);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-xs);
+  cursor: pointer;
+}
+.au-launcher-boot__escape { transition: color var(--au-m-fast) var(--au-e-std); border-radius: var(--au-radius-row); padding: var(--au-space-2) var(--au-space-3); }
+.au-launcher-boot__escape:focus-visible { outline: 1px solid var(--au-focus-outer); outline-offset: var(--au-space-1); }
+.au-launcher-boot__escape:hover {
+  color: var(--au-ink-2);
+}
+
+/* The two-daemon status line under the brand: engine + (when configured) mcp, each a dot + label +
+ * state word. */
+.au-launcher-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-3);
+}
+.au-launcher-status__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-1);
+}
+.au-launcher-status__label {
+  color: var(--au-ink-3);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-xs);
+}
+.au-launcher-status__detail {
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-2xs);
+  letter-spacing: var(--au-ls-mono);
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .au-launcher-stage { background-image: none; }
+}
+
+/* Shared identity stays mounted while only the task surface changes. */
+.au-launcher-stage {
+  display: flex;
+  overflow: auto;
+  padding: var(--au-space-8) var(--au-space-5);
+  box-sizing: border-box;
+}
+.au-launcher-shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 40rem);
+  min-width: 0;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--au-space-5);
+}
+.au-launcher-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--au-space-2);
+  text-align: center;
+  color: var(--au-ink-1);
+}
+.au-launcher-identity__avatar {
+  width: calc(var(--au-space-1) * 40);
+  height: calc(var(--au-space-1) * 24);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.au-launcher-identity__avatar .au-launcher-avatar { width: 100%; height: 100%; }
+.au-launcher-identity__brand {
+  color: var(--au-ink-3);
+  font: var(--au-w-medium) var(--au-t-body) / var(--au-lh-body) var(--au-font-sans);
+}
+.au-launcher-identity h1 {
+  margin: 0;
+  color: var(--au-ink-1);
+  font: var(--au-w-medium) var(--au-t-h2) / var(--au-lh-h2) var(--au-font-sans);
+  letter-spacing: var(--au-ls-display);
+}
+.au-launcher-shell > .au-launcher {
+  align-self: center;
+  padding: 0;
+  height: auto;
+  width: min(100%, 32rem);
+  overflow: visible;
+}
+.au-launcher-shell > .au-launcher-setup {
+  position: relative;
+  inset: auto;
+  overflow: visible;
+  padding: 0;
+}
+.au-launcher-shell > .au-launcher-setup .gate {
+  width: 100%;
+  margin: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.au-launcher-shell > .au-launcher-setup .gate-card { max-height: 60dvh; }
+.au-launcher-shell > .au-launcher-boot { position: relative; inset: auto; padding: var(--au-space-6); }
+@media (max-height: 560px) {
+  .au-launcher-shell > .au-launcher-setup .gate-card { max-height: none; }
+}
+
+/* Matches catalogue Skeleton's neutral channel and transform-only sweep. No fake progress. */
+.au-launcher-skeleton { width: min(100%, 28rem); display: grid; gap: var(--au-space-3); }
+.au-launcher-skeleton__row { display: flex; align-items: center; gap: var(--au-space-3); }
+.au-launcher-skeleton__row > i { width: calc(var(--au-space-1) * 10); height: calc(var(--au-space-1) * 10); border-radius: var(--au-radius-md); }
+.au-launcher-skeleton__row > span { display: grid; gap: var(--au-space-2); flex: 1; }
+.au-launcher-skeleton__row b { height: var(--au-space-2); width: 75%; border-radius: var(--au-radius-pill); }
+.au-launcher-skeleton__row b:last-child { width: 55%; }
+.au-launcher-skeleton :is(i,b) { display: block; position: relative; overflow: hidden; background: var(--au-line-2); }
+.au-launcher-skeleton :is(i,b)::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--au-line-2), transparent);
+  animation: au-launcher-skeleton-sweep calc(var(--au-m-cinema) * 2) var(--au-e-move) infinite;
+}
+@keyframes au-launcher-skeleton-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .au-launcher-skeleton :is(i,b)::after { animation: none; opacity: 0; } }
+
+.au-launcher-shell > .au-launcher,
+.au-launcher-shell > .au-launcher-setup { view-transition-name: au-launcher-task; }
+.au-launcher-identity { view-transition-name: au-launcher-identity; }
+::view-transition-group(au-launcher-task),
+::view-transition-group(au-launcher-identity) {
+  animation-duration: var(--au-m-base);
+  animation-timing-function: var(--au-e-soft);
+}
+::view-transition-old(au-launcher-task),
+::view-transition-new(au-launcher-task),
+::view-transition-old(au-launcher-identity),
+::view-transition-new(au-launcher-identity) { animation-duration: var(--au-m-base); }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(au-launcher-task),
+  ::view-transition-group(au-launcher-identity) { animation: none; }
+}
+/* Keep the atmosphere steady; only the named task/identity regions transition. */
+:root:has(.au-launcher-stage)::view-transition-old(root),
+:root:has(.au-launcher-stage)::view-transition-new(root) { animation: none; }

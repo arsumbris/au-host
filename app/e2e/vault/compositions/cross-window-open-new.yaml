@@ -1,0 +1,17 @@
+# A window containing only a file-tree, with no open handler.
+# Opening a file offers a new window; choosing it creates a viewer and window record
+# and realizes the viewer on that secondary surface.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tree]]"
+    ^: w
+  - ^: tree
+    type: file-tree::file-tree

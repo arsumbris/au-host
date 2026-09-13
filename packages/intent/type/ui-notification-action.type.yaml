@@ -1,0 +1,16 @@
+# STAND-IN type-def, owned by the `intent` package (NOT the SDK).
+# A labeled follow-up action on a ui-notification: a `label` plus the `intent` to fire
+# when the human activates it. "Retry" fires a retry intent; "Open" fires an open-intent.
+# The surfacer RENDERS the affordance and FIRES `intent` through host.intent.fire on
+# activation; the notification vocab does NOT interpret it (payload-opaque, `intent&`
+# inline-or-ref). Kept minimal — rich wiring (confirm-flows, disabled-state, per-action
+# styling) is deferred until a real case needs it.
+
+#: A labeled follow-up on a notification: a `label` the surfacer shows and the `intent`
+#: it fires on activation. The vocab does not interpret the intent (opaque, inline-or-ref).
+fields:
+  #: The button/affordance text the surfacer renders.
+  label: String
+  #: The intent fired when the human activates this action (inline or a referenced
+  #: intent instance). Opaque to this vocab — the surfacer fires it via host.intent.fire.
+  intent: intent::au-host-sdk&

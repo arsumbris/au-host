@@ -1,0 +1,8 @@
+# A row in <au-workspace-switcher>'s `items`: a stable id the consumer keys the switch on, and the
+# name shown in the menu. Serializable DATA — never a framework element (the data-driven rule).
+#: One workspace-switcher row: id (the entry root, keys the switch) + name (shown in the menu).
+fields:
+  #: Stable id the consumer maps back on `au-select` (the workspace entry root).
+  id: String
+  #: The workspace name shown in the menu row (and its mark).
+  name: String

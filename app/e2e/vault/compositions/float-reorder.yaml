@@ -1,0 +1,32 @@
+# A sandwich with two distinguishable tabs at left and an editor at center.
+# Float the tabs and reorder them in the secondary window. The surface proposes a
+# structural edit to the authority and receives the updated pool through synchronization.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabs]]"
+    center: "[[^^edC]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^edA]]"
+      - "[[^^tree]]"
+  - ^: edA
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: edC
+    type: editor-pane::editor
+    file: sample.md

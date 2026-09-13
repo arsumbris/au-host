@@ -1,0 +1,38 @@
+# Owned by component-contract. The INTERFACE for `<au-textarea>` — the multiline text field.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. Set-INDEPENDENT: a consumer types against THIS. Mirrors `au-input`'s border /
+# radius / focus / disabled / error, on a block box that wraps.
+#
+# FORM-ASSOCIATED: `<au-textarea>` is a form-associated custom element (ElementInternals), so its `value`
+# participates in a native `<form>` + reset, across the shadow boundary. Emits `au-input` (per keystroke)
+# and `au-change` (on commit), both composed + bubbling.
+#: The interface for <au-textarea>: a multiline text field mirroring au-input's chrome. Form-associated.
+#: `mono` + `size` support a code/pattern well; `autoGrow` grows to a token cap then scrolls. Emits
+#: `au-input` / `au-change`.
+extends: ui-component::component-contract
+fields:
+  #: The field text. Form-associated (participates in a native form + reset).
+  value?: String
+  #: Placeholder shown when empty.
+  placeholder?: String
+  #: Initial visible row count (the box grows with `resize` unless `autoGrow`). Default 3.
+  rows?: Number
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Paints the danger border + focus ring and sets aria-invalid. Reflected as the `error` state.
+  error?: Boolean
+  #: Grow to fit content up to a token max-height, then scroll (disables the manual resize handle).
+  autoGrow?: Boolean
+  #: Monospace font — for a code / pattern well (ignore rules, snippets). Default is the sans body font.
+  mono?: Boolean
+  #: Font + padding step. `md` (default), `sm` (dense wells), `lg` (roomy).
+  size?: [sm, md, lg]
+  #: Native spellcheck. Turn OFF for code / pattern text where squiggles are noise. Default on.
+  spellcheck?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-input, au-change]
+    states: [disabled, error]
+    parts: [textarea]
+    preview: '<au-textarea placeholder="Write a note…" rows="3"></au-textarea>'

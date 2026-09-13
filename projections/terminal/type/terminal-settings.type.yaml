@@ -1,0 +1,10 @@
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Terminal settings
+    icon: terminal
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    export: settings

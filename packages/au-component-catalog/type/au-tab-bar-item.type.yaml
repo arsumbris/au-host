@@ -1,0 +1,23 @@
+# One tab in an <au-tab-bar>. Serializable DATA — never a framework element (the data-driven rule).
+#: One <au-tab-bar> tab: id (keys select/close), label, and optional status flags.
+fields:
+  #: Optional shared au-icon identifier for the tab content, shown in the leading grip slot.
+  icon?: String
+  #: This tab contains a nested container; show a group marker without changing selection or drag behavior.
+  group?: Boolean
+  #: Stable id the consumer maps back to on `au-select` / `au-close`.
+  id: String
+  #: The tab label (a filename). Truncates with ellipsis; the full text rides the native tooltip.
+  label: String
+  #: Unsaved changes — promotes the status dot to full ink.
+  dirty?: Boolean
+  #: Sorts to the front, drops the close, and is exempt from close / middle-click.
+  pinned?: Boolean
+  #: Structure-locked — drops grip + close and draws the lock hairline.
+  locked?: Boolean
+  #: Preview / transient (opened-not-kept) — the label renders italic.
+  isPreview?: Boolean
+  #: Suppresses the drag grip INDEPENDENTLY of remove.
+  moveLocked?: Boolean
+  #: Suppresses the close INDEPENDENTLY of move.
+  removeLocked?: Boolean

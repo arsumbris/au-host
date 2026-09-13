@@ -1,0 +1,22 @@
+# Owned by component-contract. The INTERFACE for `<au-chevron>` — the disclosure arrow.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# states, parts, and the gallery sample.
+#: The interface for <au-chevron>: the disclosure arrow (section / nav-group / tree row / select trigger).
+#: `open` rotates it from pointing-right to pointing-down. Emits `au-activate` on press.
+#: Hover and press use shared chrome interaction fills; keyboard focus uses the shared inset outline.
+extends: ui-component::component-contract
+fields:
+  #: Consumer-owned disclosure state — true rotates right to down and sets aria-expanded; activation emits an event without changing this prop.
+  open?: Boolean
+  #: Accessible label. Missing or blank uses Collapse / Expand by `open`.
+  label?: String
+  #: Non-interactive + de-emphasized; suppresses activation.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    # Composed + bubbling, per the contract rule in ui-component-meta.
+    events: [au-activate]
+    states: [open, disabled]
+    parts: [button]
+    preview: '<au-chevron></au-chevron> <au-chevron open></au-chevron> <au-chevron disabled></au-chevron>'

@@ -1,0 +1,6 @@
+type: au.engine.repo::au-engine
+name: agent-sessions
+deps:
+  - name: au-host-sdk
+  - name: intent
+  - name: au-mcp-sdk

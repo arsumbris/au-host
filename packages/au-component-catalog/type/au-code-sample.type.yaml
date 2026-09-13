@@ -1,0 +1,15 @@
+# <au-code-sample> — a mock code editor rendered from the --au-code-* / --au-editor-* token ladder.
+#: <au-code-sample> — a MOCK code editor (themed gutter + syntax-coloured lines) rendered from the
+#: `--au-code-*` / `--au-editor-*` token ladder. The real CodeMirror editor wears the SAME tokens, so
+#: this is the surface to dial the syntax + chrome palette: edit the tokens, watch it here, reload the
+#: app. Not the editor itself, just a faithful swatch.
+extends: ui-component::component-contract
+fields:
+  #: The 1-based line rendered as the active line (gutter highlight + wash). Default 5.
+  activeLine?: Number
+meta:
+  - type: ui-component-meta::component-contract
+    slots: []
+    states: []
+    parts: [surface, line, gutter]
+    preview: '<au-code-sample active-line="5" style="width:440px"></au-code-sample>'

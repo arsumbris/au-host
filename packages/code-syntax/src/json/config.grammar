@@ -1,0 +1,32 @@
+@top JsonText { value }
+@dialects { json5 }
+@detectDelim
+@skip { space | extraSpace | LineComment | BlockComment }
+value { Object | Array | String | Number | True | False | Null }
+Object { "{" (Property ("," Property)* ","?)? "}" }
+Array { "[" (value ("," value)* ","?)? "]" }
+Property { PropertyName ":" value }
+PropertyName { String | Identifier }
+String { JsonString | ExtendedString }
+Number { JsonNumber | ExtendedNumber }
+@external tokens identifiers from "./tokens.ts" { Identifier[@dialect=json5] }
+@external tokens strings from "./tokens.ts" { ExtendedString[@dialect=json5] }
+@tokens {
+  space { $[\u0009\u000a\u000d ]+ }
+  extraSpace[@dialect=json5] { $[\u000b\u000c\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+ }
+  LineComment { "//" ![\n\r\u2028\u2029]* }
+  BlockComment { "/*" (![*] | "*" ![/])* "*/" }
+  hex { $[0-9a-fA-F] }
+  JsonString { '"' (!["\\\u0000-\u001f] | "\\" ($["\\/bfnrt] | "u" hex hex hex hex))* '"' }
+  integer { "0" | $[1-9] $[0-9]* }
+  exponent { $[eE] $[+-]? $[0-9]+ }
+  JsonNumber { "-"? integer ("." $[0-9]+)? exponent? }
+  ExtendedNumber[@dialect=json5] {
+    $[+-]? ("Infinity" | "NaN" | "0" $[xX] hex+ | integer ("." $[0-9]*)? exponent? | "." $[0-9]+ exponent?)
+  }
+  True { "true" }
+  False { "false" }
+  Null { "null" }
+  @precedence { ExtendedNumber, JsonNumber }
+  "{" "}" "[" "]" ":" ","
+}

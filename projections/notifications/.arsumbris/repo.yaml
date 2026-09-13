@@ -1,0 +1,7 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: notifications
+description: first-party notifications surfacer projection (toast overlay + status indicator)
+deps:
+  - name: au-host-sdk
+  - name: intent

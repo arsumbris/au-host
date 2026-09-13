@@ -1,0 +1,21 @@
+# BENTO-EDITOR fixture — window → bento → editor (a single-leaf bento at the window root). Used to repro
+# the root-position restructure bugs: unwrap should dissolve the bento to a BARE editor; wrapping the
+# editor in tabs should nest it (bento → tabs → editor).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^grid]]"
+    ^: w
+  - ^: grid
+    type: bento::bento
+    root: "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

@@ -1,0 +1,20 @@
+# aup-git-activity IS a projection subtype. It renders one live, reverse-chronological
+# stream of change events merged across every mounted working tree — a cross-repo commit pulse.
+# The feed unit is the engine MUTATION (commits sharing a Mutation-Id trailer fold into one entry);
+# out-of-band commits show as their own rows. Data comes solely from the engine recent_commits
+# read + subscription. No durable config yet (scope + filters are ambient runtime state, not saved).
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  # `customTokenEntry` is the per-tree categorical colour sheet, discovered before mount.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    customTokenEntry:
+      - ./aup-git-activity.tokens.css
+  # The intents this projection FIRES: a changed file in an expanded row opens in the focused editor.
+  # host.intent.fire is gated on this declaration.
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

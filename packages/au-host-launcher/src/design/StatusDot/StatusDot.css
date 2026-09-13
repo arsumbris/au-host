@@ -1,0 +1,85 @@
+/*
+ * StatusDot — status indicator with ink or ok tone, filled or ring variant, and optional halo or pulse.
+ * Sizes use the local diameter variable derived from spacing tokens; the ring is one pixel.
+ */
+
+.au-status-dot {
+  --au-statusdot-d: calc(var(--au-space-1) + var(--au-space-0-5));
+  position: relative;
+  display: inline-block;
+  width: var(--au-statusdot-d);
+  height: var(--au-statusdot-d);
+  border-radius: var(--au-radius-pill);
+  background: var(--au-ink-1);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.au-status-dot[data-size="sm"] {
+  --au-statusdot-d: var(--au-space-1);
+}
+
+.au-status-dot[data-size="lg"] {
+  --au-statusdot-d: var(--au-space-2);
+}
+
+.au-status-dot[data-tone="ok"] {
+  background: var(--au-color-ok);
+}
+
+.au-status-dot[data-variant="ring"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--au-ink-4);
+}
+
+.au-status-dot[data-tone="ok"][data-variant="ring"] {
+  box-shadow: inset 0 0 0 1px var(--au-color-ok);
+}
+
+.au-status-dot[data-glow] {
+  box-shadow: 0 0 0 var(--au-space-0-5) color-mix(in oklab, var(--au-ink-1) 18%, transparent);
+}
+
+.au-status-dot[data-tone="ok"][data-glow] {
+  box-shadow: 0 0 0 var(--au-space-0-5) color-mix(in oklab, var(--au-color-ok) 22%, transparent);
+}
+
+/* pulse — a subtle radar heartbeat on the dot's own glow: an expanding, fading ring
+ * (transform + opacity ONLY, never box-shadow spread) that never occludes the crisp
+ * dot underneath. Tone-matched. Rides the ::after so [data-glow]'s static box-shadow
+ * halo stays intact as the resting glow — pulse pings outward over it. */
+.au-status-dot[data-pulse]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--au-ink-1) 45%, transparent);
+  transform-origin: center;
+  pointer-events: none;
+  animation: au-status-pulse var(--au-m-cinema) var(--au-e-soft) infinite;
+}
+
+.au-status-dot[data-tone="ok"][data-pulse]::after {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--au-color-ok) 50%, transparent);
+}
+
+@keyframes au-status-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* reduced-motion: settle to a static soft ring (no travel, no loop). */
+@media (prefers-reduced-motion: reduce) {
+  .au-status-dot[data-pulse]::after {
+    animation: none;
+    opacity: 0.5;
+    transform: scale(1.35);
+  }
+}

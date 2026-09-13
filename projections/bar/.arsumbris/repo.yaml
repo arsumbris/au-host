@@ -1,0 +1,11 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: bar
+deps:
+  - name: au-host-sdk
+  # bar declares fires-intent-meta::intent, so it crosses into the intent repo.
+  - name: intent
+  # bar fires `reposition`, which is dock-OWNED (the verb belongs to the
+  # container whose dialect it names). Declaring `fires: [[reposition::dock]]` crosses into
+  # dock — the peer gate making bar's already-real firing of a dock intent explicit.
+  - name: dock

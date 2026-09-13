@@ -1,0 +1,17 @@
+# Owned by @arsumbris/host-sdk. ONE viewer-default = one file-kind mapped to the viewer that opens it by
+# default. Listed in a composition's `viewer-defaults.defaults` field. Reifies a (kind -> viewer) map
+# entry, because the type system has no dynamic-key map — the same idiom `intent-default` uses.
+
+# `opens` is the file kind this default applies to: a bare extension (no dot, e.g. `md`) or `*` (any file),
+# matched against the opened file's extension at resolution. `viewer` is a def-ref to the viewer projection
+# type (`type<projection>*`), same-repo bare. The chosen viewer must be ELIGIBLE for the kind (declared in
+# its own `opens-meta`); the resolver only honours a default whose viewer can actually open the kind.
+
+
+fields:
+  #: The file kind this default applies to: a bare extension (no dot, `md`) or `*` (any file). Matched
+  #: against the opened file's extension at resolution.
+  opens: String
+  #: The viewer projection type that opens this kind by default, a def-ref (`viewer: "[[editor-pane::editor]]"`).
+  #: Same-repo bare (`projection` is the host-sdk base); a specific viewer is `::repo`-qualified at the value.
+  viewer: type<projection>*

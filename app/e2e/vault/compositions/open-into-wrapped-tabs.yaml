@@ -1,0 +1,24 @@
+# A window containing a tabs group with one file-tree.
+# Opening a file creates a transient preview beside the tree. Its editor must render
+# content, proving the primary portal retains the live preview record.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+# md is eligible for BOTH editor-pane and aup-reader (the reader arrives via host-bundle discovery), so
+# without a default the open would surface the host chooser and block. The ladder's rung-2 default keeps
+# the open deterministic → editor-pane, matching the shipped templates.
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^tree]]"
+  - ^: tree
+    type: file-tree::file-tree

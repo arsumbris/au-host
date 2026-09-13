@@ -1,0 +1,24 @@
+# Owned by component-contract. The INTERFACE for `<au-workspace-switcher>` — the rail identity control.
+#
+# The type NAME is the custom-element tag. The trigger (WorkspaceMark + name + chevron) drops a menu of
+# workspaces to switch to, plus open-folder / new-workspace. The menu is drawn into a `host.overlay`
+# layer.
+# `items` is set as a PROPERTY (complex data). Set-INDEPENDENT: a consumer types against THIS.
+#: The interface for <au-workspace-switcher>: the rail identity row + workspace menu. `name`/`current-id`
+#: attrs + an `items` property; the menu claims host.overlay. Emits au-select/au-open-folder/au-new-workspace.
+extends: ui-component::component-contract
+fields:
+  #: The current workspace name — the trigger's label and its mark.
+  name?: String
+  #: The workspaces the menu offers (current + recents). Set as a PROPERTY. Render-resilient: empty.
+  items?: au-workspace-item[]
+  #: Which item id is the current workspace (reads as marked). Falls back to matching `name`.
+  currentId?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-select, au-open-folder, au-new-workspace]
+    states: [open]
+    parts: [trigger, mark, name, chev]
+    # `items` is a property (not the attribute the gallery's innerHTML sets), so a shell preview — the
+    # trigger renders from `name`; the menu is exercised in-app / the twin story sets `.items`.
+    preview: '<au-workspace-switcher name="my-workspace"></au-workspace-switcher>'

@@ -1,0 +1,16 @@
+# aup-mcp-session-retention IS a projection subtype. No config (it drives the au-mcp
+# retention verbs via the host capability); `meta` declares its loadable code, read via the type owner.
+#
+# The au-mcp dormant-session management surface: list dormant (cleanly-closed, resumable) agent
+# sessions, edit the dormancy window with a blast-radius preview, and retire a session.
+# All CONTROL-PLANE over the au-mcp daemon socket — host/user authority, never an agent tool.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Session Retention
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

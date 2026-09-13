@@ -1,0 +1,26 @@
+# Owned by component-contract. The INTERFACE for `<au-pane-header>` — the one pane masthead.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries states, slots,
+# and the gallery sample. The window top bar owns the OS controls.
+#: The interface for <au-pane-header>: the single masthead row a container composes — grip · title ·
+#: optional divider · center slot · actions. `surface` panel (card) or rail (chrome). Direct occupants may share its center; distinct nested scopes can retain separate rows.
+extends: ui-component::component-contract
+fields:
+  #: Wrapper header expands when its frame is pinned open or its controls receive keyboard focus; the enclosing nested pane-frame supplies equal insets. Rail headers remain compact rows. Default false.
+  compact?: Boolean
+  #: Name of the container enclosed by this frame. Reveals above contributed tabs; group controls remain directly accessible in the shared row. Never names the parent providing the header.
+  context?: String
+  #: `panel` names a card masthead; `rail` names shell chrome. Both use shared row geometry; the enclosing frame owns boundaries. Default panel.
+  surface?: [panel, rail]
+  #: Pane focus context; individual controls own keyboard focus and the enclosing frame owns the main focus boundary.
+  focused?: Boolean
+  #: Draw the vertical hairline between the fixed title and the center slot.
+  divider?: Boolean
+  #: Render a default drag handle (<au-grip-glyph>) in the leading region when no `leading` slot is given.
+  draggable?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    states: [focused]
+    # `default` is the center slot (the only flexing part — a tab strip / breadcrumb scrolls inside it).
+    slots: [leading, title, actions, default]
+    preview: '<au-pane-header draggable divider style="max-width: 360px"><span slot="title">Files</span><span slot="actions"><au-close-button></au-close-button></span></au-pane-header>'

@@ -1,0 +1,28 @@
+# A sandwich with a file-tree at left and distinct editor panes at center and right.
+# Clicking either editor updates its window’s DOM-focus tracker, focus recency, and active ring.
+# The file-tree is chrome and declares no open handler.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^edA]]"
+    right: "[[^^edB]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: edA
+    type: editor-pane::editor
+    file: sample.md
+  - ^: edB
+    type: editor-pane::editor
+    file: refs-sample.md

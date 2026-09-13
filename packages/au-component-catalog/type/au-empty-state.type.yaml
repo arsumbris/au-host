@@ -1,0 +1,14 @@
+# <au-empty-state> — centered empty-slot messaging. `label`/`hint` string props; icon/action slots.
+#: <au-empty-state> — centered empty-slot messaging: `label` + optional `hint` (string props), with
+#: optional `icon` / `action` slots. `title` is renamed `label` — a `title` prop shadows the native tooltip.
+extends: ui-component::component-contract
+fields:
+  #: The heading line.
+  label?: String
+  #: An optional secondary line.
+  hint?: String
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [icon, action]
+    parts: [icon, title, hint]
+    preview: '<au-empty-state label="No document open" hint="Select a file to read it here."></au-empty-state>'

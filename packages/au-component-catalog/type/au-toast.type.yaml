@@ -1,0 +1,24 @@
+#: Narrow containers place the action beneath the message while keeping dismissal at the top right.
+#: The host bounded stack accepts scrollbar input; outside its bounds clicks pass through.
+#: Host stack scrolling uses the theme focus hue and system focus color in forced colors.
+#: Text-role fallbacks match the base ink palette without token stylesheets.
+#: Long unbroken headings and descriptions wrap within the available content width.
+# <au-toast> — one toast card: the LOOK of the elevation family's notification surface.
+#: <au-toast> — one floating toast card. Elev-5 fill + inset hairline + glass shadow; severity rides a
+#: small leading tone DOT (ink/ok/warn/danger) — NEVER a bar or a fill. A heading, an optional
+#: description (default slot), an optional trailing `action` slot, and a built-in × close (emits
+#: au-close). The LOOK only: the host notification surface owns the claim, the queue, and the timers.
+extends: ui-component::component-contract
+fields:
+  #: The toast headline (`title` is the reserved native tooltip, so this is `heading`, like au-banner).
+  heading?: String
+  #: Severity, as a leading status dot only (never a bar/fill). ink is the neutral default.
+  tone?: [ink, ok, warn, danger]
+  #: Show the × close affordance (emits au-close). Default on.
+  dismissible?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-close]
+    slots: [action]
+    parts: [toast, dot, content, heading, desc, action, close]
+    preview: '<au-toast tone="danger" heading="Write rejected: content changed on disk.">A newer version is on disk.</au-toast> <au-toast tone="ok" heading="Saved"></au-toast> <au-toast tone="warn" heading="Reconnecting"></au-toast>'

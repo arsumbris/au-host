@@ -1,0 +1,43 @@
+{
+  "name": "@arsumbris/au-component-catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.ts",
+    "./theme-specimen": "./src/theme-specimen.tsx",
+    "./theme-preview": "./src/theme-preview.tsx",
+    "./theme-library": "./src/theme-library.ts",
+    "./action-region": "./src/action-region.ts",
+    "./chooser-presentation": "./src/chooser-presentation.ts",
+    "./surface-recipes": "./src/surface-recipes.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo au-component-catalog --module component-contract=@arsumbris/component-contract --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
+    "gen:react": "node --experimental-transform-types scripts/gen-react-jsx.ts --dir type --out src/react-jsx.ts && node --experimental-transform-types scripts/gen-react-wrappers.ts --dir type --out src/react.ts"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/component-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@arsumbris/container-core": "workspace:*",
+    "@arsumbris/typed-value": "workspace:*",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "happy-dom": "^20.11.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
+  }
+}

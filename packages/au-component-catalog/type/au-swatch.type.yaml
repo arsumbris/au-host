@@ -1,0 +1,22 @@
+# <au-swatch> — a token-value colour chip: the fill is the value being shown, everything else is chrome.
+#: <au-swatch> — a token-value colour chip. The FILL is the value being shown (the ONE place a colour
+#: legitimately paints in chrome); a hairline ring keeps a pale swatch edged on a pale surface, and
+#: `alpha0` reveals a checker so a transparent value reads as no-paint. Three sizes, optional mono
+#: value read-out beneath.
+extends: ui-component::component-contract
+fields:
+  #: The colour to show — any CSS colour string. This is DATA (the token value being displayed).
+  value?: String
+  #: The chip diameter. md is the default.
+  size?: [md, sm, lg]
+  #: Alpha-0 — dims the fill and draws a checker, so "no paint" stays legible. (Named `alpha0`, not
+  #: `hidden`, which would collapse the element via the global attribute.)
+  alpha0?: Boolean
+  #: An optional mono value read-out rendered beneath the chip.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    slots: []
+    states: [alpha0]
+    parts: [chip, value]
+    preview: '<au-swatch value="#76cd98" size="lg" label="--au-color-ok"></au-swatch> <au-swatch value="transparent" size="lg" alpha0 label="alpha-0"></au-swatch>'

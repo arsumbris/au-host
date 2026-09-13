@@ -1,0 +1,28 @@
+# Owned by the `intent` package. The META a projection carries to declare WHICH composition-config
+# ASPECTS it may EDIT — a bounded list of def-refs to `composition-config` subtypes. The switchboard
+# declares `edits: [ [[intent-wires]] ]`: it may write the wires aspect, and nothing else.
+
+# THE SIBLING of `fires-intent-meta` / `handles-intent-meta`, one axis over: same shape (a type-level
+# def-ref meta read in the discovery `subtypes('projection')` pass — the SAME fetch, no new engine
+# read), a different BOUND. `fires`/`handles` bound to `intent`; this bounds to
+# `composition-config::au-host-sdk` (owned by host-sdk; `intent` already deps it), so the capability's
+# domain is the composition config aspects and nothing else.
+
+# WHY IT EXISTS: a projection edits a composition aspect (the switchboard writes `intent-wires`) through
+# the host's single composition writer. That power should be a DECLARED, ENFORCED, DISCOVERABLE
+# capability — so a switchboard port drawn from the declaration is trustworthy, and a projection cannot
+# silently write an aspect it never declared. The host gates a composition-aspect write against this set
+# at the WARN rung (the projection surface is user-chosen code; the refuse boundary is the agent
+# bridge). NOT a vault-content file gate (that is a separate concern), and NOT structural editing
+# (create/remove/reparent records stays availability-gated).
+#
+
+
+
+# `-meta` suffix + the `au.engine.meta::au-engine` mixin per the type-system convention for a type-def
+# meant for a `meta:` position (`::au-engine` is a universal peer, no `deps` entry needed).
+extends: au.engine.meta::au-engine
+fields:
+  # The composition-config aspects this projection TYPE may edit, as def-refs to `composition-config`
+  # subtypes. Optional list: a projection that edits no composition aspect carries no such meta.
+  edits: type<composition-config::au-host-sdk>*[]

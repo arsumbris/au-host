@@ -1,0 +1,13 @@
+# <au-tab-panel> — one panel in an <au-tabs> compound.
+#: <au-tab-panel> — the content region for one <au-tab>. Nest it as a child of <au-tabs>; it
+#: self-assigns the panel slot and shows only when its `value` matches the <au-tabs> value. The region
+#: is unboxed — compose a Skeleton / EmptyState / Card inside it. The default slot is the content.
+extends: ui-component::component-contract
+fields:
+  #: Matches the owning <au-tab> value.
+  value?: String
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    states: [active]
+    preview: '<au-tab-panel value="org" active>Organisation name, slug, and region.</au-tab-panel>'

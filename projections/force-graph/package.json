@@ -1,0 +1,24 @@
+{
+  "name": "@au-projections/force-graph",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo force-graph --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/preview-content": "link:../../packages/preview-content",
+    "@arsumbris/selection": "link:../../packages/selection",
+    "d3-force": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

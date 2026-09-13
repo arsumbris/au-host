@@ -1,0 +1,31 @@
+# CLOSE-GUARD-FLOATED fixture — a sandwich with the EDITOR first (left) so `Pane actions .first()` floats it
+# into its own OS window. The e2e floats the editor, dirties it IN the floated window, then closes that window
+# (the traffic-light) — asserting the CONTENT close-guard runs IN the floated window (a save/discard/cancel
+# prompt), a cancel preserves the window + its unsaved buffer, and a discard closes it. This is the CROSS-WINDOW
+# half of the close-removal lifecycle (the surface is a different renderer the main-window e2e
+# cannot observe): the guard + its dialog run LOCALLY in the floated window while the authority owns the reap.
+# Carries the default keymap so ⌘W is bound (native-suppression context), though this spec closes via the
+# window control, not a synthetic key (a synthetic keydown never triggers the native menu accelerator).
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^ed]]"
+    center: "[[^^tree]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tree
+    type: file-tree::file-tree

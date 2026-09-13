@@ -1,0 +1,6 @@
+# Schema-12 repo identity + deps (au.engine.repo). Every first-party projection is its own repo.
+type: au.engine.repo::au-engine
+name: aup-mcp-session-retention
+description: first-party projection — the au-mcp dormant-session (retention) management surface over au-mcp's verbs
+deps:
+  - name: au-host-sdk

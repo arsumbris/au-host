@@ -1,0 +1,32 @@
+# STAND-IN type-def, owned by the `intent` package (NOT the SDK).
+# "Surface a transient message to the human." BROADCAST: every mounted projection
+# that handles it (its `handles` meta lists ui-notification) surfaces it ITS OWN way
+# — a toast strip, a status-line flash, a log pane. No focus, no routing, no
+# claim/decline; the host fans the fired instance out to every surfacer.
+# The canonical firer is the SESSION (the agent, over the bridge), but it is a general
+# broadcast primitive ANY node may fire (a projection reporting its own error is a
+# legitimate source). Display lifecycle (dismiss / timeout / stacking) is the SURFACER's.
+
+#: Surface a transient message to the human. BROADCAST: every mounted surfacer that
+#: handles it shows it ITS OWN way (a toast, a status flash), no focus or routing.
+#: Fired by the session (agent) or any node. `severity` tags it; `actions` are optional
+#: labeled follow-ups the surfacer renders + fires.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: broadcast
+  # AGENT-FIRABLE. The SESSION is this intent's canonical firer, as the header says, so
+  # refusing it would break the channel's purpose. Its payload is text plus a severity;
+  # `actions` embed further intents, and each of those is gated on its OWN declaration
+  # when the surfacer fires it, so nesting grants nothing this block does not.
+  - type: intent-agent-meta
+    firable: true
+fields:
+  #: How urgent — info (neutral), warn (attention), error (something failed). The
+  #: surfacer styles by it (e.g. a severity glyph / color).
+  severity: [info, warn, error]
+  #: The human-facing message text.
+  message: String
+  #: Optional labeled follow-up actions. The surfacer renders each as an affordance and
+  #: FIRES its embedded intent on activation. Omit for a plain notification.
+  actions?: ui-notification-action[]

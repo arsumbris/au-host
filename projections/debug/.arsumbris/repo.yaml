@@ -1,0 +1,10 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: debug
+description: first-party debug pane — a home for dev/debug affordances (notification test-fire, and future tools)
+deps:
+  - name: au-host-sdk
+  - name: intent
+  # debug fires the `ui-notification-progress` SUBTYPE (owned by notifications) to exercise the
+  # progress content-renderer, so it declares that vocab as a peer dep (the peer gate needs it).
+  - name: notifications

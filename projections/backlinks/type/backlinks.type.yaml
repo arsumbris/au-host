@@ -1,0 +1,17 @@
+# backlinks IS a projection subtype. It shows every reference INTO the
+# selected file (the `backlinks` read), following the container's selection to know
+# which file. No durable config yet (the tracked file is ambient selection, not saved);
+# `meta` declares its loadable code, resolved via the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

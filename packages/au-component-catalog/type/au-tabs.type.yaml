@@ -1,0 +1,38 @@
+# <au-tabs> — the in-content tablist + tabpanels compound.
+#: <au-tabs> — the in-content tablist + tabpanels pattern. DISTINCT from au-tab-bar (the pane chrome
+#: strip) and au-segmented-control (the bounded toggle). `variant` line (a sliding 2px ink underline
+#: over a hairline baseline) or pill (a quiet surface fill, no tray). `orientation` vertical is a rail
+#: whose active tab is a fill + weight (never a bar). Nest <au-tab> + <au-tab-panel> children (matched
+#: by `value`); the root owns selection, roving focus, the sliding indicator, and aria. Emits
+#: au-tab-change {value}.
+extends: ui-component::component-contract
+fields:
+  #: line = a sliding underline over a hairline baseline (page/section nav); pill = a quiet surface fill.
+  variant?: [line, pill]
+  #: horizontal row (default) or vertical rail (fill-active, never a leading bar).
+  orientation?: [horizontal, vertical]
+  #: automatic selects on arrow-key focus (default); manual requires Enter / Space.
+  activationMode?: [automatic, manual]
+  #: active hides inactive panels (default); keep retains them. (Slotted panels are hidden, never unmounted.)
+  mount?: [active, keep]
+  #: overflow affordance when the list is wider than its box. scroll = a scrolling track + edge scrims.
+  overflow?: [none, scroll, menu, both]
+  #: The controlled active tab value (matches an <au-tab> / <au-tab-panel> value).
+  value?: String
+  #: Accessible name for the tablist.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-tab-change]
+    slots: [tab, panel]
+    states: [variant, orientation]
+    parts: [listwrap, tablist, indicator, panels]
+    preview: |
+      <au-tabs variant="line" value="org" label="Settings">
+        <au-tab value="org">Org</au-tab>
+        <au-tab value="keys">API Keys</au-tab>
+        <au-tab value="team">Team</au-tab>
+        <au-tab-panel value="org">Organisation name, slug, region.</au-tab-panel>
+        <au-tab-panel value="keys">Three active keys.</au-tab-panel>
+        <au-tab-panel value="team">Members and roles.</au-tab-panel>
+      </au-tabs>

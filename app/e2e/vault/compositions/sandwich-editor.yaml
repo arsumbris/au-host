@@ -1,0 +1,20 @@
+# A sandwich with a center editor. Wrap the editor in tabs, then wrap those tabs in bento.
+# The resulting bento → tabs → editor subtree must remain visible.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    center: "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

@@ -1,0 +1,24 @@
+# Owned by component-contract. The INTERFACE for `<au-switch>` — the role=switch toggle.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. Set-INDEPENDENT: a consumer types against THIS.
+#
+# FORM-ASSOCIATED: `<au-switch>` is a form-associated custom element (ElementInternals), so its checked
+# state participates in a native `<form>` + reset, across the shadow boundary. It emits `au-change`
+# (detail `{ checked }`, composed + bubbling) on toggle.
+#: The interface for <au-switch>: a role=switch toggle — a token track + thumb. Monochrome: "on" is an
+#: ink-1 track with a canvas thumb slid right. Form-associated. Emits `au-change {checked}`.
+extends: ui-component::component-contract
+fields:
+  #: Whether the switch is on. Form-associated (participates in a native form + reset).
+  checked?: Boolean
+  #: Non-interactive + de-emphasized. Reflected as the `disabled` state.
+  disabled?: Boolean
+  #: Accessible name for the toggle (there is no visible label). Set on the inner control as aria-label.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change]
+    states: [checked, disabled]
+    parts: [track, thumb]
+    preview: '<au-switch label="Wrap lines"></au-switch> <au-switch checked label="Confirm before delete"></au-switch> <au-switch disabled label="Locked off"></au-switch> <au-switch checked disabled label="Locked on"></au-switch>'

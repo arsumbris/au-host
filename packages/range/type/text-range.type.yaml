@@ -1,0 +1,9 @@
+# STAND-IN type-def, owned by the `range` package.
+# A sub-region of text: a half-open span [from, to).
+# Offsets are UTF-8 byte offsets, matching the engine's spans (au-engine WireByteRange),
+# so a text-range round-trips with engine reads. A text editor converts to its own
+# unit (e.g. CodeMirror's UTF-16 positions) at its edge.
+extends: range
+fields:
+  from: Number
+  to: Number

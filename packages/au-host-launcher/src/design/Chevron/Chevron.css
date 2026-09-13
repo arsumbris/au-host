@@ -1,0 +1,67 @@
+/* Chevron — rotation-animated disclosure arrow (section / nav-group / tree row).
+ * Tokens-only, @scope-safe. Closed points right; open rotates to point down.
+ * The rotation is on-screen TRANSPORT, so it rides --au-m-base on --au-e-move
+ * (ease-in-out). Reduced-motion disables the transitions locally.
+ */
+.au-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: var(--au-space-5);
+  height: var(--au-space-5);
+  flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  border-radius: var(--au-radius-chip);
+  outline: 1px solid transparent;
+  color: var(--au-ink-4);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color var(--au-m-fast) var(--au-e-std),
+    background-color var(--au-m-fast) var(--au-e-std),
+    box-shadow var(--au-m-fast) var(--au-e-std);
+}
+
+.au-chevron-icon {
+  width: var(--au-space-4);
+  height: var(--au-space-4);
+  display: block;
+  /* Closed = pointing right (base glyph). */
+  transform: rotate(0deg);
+  transition: transform var(--au-m-base) var(--au-e-move);
+}
+
+.au-chevron[data-open] .au-chevron-icon {
+  /* Open = pointing down. */
+  transform: rotate(90deg);
+}
+
+.au-chevron:hover,
+.au-chevron[data-force-hover] {
+  color: var(--au-ink-2);
+  background: var(--au-elev-4-fill);
+}
+
+.au-chevron:active,
+.au-chevron[data-force-active] {
+  background: var(--au-elev-5-fill);
+}
+
+.au-chevron:focus-visible,
+.au-chevron[data-force-focus] {
+  box-shadow: var(--au-focus-ring);
+}
+
+.au-chevron:disabled,
+.au-chevron[data-force-disabled] {
+  color: var(--au-ink-5);
+  background: transparent;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-chevron,
+  .au-chevron-icon {
+    transition: none;
+  }
+}

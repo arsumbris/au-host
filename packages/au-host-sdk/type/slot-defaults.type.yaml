@@ -1,0 +1,25 @@
+# Owned by @arsumbris/host-sdk. THE slot-default config a composition carries in its `slot-defaults?` field:
+# which placeholder-projection an EMPTY slot resolves to when nothing more specific is configured. A
+# STANDALONE composition-config aspect, sibling to `viewer-defaults` / `intent-routing`.
+
+# A COMPOSITION-CONFIG ASPECT: it EXTENDS `composition-config` so
+#   - `readSubtypes(composition-config)` returns it (discoverable, open); a third-party aspect joins the same
+#     way; and
+#   - the per-projection edit right stays bounded by the UNCHANGED `edits: type<composition-config>*` bound.
+
+# This is the COMPOSITION-GLOBAL default — the FLOOR for every empty slot. A per-slot `container-slot.placeholder`
+# OVERRIDES it locally (the container-slots principle: the position carries the state that belongs to it). The
+# empty-slot resolver reads `(slot.placeholder ?? composition slot-defaults.placeholder)` as its `configured`
+# rung: configured > sole > ask. A stale default (naming an uninstalled placeholder) falls through to the count.
+
+# WHY host-sdk owns it: the host's empty-slot RESOLUTION interprets this config — the same references/interprets
+# criterion that admitted `viewer-defaults` and intent routing.
+#
+
+extends: composition-config
+#: The composition-wide default placeholder an empty slot resolves to, unless a slot overrides it.
+fields:
+  #: The default placeholder-projection type for every empty slot in this composition, a def-ref
+  #: (`placeholder: "[[placeholder-picker::placeholder-picker]]"`). A per-slot `container-slot.placeholder`
+  #: overrides it. Unset → the resolver falls to sole / ask.
+  placeholder?: type<placeholder-projection>*

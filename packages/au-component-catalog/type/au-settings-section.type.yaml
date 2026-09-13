@@ -1,0 +1,12 @@
+#: Responsive settings group with explanatory introduction and slotted controls. Presentation only; owns no values, validation or save behavior.
+extends: ui-component::component-contract
+fields:
+  heading?: String
+  description?: String
+  compact?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default, actions]
+    states: [compact]
+    parts: [section, intro, heading, description, fields]
+    preview: '<au-settings-section heading="Display" description="Adjust how content is presented."><au-field label="Name"><au-input value="Example"></au-input></au-field></au-settings-section>'

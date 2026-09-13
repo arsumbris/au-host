@@ -1,0 +1,45 @@
+# Two tabs groups and a file-tree provide competing open handlers. Float the left group,
+# focus main’s group and then the floated group, and open a file from main’s tree.
+# The floated group wins through cross-window focus recency. Each group has two tabs
+# so selecting another tab produces an observable focus transition.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabsA]]"
+    center: "[[^^tree]]"
+    right: "[[^^tabsB]]"
+  - ^: tabsA
+    type: tabs::tabs
+    tabs:
+      - "[[^^edA1]]"
+      - "[[^^edA2]]"
+  - ^: edA1
+    type: editor-pane::editor
+    file: other.md
+  - ^: edA2
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tabsB
+    type: tabs::tabs
+    tabs:
+      - "[[^^edB1]]"
+      - "[[^^edB2]]"
+  - ^: edB1
+    type: editor-pane::editor
+    file: other.md
+  - ^: edB2
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tree
+    type: file-tree::file-tree

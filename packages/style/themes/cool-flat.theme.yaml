@@ -1,0 +1,5 @@
+type: theme
+name: Cool — Flat
+styles:
+  - ./cool.theme.css
+  - ./flat-surfaces.css

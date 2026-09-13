@@ -1,0 +1,10 @@
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^reader]]"
+  - ^: reader
+    type: aup-reader::aup-reader
+    file: range-document.md

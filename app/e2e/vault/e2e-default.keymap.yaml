@@ -1,0 +1,23 @@
+# Keymap fixture: ⌘S saves through save-intent and ⌘K toggles the command palette.
+# The intents belong to the declared intent dependency; keybind-default exercises the dispatch.
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [ mod ]
+        key: s
+    intent: "[[save-intent::intent]]"
+  - chord:
+      - mods: [ mod ]
+        key: k
+    intent: "[[toggle-command-palette-intent::intent]]"
+  - chord:
+      - mods: [ mod ]
+        key: w
+    intent: "[[close-view-intent::intent]]"
+  - intent: "[[open-file-dialog-intent]]"
+    chord:
+      - mods:
+          - ctrl
+          - alt
+          - shift
+        key: digit9

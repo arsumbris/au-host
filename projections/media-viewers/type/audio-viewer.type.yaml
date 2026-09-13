@@ -1,0 +1,15 @@
+extends: pane-projection::au-host-sdk
+fields:
+  file?: String
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Audio preview
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    export: audio
+    contractVersion: 7
+  - type: opens-meta::au-host-sdk
+    opens: [mp3, wav, m4a, aac, flac, ogg, opus]
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"

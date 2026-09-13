@@ -1,0 +1,43 @@
+# Owned by au-host-sdk (the host mount-contract vocabulary).
+# Generates the exported `Window` interface.
+
+
+# AN OS WINDOW SURFACE, as a first-class node in the composition pool. One authority runtime drives
+# every window; a window is a SITE the authority mounts a view into, not a second app. So cross-window
+# is cross-pane: a window node is an ordinary pool record, a float is a reference re-point of a view's
+# parent to a window, and identity is always the authority's.
+
+# ITS OWN SEALED BRANCH OF `mountable`, NOT a `projection`. A window is not CONTENT and not a LAYOUT:
+# it has no loadable module (a `projection-runtime-meta`), it is never offered as a layout choice, and
+# it carries none of the container-projection placement/grouping machinery. It is a mountable so it can
+# sit at a `mountable*` position (a composition names its windows; nothing else references a window),
+# and the host RESOLVER opens an OS surface for it and mounts its `content` into that window's DOM.
+# See [[mountable]].
+
+# REACHABILITY / REAP-SAFETY. A window is referenced by its composition's `windows` list, and its
+# `content` view is referenced by the window, so the whole subtree is reachable from the composition
+# and never orphaned. A floated pane is re-parented UNDER a window (extract/inject), so it too stays
+# referenced. This is why a window node is reap-safe: it is a normal pool reference, not an exemption.
+
+# BOUNDS ARE PER-MACHINE, NOT HERE. A window's pixel geometry (x / y / width / height, monitor) is
+# machine-specific, so it lives in the per-machine view-state auto-store keyed by the window's `^:` pool
+# id — the same split that keeps editor cursor/scroll out of the git-tracked composition. This type
+# records that a window EXISTS and WHAT it shows; the auto-store restores WHERE it sat.
+
+#: An OS window surface holding one root view by reference. A first-class pool node, so cross-window is
+#: cross-pane. Its own sealed branch of `mountable` — a site, not content and not a layout.
+extends: mountable
+fields:
+  #: The view mounted into this window, BY REFERENCE (`[[^^id]]` into the pool, or `[[file]]` naming a
+  #: composition). Reference-only, like every child position. ABSENT is an empty (or dormant) window that
+  #: still exists in the composition — a surface with nothing mounted, kept so it reopens.
+  content?: mountable*
+  #: The MAIN window (surface 0), the one the app opens into and the authority is co-located with.
+  #: Exactly one window in a composition is primary; the rest are secondary surfaces of the SAME
+  #: composition. Absent reads as not-primary. Surface 0 is symmetric — driven through the same interface
+  #: as any surface — so this flag names WHICH window is the entry, not a privileged code path.
+  primary?: Boolean
+  #: What the window's OS title bar shows. Absent falls back to a host default (the workspace / content
+  #: name). A POSITION's title, like a container slot's `label`: it names the window, not whatever view
+  #: happens to be mounted in it.
+  title?: String

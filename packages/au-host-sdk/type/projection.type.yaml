@@ -1,0 +1,36 @@
+# Owned by au-host-sdk (the host mount-contract vocabulary).
+# Generates the exported `Projection` base interface.
+#
+# The BASE projection type-def. No meaningful instances of its own.
+# Every real view is a SUBTYPE (`type: projection`) whose FIELDS are that view's
+# config shape. An instance of a subtype IS a config; a saved workspace is a
+# `composition` document whose pool holds these records. A container subtype's child
+# positions hold their children BY REFERENCE via `mountable*` (reference-only, never
+# inline), so a re-parent is a reference re-point and no parent embeds a child's content.
+#
+# Loadable-code metadata rides as a type-def `meta:` sub-region on each subtype:
+# a `projection-runtime-meta` carrying `entry` and `contractVersion`. Meta is
+# type-level — it describes the code package, not a config instance — so it is
+# never a field and never reaches an instance. Subtypes supply the values; this
+# base only declares the convention. Code is resolved instance -> type -> the
+# type-def's owner package -> `meta.entry`.
+# Abstract: the root projection kind. Only concrete subtypes are ever mounted.
+#
+# `type: mountable` makes `projection` one of the two SEALED branches of `mountable` (the other is
+# `composition`), so every container child slot references `mountable*` and a projection is a legal
+# occupant by closure. It stays a distinct type — a projection is NOT a composition — so
+# `instances_of(projection)` is unaffected. See [[mountable]].
+extends: mountable
+abstract: true
+fields: {}
+# Every CONCRETE projection subtype MUST declare its own `projection-runtime-meta`.
+# Not a convention: code is resolved instance -> type -> owner package -> meta.entry,
+# so a concrete subtype without it is unmountable. `required:` makes that a TYPE-GRAPH
+# fact — an unmet obligation is `subtype-missing-required-meta` (advisory warning, never
+# blocking) and is exposed as a read, so it surfaces BEFORE anything mounts and it reaches
+# cross-repo projections this host may never load. Abstract kinds (pane-projection,
+# container-projection, bar-projection, status-projection) are exempt: not instance-claimable.
+# Satisfaction is LITERAL — a subtype must declare its own block; an ancestor's surfaced
+# block does not count.
+meta:
+  - required: projection-runtime-meta

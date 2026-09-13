@@ -1,0 +1,10 @@
+# <au-tag> — the mono code-tag of the label family. Content is the default slot; non-interactive.
+#: <au-tag> — a mono code-tag: a small monospaced label (frontmatter tags, code-ish chips). Content is
+#: the default slot; `muted` recedes the text one ink step. Non-interactive.
+extends: ui-component::component-contract
+fields:
+  #: Recede the text one ink step.
+  muted?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    preview: '<au-tag>String</au-tag> <au-tag muted>2607</au-tag>'

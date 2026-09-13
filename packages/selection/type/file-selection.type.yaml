@@ -1,0 +1,8 @@
+# STAND-IN type-def, owned by the `selection` package.
+# A selection whose target is a vault file. `path` is vault-relative — the same
+# address space as host.files and engine reads. The inherited optional `range`
+# carries a sub-region (a text-range), so "selected lines 10-20 of foo.md" is a
+# file-selection with a text-range. block / anchor selections extend this later.
+extends: selection
+fields:
+  path: String

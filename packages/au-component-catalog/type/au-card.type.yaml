@@ -1,0 +1,21 @@
+# <au-card> — a content container.
+#: <au-card> — a content container. `variant` surface (a raised elevation-3 panel, default) or outline
+#: (a transparent hairline strip for metadata). `interactive` opts into hover / focus affordances and
+#: keyboard focusability; `roomy` steps the padding up. Content is the default slot, projected in.
+extends: ui-component::component-contract
+fields:
+  #: surface = raised elevation-3 panel (default); outline = transparent hairline strip.
+  variant?: [surface, outline]
+  #: Opt into hover / focus affordances and keyboard focusability (tabindex).
+  interactive?: Boolean
+  #: Step the padding up (space-5 instead of space-4).
+  roomy?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    states: [variant, interactive, roomy]
+    parts: [card]
+    preview: |
+      <au-card>A raised surface card. Content sits in the default slot.</au-card>
+      <au-card variant="outline">An outline card for a metadata strip.</au-card>
+      <au-card interactive>An interactive card — hover and focus lift it.</au-card>

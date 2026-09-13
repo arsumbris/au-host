@@ -1,0 +1,15 @@
+# <au-chip> — a leaf: mostly data-driven (a label + variant), with an optional remove affordance.
+#: <au-chip> — a small labelled leaf with an optional remove affordance. Data-driven label + variant;
+#: emits au-remove when the (optional) remove control is activated.
+extends: ui-component::component-contract
+fields:
+  #: The chip text. Render-resilient: absent renders empty.
+  label?: String
+  #: Visual role.
+  variant?: [neutral, accent, danger]
+  #: Show a remove (×) affordance that emits au-remove.
+  removable?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-remove]
+    parts: [chip, label, remove]

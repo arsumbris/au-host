@@ -1,0 +1,32 @@
+# terminal IS a projection subtype. Its instance IS its config: `cwd`
+# records the shell's working directory so a saved composition reopens it there.
+# The LIVE pty session is host-owned + ephemeral (not config).
+# `meta` declares its loadable code, resolved via the type owner.
+extends: pane-projection::au-host-sdk
+fields:
+  # The shell's working directory, a vault-relative or absolute path. Optional —
+  # defaults to the vault / member root (or home if none).
+  cwd?: String
+  shell?: String
+  scrollback?: Number
+  cursorStyle?: [bar, block, underline]
+  cursorBlink?: Boolean
+  #: App-session prompt preset. Applied at shell creation; inherit preserves the shell prompt.
+  prompt?: [inherit, raw, minimal, compact-git, clean, context]
+  # An optional command run in the shell once, on first spawn (e.g. launching an
+  # agent session). Not re-run on a remount re-attach. Persisted like any field.
+  command?: String
+meta:
+  - type: projection-presentation-meta::au-host-sdk
+    title: Terminal
+    icon: terminal
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    customTokenEntry:
+      - ./terminal.tokens.css
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[show-pane-intent::intent]]"

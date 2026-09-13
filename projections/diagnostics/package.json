@@ -1,0 +1,22 @@
+{
+  "name": "@au-projections/diagnostics",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/preview-content": "link:../../packages/preview-content",
+    "@arsumbris/range": "link:../../packages/range",
+    "@arsumbris/selection": "link:../../packages/selection"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

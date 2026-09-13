@@ -1,0 +1,17 @@
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^layout]]"
+  - ^: layout
+    type: sandwich::sandwich
+    left: "[[^^shell]]"
+    center: "[[^^tree]]"
+  - ^: shell
+    type: terminal::terminal
+    prompt: raw
+  - ^: tree
+    type: file-tree::file-tree

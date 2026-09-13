@@ -1,0 +1,18 @@
+# SWAP-CONTENT fixture — a window → single-tab tabs → editor#ed on sample.md. The test drives the tab's
+# ⋯ → Swap picker to swap the editor for a different viewer, asserting the tabs CONTAINER and the tab's
+# pane id are unchanged (swap replaces the occupant's viewer in place, it never wraps/replaces the container).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>au-host — surface</title>
+    <style>
+      /* Black before the renderer paints, like the main window. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+      }
+      #root {
+        height: 100vh;
+        color: #8a8f9d;
+        font: 12px ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/surface.tsx"></script>
+  </body>
+</html>

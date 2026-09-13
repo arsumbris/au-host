@@ -1,0 +1,7 @@
+# <au-table-head> — the header rowgroup of <au-table>.
+#: <au-table-head> — the header rowgroup of <au-table>. Slot <au-table-row>s of <au-table-header-cell>.
+extends: ui-component::component-contract
+fields: {}
+meta:
+  - type: ui-component-meta::component-contract
+    preview: '<au-table><au-table-head><au-table-row><au-table-header-cell>Header</au-table-header-cell></au-table-row></au-table-head></au-table>'

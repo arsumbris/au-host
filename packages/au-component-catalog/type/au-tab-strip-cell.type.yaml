@@ -1,0 +1,38 @@
+#: Content icons use a matched glyph box and shared label gap; whole-tab dragging remains available.
+# Owned by component-contract. The INTERFACE for `<au-tab-strip-cell>` — one tab.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# states, and the gallery sample. It COMPOSES <au-grip-glyph> + <au-close-button>.
+#: The interface for <au-tab-strip-cell>: a single tab (grip · status/dirty dot · label · close/pin).
+#: Borderless — selection uses fill and ink without changing label weight. Emits `au-activate` (body) and `au-close` (close affordance).
+extends: ui-component::component-contract
+fields:
+  #: Optional shared au-icon identifier for the tab content, shown in the leading grip slot.
+  icon?: String
+  #: This tab contains a nested container; show a group marker without changing selection or drag behavior.
+  group?: Boolean
+  #: The tab label (a filename). Truncates; the full text rides the native tooltip.
+  label: String
+  #: Selected tab — fills and brightens without shifting label weight; never auto-shrinks.
+  active?: Boolean
+  #: Unsaved changes — shows a status dot; clean tabs have no dot.
+  dirty?: Boolean
+  #: Pinned — shows a pin glyph in place of the close, always visible.
+  pinned?: Boolean
+  #: Freeze the lifted "carried" drag look.
+  dragging?: Boolean
+  #: Structure-locked — implies move + remove locked and draws the lock hairline.
+  locked?: Boolean
+  #: Preview / transient — the label renders italic.
+  preview?: Boolean
+  #: Disable movement from the tab body and suppress its optional drag grip.
+  moveLocked?: Boolean
+  #: Suppress the close affordance (tab can't be closed).
+  removeLocked?: Boolean
+  #: Render an additional leading grip (default true). The tab body remains draggable unless move-locked or locked.
+  grip?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-activate, au-close, au-tab-drag-start]
+    states: [active, dirty, pinned, dragging, locked, preview]
+    preview: '<au-tab-strip-cell label="index.ts" icon="file" active></au-tab-strip-cell> <au-tab-strip-cell label="Browser" icon="globe"></au-tab-strip-cell> <au-tab-strip-cell label="Terminal" icon="terminal" pinned></au-tab-strip-cell>'

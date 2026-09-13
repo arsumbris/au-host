@@ -1,0 +1,15 @@
+# One step in an <au-stepper>. Serializable DATA — never a framework element (the data-driven rule).
+#: One <au-stepper> step: a stable id, an optional label (omitted → a marker-only step), an optional
+#: vertical-variant sub-label, an optional explicit state (derived from `current` when omitted), and a
+#: `live` flag that rides a StatusDot-style pulse on the current step's marker.
+fields:
+  #: Stable id the consumer maps back to on `au-step-select`.
+  id: String
+  #: The step label. Omitted → a marker-only step (the dots posture even inside a labelled variant).
+  label?: String
+  #: Vertical-variant helper line under the label (ink-4).
+  subLabel?: String
+  #: Explicit visual state. Omitted → derived from `current` (< current → complete, = → current, > → upcoming).
+  state?: [upcoming, current, complete, disabled, skipped, error]
+  #: The current step is doing live work → a StatusDot-style pulse ring rides its marker.
+  live?: Boolean

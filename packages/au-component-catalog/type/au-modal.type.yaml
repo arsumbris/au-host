@@ -1,0 +1,20 @@
+# <au-modal> — the dialog CARD of the overlay elevation family (Modal / ConfirmDialog look).
+#: <au-modal> — the anchor of the overlay elevation family: a dialog card. Elev-5 fill + inset hairline
+#: + glass shadow, panel radius. A heading, a body (default slot), and an optional actions shelf (the
+#: `actions` slot — a hairline-topped same-surface footer) that appears only when filled. An optional top-right
+#: × close (emits au-close). NEVER a leading/left accent bar. The LOOK only — a host surface owns the
+#: scrim, focus-trap, and lifecycle.
+extends: ui-component::component-contract
+fields:
+  #: The dialog title (`title` is the reserved native tooltip, so this is `heading`).
+  heading?: String
+  #: Elevation variant: default (panel radius + glass shadow) or preview (softer peek surface).
+  variant?: [default, preview]
+  #: Show a top-right × close (emits au-close).
+  dismissible?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-close]
+    slots: [actions]
+    parts: [header, title, body, actions, close]
+    preview: '<au-modal heading="Delete note?" style="width:22rem">This removes note.md and its 2 references.<au-button slot="actions" size="sm" variant="ghost">Cancel</au-button><au-button slot="actions" size="sm" variant="cta">Delete</au-button></au-modal>'

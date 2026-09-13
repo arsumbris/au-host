@@ -1,0 +1,18 @@
+# Owned by au-host-sdk (the keybinds vocabulary). A KEYMAP FILE: a set of keybinds plus one activation
+# scope. The FILE is the unit of scope. A composition names an ordered list of active keymaps in its
+# `keymaps` field; the active set is the global keymaps plus every focus-scoped keymap whose type holds
+# focus. A chord resolves focus-first over the active set, list order breaking ties, the chooser asking
+# when no single winner emerges.
+
+# A keymap is a shareable, cross-repo, removable file — NOT a `composition-config` aspect. A user rebinds
+# by editing a keymap file (a shipped, consumed keymap copies into the user's vault first). Plugins ship
+# their own keymap files, scoped to their projection.
+
+#: A keymap file: a set of keybinds and one activation scope. Global when `when` is absent, else active
+#: only while a projection of one of the named types holds focus.
+fields:
+  #: Absent = global (always active). Present = active only while a projection of one of these types holds
+  #: focus. The file's default scope; a keybind may narrow it further with its own `when`.
+  when?: type<projection>*[]
+  #: The keybinds this map declares. Non-empty.
+  keybinds: keybind[+]

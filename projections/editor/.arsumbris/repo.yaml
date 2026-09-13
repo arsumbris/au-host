@@ -1,0 +1,10 @@
+# Schema-12 repo identity + deps (au.engine.repo).
+type: au.engine.repo::au-engine
+name: editor
+description: first-party editor projection
+deps:
+  - name: au-host-sdk
+  # `editor-pane` declares `handles-intent-meta::intent` in a TYPE position, which folds the peer type into
+  # this repo's closure-hash — so the peer must be a declared dep (`type-repo-not-a-dependency`).
+  # Membership alone is not enough; the gate is a reproducibility guard.
+  - name: intent

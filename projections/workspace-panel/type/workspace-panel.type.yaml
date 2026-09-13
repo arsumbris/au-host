@@ -1,0 +1,13 @@
+# workspace-panel IS a projection subtype. No durable config — it reads the
+# live workspace (members, member diagnostics, resolution files). `meta` declares its
+# loadable code, resolved through the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Workspace
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

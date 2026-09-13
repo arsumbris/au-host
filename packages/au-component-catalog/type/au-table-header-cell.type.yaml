@@ -1,0 +1,16 @@
+# <au-table-header-cell> — a header cell of <au-table>: a mono-uppercase eyebrow.
+#: <au-table-header-cell> — a header cell of <au-table>: a mono-uppercase eyebrow. `align="end"`
+#: right-aligns; `sortable` makes the whole header a sort control (label + rotating caret) that emits
+#: `au-sort`; `sortDir` (asc | desc) marks the active column and points the caret.
+extends: ui-component::component-contract
+fields:
+  #: Column alignment; `end` right-aligns (numeric columns).
+  align?: [start, end]
+  #: Render the whole header as a sort control (label + caret) that emits au-sort.
+  sortable?: Boolean
+  #: Active sort direction for this column (asc | desc); absent when it is not the sort key.
+  sortDir?: [asc, desc]
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-sort]
+    preview: '<au-table><au-table-head><au-table-row><au-table-header-cell sortable sort-dir="asc">Name</au-table-header-cell><au-table-header-cell align="end">Count</au-table-header-cell></au-table-row></au-table-head></au-table>'

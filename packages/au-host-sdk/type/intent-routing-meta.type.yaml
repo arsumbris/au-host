@@ -1,0 +1,20 @@
+#: Type-level routing metadata for an intent: how the host DISPATCHES a fired intent of this type.
+#: Declared on the intent TYPE-DEF, never an instance (intents are ephemeral, never persisted), so
+#: "how does this intent route" is a static type-graph fact. Codegen threads it onto every fired
+#: payload; the runtime router reads it per fire, and an agent can read it off the type graph before firing.
+extends: au.engine.meta::au-engine
+fields:
+  #: The dispatch mechanism.
+  #: - `routed`: a command consumed ONCE by the first handler that claims it.
+  #: - `broadcast`: an event fanned out to EVERY capable handler, with no claim and no ordering.
+  kind: [routed, broadcast]
+  #: For a `routed` intent, WHICH candidates it considers (absent for `broadcast` — fan-out is unordered).
+  #: - `ambient`: every capable handler tree-wide, most-recently-focused first. A GLOBAL route.
+  #: - `firer-relative`: only the firer's OWN ancestor chain. Scoped to the firer's container.
+  #:
+  #: They differ on the UNHANDLED outcome, and the host relies on it. An `ambient` intent that nobody
+  #: claims found no taker ANYWHERE, so the host surfaces it (an open with no home raises the open
+  #: chooser). A `firer-relative` intent that nobody claims just means the firer's own context does not
+  #: support it — there is no global fallback by design, so it is the expected terminal outcome and stays
+  #: SILENT. A firer that must know its intent landed checks `fire`'s claimed return instead.
+  dispatch?: [ambient, firer-relative]

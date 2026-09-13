@@ -1,0 +1,8 @@
+# The keymap-editor projection's repo identity + deps. Its type-def extends `pane-projection::au-host-sdk`
+# (the only type crossing); it reads the command registry + keymap files + host.keymaps at RUNTIME, so it
+# declares no other type dep. (au-host-app is a build/type-only import — KeymapsControl is erased — not a
+# type-graph crossing, so it is not a repo dep.)
+type: au.engine.repo::au-engine
+name: keymap-editor
+deps:
+  - name: au-host-sdk

@@ -1,0 +1,530 @@
+/* aup-reader prose — the monochrome markdown reading surface. Scoped to `.au-md` so it paints only
+ * THIS projection's document column. Uses --au-* tokens for measure, ramp, code and lists.
+ * Blockquotes use inset italic styling with no leading bars. Links stay on the ink ladder, never
+ * the anchor hue. Type tokens carry px fallbacks so the surface degrades sanely if a ramp token is
+ * renamed upstream. */
+
+/* TRANSPARENT on purpose: the CONTAINER owns the surface (its region card is the panel), the
+ * projection is only content. A transparent background keeps the masthead and body on one
+ * continuous panel. */
+.au-reader {
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--au-font-sans);
+}
+
+/* the centered reading column — a bounded measure on a calm field, generous top lead + deep foot */
+.au-md {
+  max-width: var(--au-prose-measure);
+  margin: 0 auto;
+  /* Document margins provide deep side gutters and a generous bottom margin. */
+  padding: var(--au-prose-pad-top) var(--au-prose-pad-side) var(--au-prose-pad-foot);
+  font-size: var(--au-t-body);
+  /* Use an explicit line-height ratio; the registered token has no fallback path. */
+  line-height: var(--au-prose-lh);
+  /* THE PROSE RHYTHM UNIT — one blank line of body leading, the single ladder every FLOW block spaces
+   * on. Derived from the leading token, never a hand-set px: a paragraph, a list, a blockquote, an
+   * image, and a fenced code / table BLOCK all sit one line apart, so the column reads on one beat.
+   * Headings are the deliberate exception (they bind tighter to what follows — see below). Local to
+   * `.au-md` and body-sized, so 1em always resolves against --au-t-body, not a child's own size. */
+  --au-md-flow: calc(var(--au-prose-lh) * 1em);
+  font-weight: var(--au-w-body);
+  /* Running prose must not use monospaced digits; tabular figures are for columns of numbers. */
+  font-variant-numeric: normal;
+  color: var(--au-ink-2);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* headings — big sans title, tightening ramp; h6 is the mono eyebrow. More space above than below. */
+.au-md h1,
+.au-md h2,
+.au-md h3,
+.au-md h4,
+.au-md h5,
+.au-md h6 {
+  color: var(--au-ink-1);
+  text-wrap: balance;
+}
+.au-md h1 {
+  /* Document title uses the top rung of the heading scale. */
+  font-size: var(--au-t-h1);
+  line-height: 1.06;
+  font-weight: var(--au-w-strong);
+  letter-spacing: var(--au-ls-display);
+  margin: 0 0 var(--au-space-5);
+}
+.au-md h2 {
+  font-size: var(--au-t-title);
+  line-height: 1.2;
+  font-weight: var(--au-w-strong);
+  letter-spacing: var(--au-ls-snug);
+  margin: var(--au-space-7) 0 var(--au-space-2);
+}
+.au-md h3 {
+  font-size: var(--au-t-lead);
+  /* DECLARED. h3-h6 declared no line-height, so all four inherited the column's box — a 24px line
+   * box around 13-18px type, which is the dead space around every small heading. */
+  line-height: 1.25;
+  font-weight: var(--au-w-medium);
+  margin: var(--au-space-6) 0 var(--au-space-2);
+}
+.au-md h4 {
+  font-size: var(--au-t-body);
+  line-height: 1.4;
+  font-weight: var(--au-w-medium);
+  color: var(--au-ink-2);
+  margin: var(--au-space-5) 0 var(--au-space-1);
+}
+.au-md h5 {
+  font-size: var(--au-t-base);
+  line-height: 1.45;
+  font-weight: var(--au-w-medium);
+  color: var(--au-ink-2);
+  margin: var(--au-space-5) 0 var(--au-space-1);
+}
+.au-md h6 {
+  /* h6 stays the MONO EYEBROW — this is where that treatment still earns its place. A sixth-level
+   * heading in a document is a machine-ish marker, not a name a reader dwells on. */
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-sm);
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: var(--au-ls-label);
+  color: var(--au-ink-4);
+  margin: var(--au-space-5) 0 var(--au-space-1);
+}
+.au-md > :first-child {
+  margin-top: 0;
+}
+
+/* paragraphs + inline emphasis */
+.au-md p {
+  /* Paragraph spacing follows the shared prose line-height through --au-md-flow. */
+  margin: 0 0 var(--au-md-flow);
+  text-wrap: pretty;
+}
+.au-md strong {
+  font-weight: var(--au-w-strong,590);
+  color: var(--au-ink-1);
+}
+.au-md em {
+  font-style: italic;
+}
+.au-md del {
+  text-decoration: line-through;
+  color: var(--au-ink-4);
+}
+
+/* External web links retain a fine underline as a destination cue. */
+.au-md__a {
+  color: var(--au-link-external);
+  font-weight: inherit;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Lists use the shared one-line flow spacing. Inter-item spacing uses a smaller
+ * token because it belongs within the list rather than between flow blocks. */
+.au-md ul,
+.au-md ol {
+  margin: 0 0 var(--au-md-flow);
+  padding-inline-start: var(--au-space-5, 20px);
+}
+.au-md li {
+  margin: var(--au-space-1, 4px) 0;
+}
+.au-md li::marker {
+  color: var(--au-ink-4);
+}
+
+/* blockquote — inset + italic + muted ink. It is a flow block: bottom-only on the shared one-line
+ * rhythm (top comes from the previous block's foot). Its inset PADDING is a separate concern from
+ * that outer rhythm. */
+.au-md blockquote {
+  margin: 0 0 var(--au-md-flow);
+  padding: var(--au-space-2, 8px) var(--au-space-4, 16px);
+  border-radius: var(--au-radius-md, 8px);
+  background: color-mix(in oklab, var(--au-ink-1) 3%, transparent);
+  color: var(--au-ink-3);
+  font-style: italic;
+}
+.au-md blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* inline code (fenced code → the kit CodeBlock, which brings its own frame) */
+.au-md__code {
+  font-family: var(--au-font-mono);
+  font-size: 0.85em;
+  color: var(--au-ink-2);
+  background: color-mix(in oklab, var(--au-ink-1) 7%, transparent);
+  padding: 0.1em 0.36em;
+  border-radius: var(--au-radius-sm, 5px);
+}
+
+/* Images are block figures spaced on the shared one-line flow rhythm. */
+.au-md__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--au-radius-md, 8px);
+  margin: 0 0 var(--au-md-flow);
+}
+
+/* CodeBlock and Table wrappers use block display so vertical margins apply.
+ * Their outer spacing follows the shared prose rhythm; internal padding belongs
+ * to the kit component. react-markdown supplies the wrapper as a span. */
+.au-md__block {
+  display: block;
+  margin: 0 0 var(--au-md-flow);
+}
+
+/* horizontal rule (rendered via <au-divider>, which ships NO block margin of its own) — a
+ * section break sits one line clear on each side, symmetric, so it reads centered in the rhythm. */
+.au-md au-divider {
+  margin-block: var(--au-md-flow);
+}
+
+/* Frontmatter forms a two-column masthead: 92px keys and a flexible value column.
+ * Direct dt/dd children align every value. One flow unit separates it from the title. */
+/* the open file's PATH — a quiet breadcrumb at the very top of the document, above the frontmatter.
+ * Mono + muted so it names the source without competing with the title or the prose; wraps rather
+ * than widens the column. */
+.au-md__path {
+  margin: 0 0 var(--au-md-flow);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  letter-spacing: var(--au-ls-mono);
+  color: var(--au-ink-4);
+  overflow-wrap: anywhere;
+}
+
+.au-md__meta {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: var(--au-space-2, 8px) var(--au-space-3, 12px);
+  align-items: baseline;
+  margin: 0 0 var(--au-md-flow);
+}
+/* the key rail — a muted field label (the ink step, not weight, is what makes it recede), on the same
+ * label role the kit's DetailList term uses: sentence case, medium weight, snug tracking, ink-4. */
+.au-md__meta-key {
+  margin: 0;
+  font-size: var(--au-t-sm);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-snug);
+  color: var(--au-ink-4);
+  overflow-wrap: anywhere;
+}
+/* the value column — a wrapping flex line so an array of <Tag>s flows onto multiple rows and a single
+ * <Pill> sits inline; min-width:0 lets a long chip shrink instead of forcing the grid wider. */
+.au-md__meta-val {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--au-space-1, 4px);
+}
+
+/* Internal references use the document accent without a resting underline. */
+.au-md__wikilink {
+  color: var(--au-link-internal);
+  font-weight: inherit;
+  text-decoration: none;
+  cursor: grab;
+  -webkit-user-drag: element;
+}
+.au-md__wikilink:active { cursor: grabbing; }
+
+/* centered status states (idle / loading / error) */
+.au-reader__status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--au-space-6, 24px);
+}
+
+.au-props {
+  margin-block-end: var(--au-space-8);
+  font-size: var(--au-t-sm);
+  line-height: var(--au-lh-base);
+  container-type: inline-size;
+}
+.au-props-identity { display: flex; align-items: center; gap: var(--au-space-2); margin-block-end: var(--au-space-3); }
+.au-props-eyebrow { font-weight: var(--au-w-medium); color: var(--au-ink-2); }
+.au-props-count, .au-props-state, .au-props-type-hint { color: var(--au-ink-3); font-size: var(--au-t-xs); }
+.au-props-state { margin-inline-start: auto; }
+.au-props-types { margin-block-end: var(--au-space-4); }
+.au-props-type-name { font-weight: var(--au-w-medium); color: var(--au-ink-1); }
+.au-props summary { cursor: pointer; overflow-wrap: anywhere; }
+.au-props-grid { margin: 0; }
+.au-props-row { display: grid; grid-template-columns: minmax(100px, 28%) minmax(0, 1fr); gap: var(--au-space-4); padding-block: var(--au-space-2); align-items: start; }
+.au-props-row > dt, .au-props-row > dd { margin: 0; min-width: 0; }
+.au-props-row > dt { color: var(--au-ink-3); }
+.au-props-row > dd { color: var(--au-ink-1); overflow-wrap: anywhere; }
+.au-props-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.au-props-number { font-variant-numeric: tabular-nums; }
+.au-props-empty { color: var(--au-ink-3); }
+.au-props .au-props-list { list-style: none; display: flex; flex-wrap: wrap; gap: var(--au-space-1) var(--au-space-3); margin: 0; padding: 0; }
+.au-props .au-props-list > li { margin: 0; padding: 0; max-width: 100%; }
+.au-props .au-props-list > li:not(:last-child)::after { content: ','; color: var(--au-ink-4); }
+.au-props-object > summary { color: var(--au-ink-2); }
+.au-props-object dl, .au-props-inspect dl { margin: var(--au-space-2) 0 0; }
+.au-props-object dl > div, .au-props-inspect dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--au-space-2); padding-block: var(--au-space-1); }
+.au-props-object dt, .au-props-inspect dt { color: var(--au-ink-3); overflow-wrap: anywhere; }
+.au-props-object dd, .au-props-inspect dd { margin: 0; overflow-wrap: anywhere; }
+.au-props-inspect p { margin: var(--au-space-1) 0; }
+.au-props-source { display: block; color: var(--au-ink-3); font-size: var(--au-t-xs); margin-block-start: var(--au-space-1); }
+.au-props-issues { margin-block: var(--au-space-3); color: var(--au-ink-2); }
+.au-props-issues ul { font-size: var(--au-t-xs); }
+.au-props-toggle { margin-block-start: var(--au-space-3); padding: var(--au-space-1) 0; background: transparent; border: 0; color: var(--au-ink-3); font: inherit; cursor: pointer; }
+.au-props-toggle:hover { color: var(--au-ink-1); }
+.au-props-raw { white-space: pre-wrap; overflow-wrap: anywhere; }
+@container (max-width: 320px) {
+  .au-props-row { grid-template-columns: minmax(0, 1fr); gap: var(--au-space-1); }
+}
+.au-props-inspect dl { max-height: 320px; overflow-y: auto; }
+
+.au-props-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--au-space-2);
+  flex-shrink: 0;
+  padding: var(--au-space-1) var(--au-space-2);
+  margin-inline-start: calc(-1 * var(--au-space-2));
+  border: 0;
+  border-radius: var(--au-radius-chip);
+  background: transparent;
+  color: var(--au-ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+.au-props-disclosure:hover { background: var(--au-chrome-hover); color: var(--au-ink-1); }
+.au-props-chevron { width: var(--au-space-3); text-align: center; color: var(--au-ink-3); }
+.au-props-compact-types { display: flex; flex-wrap: wrap; align-items: center; gap: var(--au-space-2); min-width: 0; }
+.au-props-identity { flex-wrap: wrap; margin-block-end: 0; }
+.au-props-panel { margin-block-start: var(--au-space-4); }
+.au-props { margin-block-end: var(--au-space-5); }
+
+/* Property inspection keeps the value columns stable during disclosure. */
+.au-props-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows var(--au-m-base) var(--au-e-std), opacity var(--au-m-fast) var(--au-e-std), visibility var(--au-m-base); }
+.au-props-reveal[data-open="true"] { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+.au-props-reveal > div { min-height: 0; overflow: hidden; }
+.au-props-detail-toggle, .au-props-field-toggle { display: inline-flex; align-items: center; gap: var(--au-space-2); padding: var(--au-space-1) 0; border: 0; background: transparent; color: var(--au-ink-3); font: inherit; text-align: start; cursor: pointer; }
+.au-props-detail-toggle:hover, .au-props-field-toggle:hover, .au-props-field-toggle[aria-expanded="true"] { color: var(--au-ink-1); }
+.au-props-field-toggle { width: 100%; padding: 0; justify-content: space-between; }
+.au-props-chevron { flex-shrink: 0; transition: transform var(--au-m-fast) var(--au-e-std); }
+.au-props-chevron[data-open="true"] { transform: rotate(90deg); }
+.au-props-field-toggle .au-props-chevron { opacity: .45; transition: opacity var(--au-m-fast) var(--au-e-std), transform var(--au-m-fast) var(--au-e-std); }
+.au-props-row:hover .au-props-chevron, .au-props-field-toggle:focus-visible .au-props-chevron, .au-props-field-toggle[aria-expanded="true"] .au-props-chevron { opacity: 1; }
+.au-props-row { column-gap: var(--au-space-4); row-gap: 0; }
+.au-props-row > .au-props-field-detail { grid-column: 1 / -1; }
+.au-props-definition-heading { display: flex; align-items: baseline; gap: var(--au-space-3); margin-block-end: var(--au-space-1); }
+.au-props-definition-heading strong { color: var(--au-ink-1); font-weight: var(--au-w-medium); }
+.au-props-definition-heading > span, .au-props-origin { color: var(--au-ink-3); }
+.au-props-types { margin-block-end: var(--au-space-3); }
+.au-props-object .au-props-detail-toggle { padding: 0; }
+.au-props-object dl { padding-inline-start: var(--au-space-4); }
+@media (prefers-reduced-motion: reduce) {
+  .au-props-reveal, .au-props-chevron, .au-props-field-toggle .au-props-chevron { transition: none; }
+}
+
+.au-props-type { display: grid; grid-template-columns: minmax(100px, 28%) minmax(0, 1fr) auto; column-gap: var(--au-space-4); align-items: center; padding-block: var(--au-space-2); }
+.au-props-type-label { color: var(--au-ink-3); }
+.au-props-type-name { min-width: 0; overflow-wrap: anywhere; }
+.au-props-type-disclosure { display: contents; }
+.au-props-type-disclosure > .au-props-detail-toggle { flex-direction: row-reverse; font-size: var(--au-t-xs); padding: var(--au-space-1) var(--au-space-2); border-radius: var(--au-radius-sm); }
+.au-props-type-disclosure > .au-props-detail-toggle:hover { background: var(--au-chrome-hover); }
+.au-props-type-disclosure > .au-props-reveal { grid-column: 1 / -1; }
+.au-props-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@container (max-width: 320px) {
+  .au-props-type { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--au-space-1); }
+  .au-props-type-label { grid-column: 1 / -1; }
+}
+
+/* Inset focus stays visible inside animated disclosure clipping boundaries. */
+.au-props summary:focus-visible, .au-props button:focus-visible {
+  outline: 1px solid var(--au-focus-outer);
+  outline-offset: -1px;
+  border-radius: var(--au-radius-sm);
+}
+@media (forced-colors: active) {
+  .au-props summary:focus-visible, .au-props button:focus-visible { outline-color: Highlight; }
+}
+.au-props-field-toggle { min-height: var(--au-space-6); padding-inline: var(--au-space-1); }
+.au-props-row > dd:not(.au-props-field-detail) { padding-block-start: var(--au-space-1); }
+.au-props-inspect {
+  margin-block: var(--au-space-2) var(--au-space-1);
+  padding: var(--au-space-4);
+  border-radius: var(--au-radius-md);
+  background: color-mix(in oklch, var(--au-ink-1) 4%, var(--au-color-surface-1));
+  color: var(--au-ink-2);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-base);
+  overflow-wrap: anywhere;
+}
+.au-props-definition-heading { flex-wrap: wrap; gap: var(--au-space-1) var(--au-space-3); }
+.au-props-inspect .au-props-origin { margin-block-start: var(--au-space-2); }
+.au-props-inspect dl { margin-block-start: var(--au-space-3); padding-inline-end: var(--au-space-2); scrollbar-width: thin; scrollbar-gutter: stable; }
+.au-props-inspect dl > div { padding-block: var(--au-space-2); column-gap: var(--au-space-4); }
+.au-props-inspect dl > div:first-child { padding-block-start: 0; }
+.au-props-inspect dt { color: var(--au-ink-2); }
+.au-props-inspect .au-props-field-doc { color: var(--au-ink-3); margin-block: var(--au-space-1) 0; }
+@container (max-width: 320px) {
+  .au-props-inspect dl > div { grid-template-columns: minmax(0, 1fr); }
+}
+
+.au-md__typechip {
+  display: inline-flex; align-items: center; gap: var(--au-space-2); max-width: 100%;
+  padding: var(--au-space-1) var(--au-space-2); border: 0; border-radius: var(--au-radius-sm);
+  background: color-mix(in oklch, var(--au-ink-1) 5%, var(--au-color-surface-1));
+  color: var(--au-ink-2); font: inherit; font-size: var(--au-t-xs); cursor: pointer;
+  overflow-wrap: anywhere; text-align: start;
+  transition: background-color var(--au-m-fast) var(--au-e-std), color var(--au-m-fast) var(--au-e-std);
+}
+.au-md__typechip:hover { background: var(--au-chrome-hover); color: var(--au-ink-1); }
+.au-type-link-arrow { flex-shrink: 0; color: var(--au-ink-3); }
+.au-props-type-disclosure > .au-props-detail-toggle { min-height: var(--au-space-7); color: var(--au-ink-2); }
+.au-props-type-disclosure > .au-props-detail-toggle[aria-expanded="true"] { background: color-mix(in oklch, var(--au-ink-1) 4%, var(--au-color-surface-1)); color: var(--au-ink-1); }
+@media (prefers-reduced-motion: reduce) { .au-md__typechip { transition: none; } }
+
+.au-reader-code {
+  margin: 0; padding: var(--au-space-2) var(--au-space-4);
+  font: var(--au-t-sm)/var(--au-lh-base) var(--au-font-mono);
+  color: var(--au-code-variable); white-space: pre; tab-size: 2;
+}
+.au-reader-code code { font: inherit; background: transparent; padding: 0; }
+.au-syntax-comment { color: var(--au-code-comment); font-style: italic; }
+.au-syntax-string { color: var(--au-code-string); }
+.au-syntax-value { color: var(--au-code-number); }
+.au-syntax-function { color: var(--au-code-function); }
+.au-syntax-keyword { color: var(--au-code-keyword); }
+.au-syntax-type { color: var(--au-code-type); }
+.au-syntax-name { color: var(--au-code-property); }
+.au-syntax-variable { color: var(--au-code-variable); }
+.au-syntax-punctuation { color: var(--au-code-punctuation); }
+.au-reader-source { max-width: none; padding: var(--au-space-4); }
+.au-reader-source .au-md__path { margin-block-end: var(--au-space-4); padding-inline-end: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--au-font-sans); }
+@container (max-width: 480px) { .au-reader-source .au-md__path { padding-inline-end: 48px; } }
+.au-md au-code-block::part(head) { border-bottom: 0; }
+.au-reader-source au-code-block { --au-elev-3-fill: transparent; --au-elev-3-line: none; }
+
+.au-reader { position: relative; }
+.au-reader-switch-error { position: absolute; inset-block-start: var(--au-space-8); inset-inline-end: var(--au-space-3); z-index: var(--au-z-raised); padding: var(--au-space-2); background: var(--au-color-surface-1); color: var(--au-ink-2); }
+
+.au-reader-code-frame { container-type: inline-size; min-width: 0; }
+.au-reader-code { white-space: pre-wrap; overflow-wrap: anywhere; max-inline-size: 100cqw; box-sizing: border-box; }
+.au-reader > au-scroll-area { flex: 1; min-height: 0; }
+.au-reader-toolbar { display: flex; align-items: center; flex: none; min-height: var(--document-action-height); padding: var(--au-space-2) var(--au-space-4); box-sizing: content-box; }
+.au-reader-location { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--au-ink-3); font: var(--au-t-xs)/var(--au-lh-base) var(--au-font-sans); }
+.au-document-view > .au-reader-toolbar.au-document-toolbar { padding-inline-end: var(--au-space-4); gap: var(--au-space-1); }
+.au-reader-toolbar > .au-reader-location { flex: 1; }
+.au-reader-toolbar > au-viewer-switch { flex: none; }
+.au-reader-invalid { margin-block-end: var(--au-md-flow); }
+.au-reader-invalid > p { font: var(--au-t-sm)/var(--au-lh-base) var(--au-font-sans); color: var(--au-ink-2); }
+.au-reader-invalid > p strong { color: var(--au-color-danger); }
+.au-md ::selection { color: var(--au-selection-fg); background: var(--au-selection-bg); }
+
+/* A narrow document pane keeps a readable measure instead of spending it on desktop margins. */
+@container (max-width: 480px) {
+  .au-md { padding-inline: var(--au-space-6); }
+  .au-md h1 { font-size: var(--au-t-h2); line-height: 1.15; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-md__a,
+  .au-md__wikilink {
+    transition: none;
+  }
+}
+
+.au-reader-code-line { display: block; position: relative; min-height: 1lh; padding-inline-start: calc(5ch + var(--au-space-3)); }
+.au-reader-code-line::before { content: attr(data-line) / ""; position: absolute; inset-inline-start: 0; width: 5ch; text-align: end; color: var(--au-ink-4); font-variant-numeric: tabular-nums; user-select: none; }
+.au-reader-source .au-reader-code-numbered { padding-inline: var(--au-space-2); }
+.au-md__image-fallback { color: var(--au-ink-3); font-size: var(--au-t-sm); overflow-wrap: anywhere; }
+.au-yaml-values { margin-block-end: var(--au-space-5); font-size: var(--au-t-sm); line-height: var(--au-lh-base); }
+.au-yaml-values > section + section { margin-block-start: var(--au-space-5); }
+.au-yaml-values h2 { font-size: var(--au-t-base); margin-block: var(--au-space-3); }
+@container (min-width: 481px) {
+  .au-reader-source .au-props-row { grid-template-columns: minmax(100px, 20ch) minmax(0, 1fr); }
+  .au-reader-source .au-props-type { grid-template-columns: minmax(100px, 20ch) minmax(0, 1fr) auto; }
+}
+
+.au-reader-source-view { inline-size: 100cqw; max-inline-size: 100cqw; box-sizing: border-box; height: min(65vh, 720px); min-height: 240px; min-width: 0; overflow: hidden; }
+
+/* Modifier emphasis belongs only to the reference under the pointer. */
+.au-md__wikilink[data-reference-active="true"], .au-md__typechip[data-reference-active="true"] {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-color: var(--au-ink-1);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+/* Structured YAML and its authored source share one readable column. */
+.au-reader-source:has(.au-props, .au-yaml-values, .au-definition) {
+  max-width: var(--au-prose-measure);
+  margin-inline: auto;
+  padding-block-start: var(--au-space-6);
+}
+.au-props-field-toggle:hover { background: var(--au-chrome-hover); border-radius: var(--au-radius-sm); }
+
+.au-reader-options { position: relative; flex: none; font-size: var(--au-t-xs); }
+.au-reader-options > summary { list-style: none; padding: var(--au-space-2); cursor: pointer; color: var(--au-ink-3); border-radius: var(--au-radius-sm); }
+.au-reader-options > summary:focus-visible { outline: 1px solid var(--au-control-focus, var(--au-focus-outer)); outline-offset: -1px; }
+.au-reader-options > summary::-webkit-details-marker { display: none; }
+.au-reader-options > summary:hover, .au-reader-options[open] > summary { color: var(--au-ink-1); background: var(--au-chrome-hover); }
+.au-reader-options-panel { position: absolute; inset-block-start: 100%; inset-inline-end: 0; z-index: var(--au-z-overlay); min-inline-size: max-content; }
+.au-reader-options:not([open]) .au-reader-options-panel { display: none; }
+
+/* Definition and instance reading share the document's surface and scroll owner. */
+.au-definition { margin-block-end: var(--au-space-6); }
+.au-definition-heading { margin-block-end: var(--au-space-5); }
+.au-definition-heading h1 { margin-block: var(--au-space-2); overflow-wrap: anywhere; }
+.au-definition-kind { color: var(--au-ink-3); font-size: var(--au-t-xs); }
+.au-definition-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--au-space-2); margin-block: var(--au-space-2); }
+.au-definition-links > span:first-child { color: var(--au-ink-3); }
+.au-definition-section { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--au-space-2); }
+.au-definition-section h2 { margin: 0; }
+.au-definition-section h2 > span { color: var(--au-ink-3); font-size: var(--au-t-sm); font-weight: var(--au-w-body); }
+.au-definition-fields { margin-block: var(--au-space-3) var(--au-space-5); }
+.au-definition-field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--au-space-4); padding-block: var(--au-space-3); border-block-start: 1px solid var(--au-line-1); }
+.au-definition-field dt, .au-definition-field dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.au-definition-field code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.au-definition-required { display: block; margin-block-start: var(--au-space-1); color: var(--au-ink-3); font-size: var(--au-t-xs); }
+.au-definition-field dd p { margin-block: var(--au-space-2) 0; color: var(--au-ink-2); }
+.au-definition-shape { color: var(--au-ink-2); }
+.au-yaml-source, .au-definition-details { margin-block: var(--au-space-4); }
+.au-yaml-source > summary, .au-definition-details > summary { cursor: pointer; color: var(--au-ink-3); padding-block: var(--au-space-2); }
+.au-yaml-document button:focus-visible, .au-yaml-document summary:focus-visible { outline: 1px solid var(--au-focus-outer); outline-offset: -1px; border-radius: var(--au-radius-sm); }
+.au-yaml-source[open] > summary { margin-block-end: var(--au-space-3); }
+.au-yaml-document .au-props-list { list-style: none; margin: 0; padding: 0; }
+.au-props-list[data-structured="true"] { display: grid; gap: var(--au-space-3); }
+.au-props .au-props-list[data-structured="true"] > li::after { content: none; }
+.au-props-field-issues { padding: 0; margin-block: var(--au-space-1); list-style: none; color: var(--au-color-warn); font-size: var(--au-t-xs); }
+@container (max-width: 420px) {
+  .au-definition-field { grid-template-columns: minmax(0, 1fr); gap: var(--au-space-2); }
+  .au-definition-field dt { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--au-space-2); }
+  .au-definition-required { display: inline; margin: 0; }
+}
+
+.au-definition { font-size: var(--au-t-base); line-height: var(--au-lh-body); }
+.au-definition-heading h1 { font-size: var(--au-t-title); line-height: var(--au-lh-title); }
+.au-definition h2 { font-size: var(--au-t-base); }
+.au-definition h3 { font-size: var(--au-t-sm); }
+.au-definition-fields code { font-size: var(--au-t-sm); }
+
+.au-md__wikilink[data-reference-active="true"] {
+  color: var(--au-link-internal);
+  text-decoration: none;
+}

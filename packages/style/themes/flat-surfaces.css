@@ -1,0 +1,6 @@
+/* Flat finish: retain palette, elevation, interaction states and material. */
+:root {
+  --au-pane-edge-image: none;
+  --au-chrome-background-image: none;
+  --au-pane-background-image: none;
+}

@@ -1,0 +1,22 @@
+#: Type-level PRESENTATION for an intent that is invocable as a user COMMAND. Declared on the intent
+#: TYPE-DEF (the intent IS the command; one intent is handled by many projections, so a per-projection
+#: default would conflict). Carrying this meta is the OPT-IN: an intent WITH a `command-meta` surfaces in
+#: the command palette; an intent WITHOUT one is fired only internally, never listed. The command's
+#: PARAMETERS are the intent's own payload fields (read from the type graph), so none are declared here.
+#: The palette (human) and the agent intent-as-tool bridge read the same declaration.
+extends: au.engine.meta::au-engine
+fields:
+  #: The command's display name, an imperative verb phrase (e.g. "Save composition").
+  label: String
+  #: OPTIONAL leading icon, a SEMANTIC ROLE name (e.g. `save`, `delete`), NOT a component-set glyph name —
+  #: so an intent has a KNOWN BASIS independent of any set (an intent may run where a given set is not
+  #: shipped). The role set must be a SHARED NAMED ENUM the intent layer owns, which needs the engine's
+  #: named-enum feature (a referenceable enum type, not an inline per-field literal list). Until then this
+  #: is a free String, unvalidated.
+  #: Icon identifier; the current schema accepts a string.
+  icon?: String
+  #: OPTIONAL grouping label for the palette (e.g. "Composition"). Commands sharing a category group together.
+  category?: String
+  # NOTE: no `defaultBinding` field. Keybinds live in removable keymap FILES, not scattered per-command metas
+  # (the "no hidden bindings" rule). The palette's shortcut DISPLAY is a reverse-lookup over the active
+  # keymaps (runtime.shortcutForIntent), so it reflects what is actually bound.

@@ -1,0 +1,28 @@
+# Owned by component-contract. The INTERFACE for `<au-pane-frame>` — the pane card.
+#
+# The type NAME is the custom-element tag. Fields are the props; the meta block carries events-out,
+# states, slots, and the gallery sample.
+#: The interface for <au-pane-frame>: the bordered / rounded / elevated card a projection mounts inside,
+#: with an optional sticky label bar (leading · title · meta, or a `label` slot that replaces them).
+extends: ui-component::component-contract
+fields:
+  #: The active pane — lifts the card ring to full ink emphasis.
+  focused?: Boolean
+  #: A danger hairline on the whole card.
+  error?: Boolean
+  #: A transient (preview) pane — italicises the title ONLY, never a different card treatment.
+  preview?: Boolean
+  #: Drop the body padding, for a projection that owns its own insets.
+  flush?: Boolean
+  #: Surround a nested container with an even gutter; clicking that gutter pins its compact header open; hover only identifies the frame.
+  nested?: Boolean
+  #: Keep the nesting header revealed while its menu or inline picker is in use.
+  engaged?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    # Fired on a double-click of the label bar (the conventional maximise affordance). Composed + bubbling.
+    events: [au-label-dblclick]
+    states: [focused, error, preview]
+    # `label` replaces the leading/title/meta trio; `default` is the scroll body.
+    slots: [leading, title, meta, label, default]
+    preview: '<au-pane-frame focused style="height: 140px; max-width: 320px"><span slot="title">document.md</span><span slot="meta">markdown</span>Body content, clipped by the card corners.</au-pane-frame>'

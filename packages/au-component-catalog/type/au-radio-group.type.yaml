@@ -1,0 +1,27 @@
+# Owned by component-contract. The INTERFACE for `<au-radio-group>` — the single-select radio group.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. DATA-DRIVEN, like `au-segmented-control`: `items` is a au-radio-item[] the consumer
+# owns; the control renders the ring+dot rows and owns roving-focus + keyboard nav. The whole group is
+# ONE element, so native arrow-roving and form-association stay clean (one shadow root, one form value).
+#
+# FORM-ASSOCIATED: the group carries its selected `value` into a native `<form>` + reset, across the
+# shadow boundary. It emits `au-change` (detail `{ value }`, composed + bubbling) on select.
+#: The interface for <au-radio-group>: a vertical single-select group over `items` (au-radio-item[]) —
+#: token ring + ink-1 dot rows. Form-associated. Emits `au-change {value}`. Roving tabindex + Arrow keys.
+extends: ui-component::component-contract
+fields:
+  #: The option model. The consumer owns it; the control renders + navigates.
+  items?: au-radio-item[]
+  #: The selected option's value. Form-associated (participates in a native form + reset).
+  value?: String
+  #: Disable the whole group (a per-item `disabled` can also disable one option). Reflected as `disabled`.
+  disabled?: Boolean
+  #: Accessible name for the radiogroup.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-change]
+    states: [disabled]
+    parts: [option, ring, dot, label]
+    preview: '<au-radio-group value="compact" label="Density"></au-radio-group>'

@@ -1,0 +1,7 @@
+# Schema-12 repo identity (au.engine.repo). `selection` is referenced (intent's open-intent
+# + ui-intent-highlight use `selection::selection&`), so it is a genuine member of the UI closure.
+type: au.engine.repo::au-engine
+name: selection
+description: first-party selection vocabulary; owns selection + file-selection (references range)
+deps:
+  - name: range

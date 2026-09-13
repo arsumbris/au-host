@@ -1,0 +1,23 @@
+# Owned by the `intent` package.
+# "Reveal the pane with this id." Pane-INSTANCE-addressed: the container that HOLDS the pane claims
+# it and activates it (a tabs group brings that tab forward; a split focuses the pane). A container
+# that does not hold the pane DECLINES, so the routed claim/decline walk reaches the one that does.
+#
+# The payload is a pane's stable `^:` id (a `surfaceId` from the open-surfaces index), not a type or
+# a config — so it names an EXISTING mounted pane and never mounts anything. Distinct from
+# `show-pane-intent` (reveal-or-CREATE, addressed by a bare TYPE) and `open-intent` (open a FILE,
+# ambient to the focused group): this focuses one specific already-open surface, wherever it lives.
+#
+# NOT agent-firable: the pane id is an internal runtime handle, not a benign type name.
+#
+# Routing metadata rides the type-def: routed + ambient.
+#: Reveal (focus / activate) an already-mounted pane by its id. Routed + ambient: the container that
+#: holds the pane claims and activates it; every other container declines.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+fields:
+  #: The stable `^:` id of the pane to reveal — a `surfaceId` from the open-surfaces index.
+  paneId: String

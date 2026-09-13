@@ -1,0 +1,20 @@
+# A row in <au-command-palette>: an id the consumer keys the action on, a label to match/show, and
+# optional icon / shortcut / detail / group / danger. Serializable DATA — never a framework element.
+#: One command-palette row: id (keys the action), label (matched + shown), optional icon (au-icon glyph
+#: name), a keymap shortcut (rendered as an au-kbd cluster), a secondary detail line, a group label
+#: (clusters rows under a section header), and a danger flag (a destructive verb, danger ink under the cursor).
+fields:
+  #: Stable id the consumer maps back to an action on `au-run` (e.g. a file path).
+  id: String
+  #: The text shown + fuzzy-matched against the query; the typed run is raised by ink weight.
+  label: String
+  #: Optional secondary text (e.g. the full path under a basename).
+  detail?: String
+  #: Optional leading glyph — an au-icon name (so rows align).
+  icon?: String
+  #: Optional keymap string (`Mod-P`) rendered as a trailing au-kbd cluster.
+  shortcut?: String
+  #: Optional group label — rows sharing one cluster under a section header (grouped variant).
+  group?: String
+  #: Marks a destructive verb — danger ink shows only when the row is the active cursor.
+  danger?: Boolean

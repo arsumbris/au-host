@@ -1,0 +1,24 @@
+# The SHIPPED placeholder-projection: the empty-slot content picker. A concrete `placeholder-projection`
+# (host-sdk owns the kind); an author ships their own placeholder (a recents launcher, a dashboard, a
+# blank) the same way. What an empty slot resolves to when nothing else is configured and this is the sole
+# installed placeholder.
+
+# It DECLARES `handles: open-intent`, so it is a NORMAL focus-MRU handler: opening a file into an empty
+# slot routes here by ordinary rules and fills the slot in place (no dead-end), via the placement seam
+# (`setPaneContent` → `setSlotContent`), never a bespoke fill verb. The viewer is resolved through the
+# ladder (`resolveViewer`), so the type is never hardcoded.
+extends: placeholder-projection::au-host-sdk
+fields: {}
+meta:
+  # Loadable-code metadata: `entry` is relative to this package root, so the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  - type: projection-presentation-meta::au-host-sdk
+    title: Pick content
+  # The intents this placeholder HANDLES. Declaring open-intent makes it a normal open TARGET in the
+  # focus-MRU walk; the runtime handler binds at mount. A placeholder that declares none is simply not
+  # an open target (an open there falls to the open-chooser floor).
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"

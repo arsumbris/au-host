@@ -1,0 +1,28 @@
+# A sandwich with a file-tree at left and editors at center and right.
+# Float the center editor and wrap the left region to invalidate the clean inverse.
+# Dock into the occupied right slot: preserve its editor and group it with the incoming pane.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^edC]]"
+    right: "[[^^edR]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: edC
+    type: editor-pane::editor
+    file: sample.md
+  - ^: edR
+    type: editor-pane::editor
+    file: sample.md

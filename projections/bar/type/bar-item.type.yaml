@@ -1,0 +1,18 @@
+# A bar's placement of ONE widget. bar's OWN type — NOT a `mountable` / `projection`.
+
+# A bar has no placement seam: you do not drag panes into or out of a bar, it lays out chrome it
+# aggregates or is authored with. So its regions are `bar-item[]`, and the slot walker skips a bar BY
+# TYPE — a `bar-item` is neither a `mountable` (content) nor a `container-node` (structure), so
+# `deriveContainerSchemas` never treats a bar as a layout container and the pool never flattens its
+# items. The widget a bar item renders IS a projection, held in `view`; bar mounts it itself.
+
+
+
+fields:
+  #: The widget this item renders — a projection instance (inline or referenced). bar mounts it via
+  #: `host.children.mount`; it is NOT a re-parentable layout child, so it lives inside `bar-item`
+  #: rather than being a `mountable*` the walker would follow.
+  view: projection::au-host-sdk&
+  #: bar's per-item overflow policy: `false` PINS the item visible (never bunches into "+N more").
+  #: Absent = eligible to overflow. bar's own placement config, kept off the widget itself.
+  overflowEligible?: Boolean

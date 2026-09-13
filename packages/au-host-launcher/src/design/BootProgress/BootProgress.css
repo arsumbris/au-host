@@ -1,0 +1,159 @@
+/* BootProgress — the startup flow made visible: a slim eased progress track over a cross-fading status
+ * line. All motion rides the motion tokens (--au-m-* / --au-e-*); no hardcoded ms. Monochrome — the
+ * fill is ink, the sweep a hairline sheen; hue appears only on the ready dot (drawn by the consumer).
+ * Tokens only; the sole raw values are hairline heights (1–2px) and the sweep geometry (a gradient
+ * band width), which are texture, not spacing decisions. */
+
+.au-boot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-3);
+  inline-size: 100%;
+}
+
+/* ── track ──────────────────────────────────────────────────────────────────────────────────────── */
+.au-boot__track {
+  position: relative;
+  block-size: 3px;
+  inline-size: 100%;
+  overflow: hidden;
+  border-radius: var(--au-radius-pill);
+  background: var(--au-line-1);
+  box-shadow: var(--au-elev-3-line);
+}
+
+/* known-fill — EASES between step fractions with the transport curve (on-screen movement). */
+.au-boot__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  block-size: 100%;
+  border-radius: var(--au-radius-pill);
+  background: var(--au-ink-2);
+  transition: inline-size var(--au-m-slow) var(--au-e-move);
+}
+
+/* at ready/entering the fill brightens to primary ink — the "served" tell. */
+.au-boot[data-done] .au-boot__fill {
+  background: var(--au-ink-1);
+  transition:
+    inline-size var(--au-m-slow) var(--au-e-move),
+    background var(--au-m-base) var(--au-e-std);
+}
+
+/* indeterminate sweep — a soft ink-sheen band travelling the track while the engine is working. Real
+ * movement layered over the known fraction so an unknown-length step still reads as "progressing". */
+.au-boot__sweep {
+  position: absolute;
+  inset-block: 0;
+  inline-size: 38%;
+  border-radius: var(--au-radius-pill);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--au-ink-1) 55%, transparent),
+    transparent
+  );
+  animation: au-boot-sweep var(--au-m-cinema) var(--au-e-move) infinite;
+  will-change: transform;
+}
+
+@keyframes au-boot-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+/* ── status: the cross-fade stack ───────────────────────────────────────────────────────────────── */
+.au-boot__status {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--au-space-3);
+}
+
+/* all lines occupy ONE grid cell so they overlap; only the active one is opaque → a real cross-fade
+ * (the outgoing fades out as the incoming fades in, never a pop). Height holds two rows. */
+.au-boot__lines {
+  display: grid;
+  min-block-size: calc(var(--au-lh-base) + var(--au-lh-xs));
+  min-inline-size: 0;
+}
+
+.au-boot__line {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--au-space-0-5);
+  min-inline-size: 0;
+  opacity: 0;
+  transform: translateY(var(--au-space-1));
+  transition:
+    opacity var(--au-m-base) var(--au-e-soft),
+    transform var(--au-m-base) var(--au-e-soft);
+  pointer-events: none;
+}
+
+.au-boot__line[data-active] {
+  opacity: 1;
+  transform: none;
+}
+
+.au-boot__label {
+  color: var(--au-ink-1);
+  font-family: var(--au-font-sans);
+  font-size: var(--au-t-base);
+  line-height: var(--au-lh-base);
+  font-weight: var(--au-w-medium);
+  letter-spacing: var(--au-ls-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.au-boot__detail {
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-xs);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* step counter — quiet mono, tabular so digits don't jitter as the step advances. */
+.au-boot__count {
+  flex: none;
+  align-self: flex-start;
+  color: var(--au-ink-4);
+  font-family: var(--au-font-mono);
+  font-size: var(--au-t-xs);
+  line-height: var(--au-lh-base);
+  letter-spacing: var(--au-ls-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.au-boot__count-sep {
+  color: var(--au-ink-5);
+}
+
+/* Keep the progress indicator visible without its looping sweep in reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .au-boot__sweep {
+    animation: none;
+    opacity: var(--au-opacity-faint);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-boot__fill,
+  .au-boot[data-done] .au-boot__fill,
+  .au-boot__line {
+    transition: none;
+  }
+}

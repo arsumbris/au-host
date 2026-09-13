@@ -1,0 +1,30 @@
+{
+  "name": "@au-projections/file-tree",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo file-tree --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arsumbris/au-component-catalog": "workspace:*",
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/component-contract": "workspace:*",
+    "@arsumbris/container-kit": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/preview-content": "link:../../packages/preview-content",
+    "@arsumbris/selection": "link:../../packages/selection",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

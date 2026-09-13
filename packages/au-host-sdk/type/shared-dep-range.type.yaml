@@ -1,0 +1,15 @@
+# Owned by au-host-sdk. One entry in a projection's `sharedDeps`: a shared-dep SPECIFIER plus
+# the semver RANGE the projection's code was built against. The host mounts the projection when
+# the SERVED version of `specifier` satisfies `range` (npm peer-deps style).
+#
+# A plain record type, NOT a meta type — it is the value shape of a field inside
+# `projection-runtime-meta`, so it needs no `au.engine.meta` mixin (only the type used in a
+# `meta:` POSITION does). The engine has no open-keyed map, so shared dependency ranges
+# are modelled as a list of these records.
+fields:
+  # The shared-dep specifier, one of the host's served set (`@arsumbris/au-host-sdk`, `react`, ...).
+  # Matches a `SHARED_DEP_SPECIFIERS` entry in `@arsumbris/au-host-sdk/shared-deps`.
+  specifier: String
+  # The semver range the projection was built against, e.g. `^6`. The ABI contract, honest only
+  # once the SDK carries real semver (a release blocker); DORMANT internally.
+  range: String

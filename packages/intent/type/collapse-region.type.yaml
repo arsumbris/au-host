@@ -1,0 +1,26 @@
+# STAND-IN type-def, owned by the `intent` package.
+# "Collapse (or expand) MY region." Fired by a region occupant for ITSELF — the rail's
+# collapse toggle is the first firer — and the enclosing container that owns collapsible
+# regions (a sandwich) narrows or expands the region holding the firer. No fields: the firer
+# is implicit (the channel delivers the firer's identity, and the handler maps it to its own
+# region via `nodeIdOf`).
+#
+# Routing metadata rides the type-def (routed + firer-relative), like `promote-intent`: the
+# firer-relative walk delivers to the firer's OWN enclosing handler (its ancestor sandwich),
+# never a sibling subtree. A container with no collapsible region declines, and the walk
+# continues outward.
+#: Toggle the collapse of the FIRING view's region. Fired by a region occupant for ITSELF
+#: (e.g. the rail's collapse toggle); the enclosing sandwich narrows/expands the region that
+#: holds the firer. No payload: the firer is implicit. Routed + firer-relative.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: firer-relative
+  # NOT agent-firable, the same structural reason as `promote-intent`: `firer-relative` means
+  # "collapse the region holding ME", and an agent fires from the socket at the ROOT with no node
+  # identity, so there is nothing for the intent to be relative to. Declared `false` so the answer
+  # is on the record rather than falling out of the default.
+  - type: intent-agent-meta
+    firable: false
+fields: {}

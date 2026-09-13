@@ -1,0 +1,25 @@
+{
+  "name": "@au-projections/agent-sessions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo agent-sessions --module au-host-sdk=@arsumbris/au-host-sdk --module au-mcp-sdk=@arsumbris/au-mcp-sdk/generated --out src/generated.ts"
+  },
+  "dependencies": {
+    "@arsumbris/au-host-app": "workspace:*",
+    "@arsumbris/au-host-sdk": "workspace:*",
+    "@arsumbris/intent": "link:../../packages/intent",
+    "@arsumbris/selection": "link:../../packages/selection",
+    "yaml": "^2.8.1",
+    "@arsumbris/au-host-launcher": "workspace:*",
+    "@arsumbris/au-mcp-sdk": "link:../../../au-mcp-sdk"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}

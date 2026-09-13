@@ -1,0 +1,36 @@
+# Host-sdk-owned routing configuration carried by composition.intent-routing.
+# Contains ambient defaults, explicit wires, per-node reachability and the initial focus seed.
+
+# A COMPOSITION-CONFIG ASPECT: it EXTENDS `composition-config` (same-repo, host-sdk-owned) so
+#   - `readSubtypes(composition-config)` still returns the aspect family (discoverable, open);
+#   - a projection's edit right stays bounded by the UNCHANGED `edits: type<composition-config>*`
+#     — the switchboard grants itself `edits: [[intent-routing::au-host-sdk]]` and the bound matches.
+# Only THIS bundle extends composition-config; the element records (intent-wire / intent-default /
+# intent-reach-rule) are ordinary list elements, never gated directly. Gating is WHOLE-ASPECT
+# (coarse): "edit routing" covers wires + defaults + reach + initial-focus together.
+
+#
+
+
+
+extends: composition-config
+#: The routing-config bundle a composition carries as its `intent-routing` field: ambient
+#: defaults, explicit wires, per-node reachability, and the initial-focus seed.
+fields:
+  #: Rung 3 — per ambient intent, its target role-kinds + scope mode. The host reads these
+  #: off the composition, resolves each rule's roles to mounted nodes by type-closure, and
+  #: scopes the focus-MRU candidate walk to them.
+  defaults?: intent-default[]
+  #: Rung 1 — explicit per-connection routings (the switchboard's stored form). A wire names
+  #: specific pool RECORDS, overriding an intent's default reach for that one (source, intent)
+  #: connection. Where no wire exists, default routing is untouched.
+  wires?: intent-wire[]
+  #: Rung 2 — per-(node, intent) ambient reachability. A rule can CLOSE a handling node to
+  #: ambient / MRU delivery (`wire-only`), so it receives that intent ONLY via an explicit wire.
+  #: A composition with none leaves every handling node ambient-reachable (today's behaviour).
+  reach?: intent-reach-rule[]
+  #: The role focused on load, so the FIRST ambient open lands deterministically — a pinned
+  #: EMPTY editor group (never focused) can be the default open target. A projection KIND
+  #: def-ref (same-repo bare); if several nodes play it, the first by tree order seeds the
+  #: focus channel.
+  initial-focus?: type<projection>*

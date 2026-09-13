@@ -1,0 +1,16 @@
+# <au-kbd> — a keyboard-shortcut chip: readable mono notation, a shared minimum keycap height and a soft inset hairline.
+#: <au-kbd> — a keyboard-shortcut chip. Pass a keymap string via `keys` (`Mod-Shift-o`) — formatted
+#: through the shortcut resolver (`Mod` → ⌘ on macOS, Ctrl elsewhere) — or slot literal content. A mono
+#: glyph on the base surface tone with a soft inset hairline. Formatted keys have a space-0-5 gap
+#: between segments; literal slotted content keeps its own spacing. Non-interactive.
+extends: ui-component::component-contract
+fields:
+  #: A keymap string (`Mod-Shift-o`), rendered as formatted keystroke glyphs. Omit to slot literal content.
+  keys?: String
+  #: Force macOS glyphs (⌘ / ⌥). Defaults to platform detection.
+  mac?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [default]
+    parts: [kbd]
+    preview: '<au-kbd keys="Mod-k" mac></au-kbd> <au-kbd keys="Mod-Shift-o" mac></au-kbd> <au-kbd keys="Enter" mac></au-kbd> <au-kbd>Esc</au-kbd>'

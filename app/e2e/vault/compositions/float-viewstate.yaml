@@ -1,0 +1,26 @@
+# FLOAT-VIEWSTATE fixture — a sandwich (left: file-tree, center: editor on the LONG file) so the editor
+# SCROLLS and is FLOATABLE. The float-viewstate E2E scrolls the main editor, floats it into a new window,
+# and asserts the scroll RESTORED there — the cross-window (FLOATED) lock for the view-state
+# round-trip: flush-on-unmount → main-owned store → refresh-node-on-mount → restore.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  # Editor is LEFT (first in DOM) so the e2e's `.first()` "Pane actions" floats the EDITOR, not the tree.
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^ed]]"
+    center: "[[^^tree]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: view-state-long.md
+  - ^: tree
+    type: file-tree::file-tree

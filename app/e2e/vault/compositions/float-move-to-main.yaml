@@ -1,0 +1,24 @@
+# FLOAT-MOVE-TO-MAIN fixture — a sandwich of two file-trees, neither a viewer. Clicking a file
+# fires open-intent nothing claims → the open-floor "Open in a new window" opens a FRESH editor (via
+# `openInWindow`, so it has NO clean-inverse origin). Moving that editor back onto the OCCUPIED center slot
+# must WRAP it with the file-tree there — never lose it (the data-loss the wrap-edit truncation caused).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^treeL]]"
+    center: "[[^^treeC]]"
+  - ^: treeL
+    type: file-tree::file-tree
+  - ^: treeC
+    type: file-tree::file-tree

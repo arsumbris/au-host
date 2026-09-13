@@ -1,0 +1,34 @@
+#: A container that arranges its N children SPATIALLY (recursive splits, free 2D placement) rather than
+#: STACKING them — a grouping container's spatial sibling. A WRAP TARGET (the wrap action's "Arrange"
+#: family), but deliberately NOT a `grouping-container`. Identity only: what a container IS, like
+#: container-projection.
+# Owned by au-host-sdk. A KIND (an abstract subtype of container-projection), the SIBLING of
+# `grouping-container` — NOT a subtype of it.
+
+# WHY A SIBLING, NOT A SUBTYPE OF grouping-container. Two questions are DECOUPLED here, because they were
+# one predicate (`isGroupingKind`) and coupling them breaks a live behaviour:
+#  - "is-a-stack-group" (does a center-drop ADD a child here, and is it the drop's new-group default) —
+#    that is `grouping-container` (tabs, column), and the substrate's drop path reads it. UNCHANGED.
+#  - "wrap-target" (does the WRAP action offer it) — that is the UNION grouping ∪ spatial (tabs, column,
+#    bento, canvas). The wrap action reads the union.
+# A spatial container (bento, canvas) is a wrap target but is NOT a stack-group: a center-drop onto a bento
+# still WRAPS (into a stack group), it does not add-into the bento. Making spatial a SUBTYPE of grouping
+# would flip `isGroupingKind` for bento and change that drop behaviour. So spatial is a SIBLING: it extends
+# `container-projection` directly, the drop's `isGroupingKind`/`groupingForKind` stay grouping-only, and the
+# wrap action resolves over a separate union registry.
+
+# THE MODULE CONTRACT is the SAME as grouping-container's: a `spatial-container` module ALSO exports
+# `buildGroup(children: { id, instance }[]) => <its own config>`, which mints an instance holding the
+# children (each child's stable id landing as its `^:` so a moved terminal or editor keeps its session and
+# view-state). The substrate CALLS that export — it never authors the container's own schema. bento's build
+# is a two-leaf branch (a split); canvas's is free placement. Discovered by `readSubtypes(spatial-container)`
+# and duck-type-enforced exactly like grouping-container's build.
+
+# SHELLS (sandwich, dock, bar, rail) declare NEITHER kind (they hold role-named fixed slots, not
+# interchangeable growable content), so they are excluded from wrap BY TYPE.
+
+
+
+abstract: true
+extends: container-projection
+fields: {}

@@ -1,0 +1,28 @@
+# <au-list-row> — the generic dense row every list composes.
+#: <au-list-row> — the generic dense row: an optional `leading` slot, a `primary` label + optional
+#: `secondary` line, an optional `meta` slot, an optional `trailing` slot. `interactive` opts into the
+#: hover-lift + focus ring; `selected` rests on a surface tint. Emphasis is surface + ink, never a rail.
+extends: ui-component::component-contract
+fields:
+  #: Wrap primary and secondary text without truncation. Keep long context in secondary; meta is for compact values.
+  wrap?: Boolean
+  #: The primary label (ellipsised on overflow).
+  primary?: String
+  #: An optional secondary line under the primary.
+  secondary?: String
+  #: Opt into hover / focus affordances + keyboard focusability.
+  interactive?: Boolean
+  #: Resting selected state — a surface lift (never a leading bar).
+  selected?: Boolean
+  #: Dim + non-interactive.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: [leading, meta, trailing]
+    parts: [leading, primary, secondary, meta, trailing]
+    preview: |
+      <div style="width:240px;display:flex;flex-direction:column">
+        <au-list-row interactive primary="composition.ts"><au-icon slot="leading" name="file-text" size="sm"></au-icon></au-list-row>
+        <au-list-row interactive selected primary="loader.ts"><au-icon slot="leading" name="file-text" size="sm"></au-icon></au-list-row>
+        <au-list-row interactive primary="mount-host.ts" secondary="the projection capability surface"><au-icon slot="leading" name="file-text" size="sm"></au-icon></au-list-row>
+      </div>

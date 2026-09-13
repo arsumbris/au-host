@@ -1,0 +1,49 @@
+# Owned by component-contract. The INTERFACE for `<au-pagination>` — the table / list FOOTER.
+#
+# The type NAME is the custom-element tag. Fields are the props (data-in); the meta block carries
+# events-out + states. A stateless, CONTROLLED footer: the consumer owns the model (`page` +
+# `pageCount`, optional `total` / `pageSize`); the control owns the layout + the page-window math and
+# composes au-icon-button / au-select / au-icon / au-skeleton plus the one owned page-number cell.
+#
+# MONOCHROME. The current page reads as a surface-LIFT chip + an ink jump + a symmetric hairline ring
+# — NEVER a coloured fill, NEVER a leading / left bar. Numerals ride tabular figures so the row is
+# pixel-stable as you page. Emits `au-page-change` (detail `{ page }`, clamped, never the current
+# page) and `au-page-size-change` (detail `{ size }`), both composed + bubbling.
+#: The interface for <au-pagination>: a controlled table/list footer — a range/count summary, a
+#: windowed pager (prev/next + numbered cells with `…`, or a Page X of Y chip), and an optional
+#: rows-per-page au-select. Variants numbered / cursor / compact; sizes comfortable / dense. Emits
+#: `au-page-change {page}` + `au-page-size-change {size}`.
+extends: ui-component::component-contract
+fields:
+  #: The 1-based current page.
+  page?: Number
+  #: Total number of pages.
+  pageCount?: Number
+  #: `numbered` (default) — page cells + `…`; `cursor` — a Page X of Y chip; `compact` — tight, right-aligned.
+  variant?: [numbered, cursor, compact]
+  #: Bar height. `comfortable` (40) or `dense` (32).
+  size?: [comfortable, dense]
+  #: Total row count — enables the left summary. Absent → no summary.
+  total?: Number
+  #: The summary form: `range` (needs pageSize) or `count`. Default range when pageSize is set, else count.
+  summary?: [range, count]
+  #: Rows per page — enables the right-hand rows-per-page au-select.
+  pageSize?: Number
+  #: The offered page sizes. Default [10, 20, 50, 100].
+  pageSizeOptions?: Number[]
+  #: Numbered variant — pages either side of the current cell. Default 1.
+  siblingCount?: Number
+  #: Numbered variant — pages pinned at each end. Default 1.
+  boundaryCount?: Number
+  #: Show the «/» first / last jump (numbered / cursor). Default false.
+  showFirstLast?: Boolean
+  #: Swap the summary + page cells for skeletons while a page fetches; the bar height stays frozen.
+  loading?: Boolean
+  #: Accessible name for the pager nav.
+  label?: String
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-page-change, au-page-size-change]
+    states: [loading]
+    parts: [summary, pager, page, indicator, ellipsis]
+    preview: '<au-pagination page="3" page-count="24" total="1204" page-size="50" summary="range"></au-pagination>'

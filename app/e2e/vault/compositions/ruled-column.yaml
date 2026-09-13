@@ -1,0 +1,25 @@
+# A column with an inline ruled slot whose position ID differs from its editor occupant ID.
+# Floating the editor resolves the occupant to the slot position before extraction.
+# A bare slot has matching IDs and cannot exercise this distinction.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^col]]"
+    ^: w
+  - ^: col
+    type: column::column
+    items:
+      - ^: ruledslot
+        type: column-slot::column
+        label: "Pinned"
+        child: "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

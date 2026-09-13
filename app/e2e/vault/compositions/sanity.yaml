@@ -1,0 +1,13 @@
+# SANITY fixture — a window whose content is a single editor pane on a known file. The loop-sanity E2E
+# test asserts the app boots, auto-mounts this composition, and the editor pane renders for sample.md.
+type: composition::au-host-sdk
+windows:
+  - "[[^^au-window-primary]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^main]]"
+    ^: au-window-primary
+  - ^: main
+    type: editor-pane::editor
+    file: sample.md

@@ -1,0 +1,21 @@
+# type-instances IS a projection subtype. It picks a type and lists its
+# instances (the `instances_of` read) in a filterable table — rows are instances,
+# columns are the type's closure fields, filtered by an interactive clause builder.
+# No durable config yet (the picked type + clauses are ambient UI state, not saved);
+# `meta` declares its loadable code, resolved via the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Instances
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

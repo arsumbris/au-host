@@ -1,0 +1,31 @@
+# dock IS a projection subtype (the instance-is-config model) AND a CONTAINER projection:
+# it edge-anchors child projections (typically bars) around a fill CENTER (typically a bento).
+# A first-party container peer to bento, swappable. "Chrome" is just a dock at the root with
+# bars on its edges + a bento center (the host-compositor model). corner-ownership default:
+# top/bottom span full width (own the corners), left/right sit between them.
+extends: container-projection::au-host-sdk
+fields:
+  # each edge holds a LIST of child positions (multiple bars per edge, in outward order); all
+  # optional. A child is typically a `bar` (set its orientation to match the edge).
+
+  # EACH POSITION IS A UNION: a bare `mountable*` child reference, or a `container-slot` when the
+  # position has something to say. dock declares NO slot subtype of its own — it sizes its edges by CSS grid and has
+  # neither a per-position size nor a collapse — so it names the shared base directly and an author
+  # can only write a field dock actually acts on.
+
+  top?: <mountable::au-host-sdk* | container-slot::au-host-sdk>[]
+  bottom?: <mountable::au-host-sdk* | container-slot::au-host-sdk>[]
+  left?: <mountable::au-host-sdk* | container-slot::au-host-sdk>[]
+  right?: <mountable::au-host-sdk* | container-slot::au-host-sdk>[]
+  # the fill center: ONE child (typically a bento) BY REFERENCE (`mountable*`), or a ruled slot.
+  center?: <mountable::au-host-sdk* | container-slot::au-host-sdk>
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The intents dock HANDLES (typed capability). `reposition` is dock's OWN intent
+  # (same repo, bare ref). handle() is gated by this declaration.
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[reposition]]"

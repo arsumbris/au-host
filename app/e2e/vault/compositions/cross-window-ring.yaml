@@ -1,0 +1,35 @@
+# A declared second window with a sandwich and an editor in an au-pane-frame.
+# Focusing its center editor displays that window’s active-pane ring; moving focus
+# to the side rail clears it. Main has its own editor so both window states are observable.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w0]]"
+  - "[[^^w1]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed0]]"
+    ^: w0
+  - type: window::au-host-sdk
+    content: "[[^^sw]]"
+    ^: w1
+  - ^: ed0
+    type: editor-pane::editor
+    file: refs-sample.md
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^edC]]"
+    right: "[[^^edR]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: edC
+    type: editor-pane::editor
+    file: sample.md
+  - ^: edR
+    type: editor-pane::editor
+    file: other.md

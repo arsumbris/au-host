@@ -1,0 +1,13 @@
+# GIT-ACTIVITY fixture — a window whose content is a bare aup-git-activity pane. The vault sits inside
+# the au-host working tree, so the recent_commits read returns a non-empty stream; the test asserts the
+# render + expand + file-open-intent path end-to-end in the running app.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ga]]"
+    ^: w
+  - ^: ga
+    type: aup-git-activity::aup-git-activity

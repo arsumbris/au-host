@@ -1,0 +1,13 @@
+# Repo identity + deps (au.engine.repo).
+#
+# au-avatar ships TWO things from one package: a standalone `<au-avatar-sphere>` custom element
+# (consumed by the launcher, source-side) AND a pane-projection that mounts it (built to dist/,
+# declared by type/aup-avatar.type.yaml). It is a thin placeholder easter-egg, not a design-system
+# atom, so the element is bespoke and self-registering — NOT a member of the swappable component set.
+#
+# One type DEP: `au-host-sdk` for the pane-projection parent + the runtime-meta the type-def claims.
+type: au.engine.repo::au-engine
+name: au-avatar
+description: the avatar sphere — a bespoke custom element plus a pane-projection that mounts it (placeholder)
+deps:
+  - name: au-host-sdk

@@ -1,0 +1,33 @@
+# The `aup-workspace-sidebar` container-projection. A VERTICAL frame — top | body | foot — where the top and foot
+# are CHROME the rail renders (the OS-lights reserve, the workspace switcher, settings + a
+# theme toggle), and the BODY is the one placement slot, holding a container (a `column` that stacks
+# the sidebar's views).
+
+# A PEER container over the shared substrate (like sandwich / column): PaneProjection mounts the body
+# child, ContainerPlacement lets the shared router re-parent it, a drop dialect declares its single
+# drop zone. It is a container so its own slot goes bare (no parent masthead) and it owns its whole
+# surface — the sidebar frame.
+
+# The body holds ONE child by REFERENCE (`mountable*`, `[[^^id]]` into the pool), which may itself be a
+# container. An inline projection there is a type error.
+
+
+extends: container-projection::au-host-sdk
+fields:
+  #: The one region — the sidebar's view area. Holds a container (a `column`) by reference; the rail
+  #: delegates all re-parenting to it and the column stacks views inside. Absent = an empty rail.
+  #: A bare `mountable*` — a containment position with no per-slot rules. `mountable` is the marker the
+  #: pool walk descends by; widen to `<mountable* | container-slot>` if the body ever needs `fixed` /
+  #: `admits` (the shape dock / tabs use).
+  body?: mountable::au-host-sdk*
+meta:
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+  # The rail can render at a COMPACT width: below its own ~140px narrow threshold it folds to a ~48px
+  # icon-spine (its mark + foot gear), staying mounted. Declaring it lets an enclosing container (a
+  # sandwich side) size the region to 48 and get the spine, instead of hiding the rail. 48 sits below
+  # NARROW_THRESHOLD_PX (140) so sizing there actually trips the spine; the rail owns both numbers.
+  - type: breakpoints-meta::au-host-sdk
+    breakpoints:
+      - width: 48

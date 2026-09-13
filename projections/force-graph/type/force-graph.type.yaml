@@ -1,0 +1,67 @@
+#: A force-directed workspace map of files, references and type relationships.
+# Files are nodes; resolved links and type relationships are edges.
+# The configuration is a shareable view, read by configToScope in src/graph-source.ts.
+# Currently every scope renders the global graph; local/saved scope and query filtering
+# are retained in config but are not applied by the renderer.
+# `meta` declares loadable code, resolved through the type owner.
+extends: pane-projection::au-host-sdk
+fields:
+# Requested graph scope: global, local, or saved. Defaults to global.
+  # The renderer currently uses the global graph for every scope.
+  scope?: [global, local, saved]
+# Requested local depth. Retained in config but not currently applied.
+  depth?: Number
+# Filter expression. Retained in config but not currently applied to the graph.
+  query?: String
+  # COLOUR rule for nodes: `none` (one ink), `repo` (a hue per source member), or `kind` (a hue per
+  # filetype: note / instance / type-def / asset). The in-pane controls toggle it and write it back;
+  # a composition ships the authored default. Absent = kind.
+  colorBy?: [none, repo, kind]
+  # NODE-SIZE rule: `degree` (radius grows with connectivity — the default) or `uniform` (every node
+  # the same). Absent = degree.
+  sizeBy?: [degree, uniform]
+  # Draw the isolated (degree-0) files, or hide them. Absent = show (the `link_graph` includes them,
+  # so a floating-orphan view is the default). The controls toggle it.
+  showOrphans?: Boolean
+  # EDGE colour: `uniform` (one faint line) or `kind` (a hue per reference kind: field / contributing /
+  # navigational). Absent = uniform.
+  edgeColorBy?: [uniform, kind]
+  # Background edge opacity multiplier (0–1), default 1. Hover emphasis is separate.
+  edgeOpacity?: Number
+# Requested selection tracking for local scope; not currently applied.
+  tracksSelection?: Boolean
+  # LABELS — how note titles show over nodes: `off`, `hover` (only the hovered node, default),
+  # `zoom` (prioritized labels as you zoom in), or `always`. The hovered node always shows its title
+  # unless `off`. A RENDER control (read directly by the projection), not part of the scope. SEALED.
+  labels?: [off, hover, zoom, always]
+  # Persistent open/selected filename opacity; 0 hides, default 1.
+  openLabelOpacity?: Number
+  # Hovered node neighbor filename opacity; 0 hides, default 0.
+  adjacentLabelOpacity?: Number
+  # Selection presentation defaults; independently adjustable in Graph settings.
+  highlightOpen?: Boolean
+  panToSelection?: Boolean
+  pulseSelection?: Boolean
+  # Target camera scale when following selection; default 0.7.
+  selectionZoom?: Number
+  # Force and motion settings, read by the renderer via `paramsFromConfig`.
+  # Absent falls back to `DEFAULT_PARAMS`; a composition can override per-view.
+  ease?: Number # hover neighbourhood ease (0.008 slow … 0.3 instant)
+  dimDepth?: Number # how far out-of-focus recedes on hover (0 … 0.9)
+  nodeScale?: Number # node radius multiplier (0.5 … 2)
+  charge?: Number # repulsion strength (−120 … −10)
+  linkDistance?: Number # edge rest length (10 … 120)
+  linkStrength?: Number # edge stiffness (0 … 1)
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    customTokenEntry:
+      - ./graph.tokens.css
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

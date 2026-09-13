@@ -1,0 +1,44 @@
+# radial-tree IS a projection subtype : a `pane-projection` that renders a file's
+# REFERENCE NEIGHBORHOOD as a radial tree. Its fields ARE the view config; an instance IS a
+# config. Generalized beyond MOC — the root is ANY file, and the tree is that file's inbound /
+# outbound references walked N hops (the schema-20 `neighborhood` read).
+
+extends: pane-projection::au-host-sdk
+fields:
+  # Optional focal file as a vault path. Without a configured root, selection or an
+  # open intent supplies it. The current file API accepts paths rather than typed refs.
+  root?: String
+  # Hop count of the walk (default 1 at runtime). A deeper walk needs `kinds`, supplied by the view.
+  depth?: Number
+  # Which edges to walk: `out` (default) | `in` | `both`. `both` splits the two hemispheres.
+  direction?: String
+  # Two independent linkage axes (authored defaults; runtime toggles override per session).
+  # FOLLOW: consume external file-open — re-seed when you navigate elsewhere (default true).
+  # DRIVE: fire file-open on re-root — open the new focal file elsewhere too (default true).
+  # Both false = LOCKED (isolated). Node-click always re-roots; the axes gate only cross-view linkage.
+  follow?: Boolean
+  drive?: Boolean
+meta:
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7
+    # radial-tree's own themeable tokens (--au-radial-tree-*), declared in a declarations-only
+    # sheet the host eager-loads at document level for theming-pane discovery even when unmounted.
+    customTokenEntry:
+      - ./radial-tree.tokens.css
+  # The intents this projection HANDLES (typed capability, discovered in the
+  # `subtypes('projection')` pass; the runtime handler binds at mount). radial-tree handles
+  # open-intent: an open fired at it (with the radial-tree focused) re-seeds its root on that
+  # file — this is "openable from other sources". The claim/decline + MRU-focus routing decides
+  # when the radial-tree wins an ambient open vs an editor.
+
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[open-intent::intent]]"
+  # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
+  # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
+
+  - type: fires-intent-meta::au-host-sdk
+    fires:
+      - "[[open-intent::intent]]"

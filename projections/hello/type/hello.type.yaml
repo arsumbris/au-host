@@ -1,0 +1,9 @@
+# hello IS a projection subtype. Throwaway example, no config; `meta`
+# declares its loadable code, read via the type owner.
+extends: pane-projection::au-host-sdk
+fields: {}
+meta:
+  # hello is TypeScript over the SDK, built to./dist/index.js (like every projection).
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 7

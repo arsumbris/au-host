@@ -1,0 +1,24 @@
+# <au-toggle-chip> — an interactive filter chip: a toggleable pill carrying a tone + optional count.
+#: <au-toggle-chip> — an interactive filter chip. The INTERACTIVE sibling of the display-only au-chip:
+#: a toggleable pill (pressed / unpressed) with a status-or-advisory tone and an optional trailing
+#: count. Emits au-toggle {pressed} when activated. For multi-select view filters — a severity facet,
+#: an origin-kind facet — where each chip toggles independently (unlike the single-select
+#: au-segmented-control).
+extends: ui-component::component-contract
+fields:
+  #: The chip text.
+  label?: String
+  #: The tone signal — the same status/advisory range as au-status-dot. Neutral ink by default.
+  tone?: [ink, ok, warn, danger]
+  #: An optional trailing count.
+  count?: Number
+  #: Whether the filter is active (on). Reflected.
+  pressed?: Boolean
+  #: Disable interaction.
+  disabled?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-toggle]
+    states: [pressed, disabled]
+    parts: [chip, label, count]
+    preview: '<au-toggle-chip label="error" tone="danger" count="3" pressed></au-toggle-chip> <au-toggle-chip label="warning" tone="warn" count="12"></au-toggle-chip> <au-toggle-chip label="hint" count="1"></au-toggle-chip>'

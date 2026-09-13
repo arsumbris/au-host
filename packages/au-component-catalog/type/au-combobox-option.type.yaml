@@ -1,0 +1,18 @@
+# One option in an <au-combobox>. Serializable DATA — never a framework element (the data-driven rule).
+#: One <au-combobox> option: value (keys select + matches the field value), label, an optional leading
+#: glyph (an au-icon NAME, or a raw emoji/initial string), an optional muted secondary line, an
+#: optional right-aligned mono meta, and an optional per-item disabled flag.
+fields:
+  #: Stable value the consumer maps back to on `au-change` and matches against the combobox value.
+  value: String
+  #: The option label, shown in the row and (single-select) echoed in the field.
+  label: String
+  #: Optional leading glyph: an au-icon NAME (e.g. `file-text`) rendered as an icon, else a raw string
+  #: (an emoji flag, an initial) rendered verbatim.
+  icon?: String
+  #: Optional muted second line (email / role / path) — makes a two-line row.
+  secondary?: String
+  #: Optional right-aligned mono meta (dial code / count / shortcut).
+  meta?: String
+  #: Disable just this option (it stays visible but is not selectable).
+  disabled?: Boolean

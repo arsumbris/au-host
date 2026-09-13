@@ -1,0 +1,41 @@
+# Owned by component-contract. The INTERFACE for `<au-drawer>` — the sheet of the overlay elevation family.
+#
+# au-modal's edge-docked sibling: an edge-anchored panel that slides in from a shell edge (transform
+# only) to host a form or an inspector without leaving context. Two postures share one surface — `modal`
+# (scrim + elev-5 + glass) for forms/flows, `flush` (elev-3, no scrim, the page stays interactive) for
+# read-alongside inspectors. The docking edge is the neutral inset hairline — never a coloured rail.
+#
+# The LOOK only (au-modal's split): a host surface / consumer owns the site + focus-trap + lifecycle and
+# toggles `open`. The panel is ALWAYS mounted and CSS-slid, so it animates both ways off one `open`
+# toggle. Claims NO overlay itself — no body portal; `:host{position:absolute;inset:0}` fills the nearest
+# positioned ancestor. Emits `au-close` (× / scrim-click / Escape).
+#: The interface for <au-drawer>: an edge-anchored slide-in sheet (au-modal's docked sibling). `side`
+#: right/left/bottom, `size` sm/md/lg, `posture` modal (scrim+elev-5) or flush (elev-3, no scrim).
+#: heading + subtitle, slots for header-actions / body (default) / footer, optional × + resize seam.
+#: Look-only (claims no overlay). Emits `au-close`.
+extends: ui-component::component-contract
+fields:
+  #: Whether the drawer is slid in. Reflected — the consumer toggles it; the panel animates both ways.
+  open?: Boolean
+  #: The docking edge + slide axis. `right` (default), `left` (mirrors right), `bottom` (full-width sheet).
+  side?: [right, left, bottom]
+  #: Panel width (right/left) / capped height (bottom): sm/md/lg = 320/400/480.
+  size?: [sm, md, lg]
+  #: `modal` (default — scrim + elev-5 + glass) or `flush` (elev-3, no scrim, the page stays interactive).
+  posture?: [modal, flush]
+  #: The panel heading (the accessible name).
+  heading?: String
+  #: A muted second line under the heading.
+  subtitle?: String
+  #: Show a top-right × close (emits `au-close`).
+  dismissible?: Boolean
+  #: Render a presentational resize seam on the docking edge (a grabber for `side=bottom`). The
+  #: container owns the drag physics.
+  resizable?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    events: [au-close]
+    slots: [default, header-actions, footer]
+    states: [open]
+    parts: [scrim, panel, header, title, subtitle, close, body, footer]
+    preview: '<div style="position:relative;height:140px;width:220px;overflow:hidden;border:1px solid var(--au-line-1);border-radius:var(--au-radius-md)"><au-drawer open side="right" size="sm" dismissible heading="Details" subtitle="one panel"><span style="font-size:var(--au-t-sm);color:var(--au-ink-3)">Body content</span></au-drawer></div>'

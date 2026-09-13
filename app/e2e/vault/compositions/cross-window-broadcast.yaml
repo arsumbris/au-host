@@ -1,0 +1,24 @@
+# CROSS-WINDOW-BROADCAST fixture — a BROADCAST intent fans out across the window boundary.
+# window → sandwich (LEFT: a file-tree, the broadcast HANDLER; CENTER: an editor on sample.md, the FIRER).
+# Float the LEFT (the file-tree) into its own OS window, then click the editor's `reveal` button (which
+# stays in the main window). `reveal` fires a BROADCAST `ui-intent-highlight` for the open file; the
+# authority fans it out to every capable handler — including the floated file-tree in window 2, whose stub
+# `commit` crosses the boundary (a `commit-remote` trace). Broadcast ignores claim, so NO `claim-remote`
+# query is issued — the discriminator from the routed/wired cross-window paths.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^ed]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

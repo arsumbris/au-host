@@ -1,0 +1,29 @@
+# CROSS-WINDOW-WRAP fixture — window → sandwich (LEFT: a BARE editor, the thing to float; CENTER: a
+# file-tree, the open-FIRER). Float the LEFT bare editor into its own OS window, then click a file in the
+# file-tree (which stays in the main window). The open-intent fires in window 1 and NOTHING claims it (a
+# bare editor is aimed-only, not an ambient open-claimer), so the authority's chooser floor opens: pick
+# "Wrap Editor in a container" → "Tabs". The wrap TARGET is the floated window's ROOT content, whose
+# container DOM lives on the SURFACE — the DOM-keyed `wrapPane` cannot reach it, so the authority wraps the
+# window's content directly (a pool re-point + a surface re-drive). viewer-defaults route md → editor, so
+# the viewer resolves without a second chooser.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^ed]]"
+    center: "[[^^tree]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

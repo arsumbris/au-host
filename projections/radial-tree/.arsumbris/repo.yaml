@@ -1,0 +1,11 @@
+# Schema-12 repo identity + deps (au.engine.repo). The radial-tree projection is a
+# pane-projection subtype, so it deps au-host-sdk (the kind hierarchy owner). It deps
+# `intent` because its type-def declares `handles-intent-meta::intent` in a TYPE position (and
+# references `[[open-intent::intent]]`), which folds the peer into this repo's
+# closure-hash — the peer gate (`type-repo-not-a-dependency`). Membership is not enough.
+type: au.engine.repo::au-engine
+name: radial-tree
+description: first-party radial reference-neighborhood projection
+deps:
+  - name: au-host-sdk
+  - name: intent

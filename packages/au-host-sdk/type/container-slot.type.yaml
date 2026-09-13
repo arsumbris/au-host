@@ -1,0 +1,97 @@
+# Owned by au-host-sdk. A slot represents the position occupied by a child projection.
+# Rules and state attached to the slot remain with the position when its occupant changes.
+
+# Extends `container-node`, the structural root DISJOINT from `projection`. That
+# disjointness is load-bearing three times over: it makes the child-bearing union
+# unambiguously discriminable, it keeps a slot out of the projection subtree, and it
+# terminates the derived slot-enumeration traversal.
+
+
+# THE BARE FORM. Every child-bearing field is a UNION of `<mountable* | that container's
+# slot>`, so a child needing no rules and no state sits DIRECTLY in the field as a bare
+# `[[^^id]]` reference into the composition pool, with no slot record. The unruled case is
+# therefore just a reference; a rule costs a slot record and nothing else. The cost of a
+# rule falls on the author who asks for it, and on nobody else.
+
+# REFERENCE-ONLY CHILD, INLINE SLOT. The child occupant is `mountable*` (reference-only) —
+# an inline projection at a child position is a TYPE ERROR, which is the by-construction
+# death of inline nesting (see [[mountable]]). The SLOT wrapper itself stays INLINE: a
+# referenced slot would share its per-position state across every container referencing it,
+# which is incoherent. So a wikilink at a child position is unambiguously a CHILD (a
+# `mountable*` occupant), and cross-file REUSE of a view is a composition referenced at that
+# same `mountable*` slot: the rules stay with the parent, and what is reused is the VIEW.
+
+# CONTAINMENT, NOT ATTACHMENT. A slot's rules belong to the parent that declares them.
+# They do NOT travel when the child is re-parented; the child picks up the destination
+# slot's rules, whatever they are. A slot is a POSITION, never a record of where one child
+# happens to sit.
+
+# IDENTITY SPLITS, and both records may carry one. A child's `^:` id names THE THING
+# (restorable view-state, the host-owned terminal session) and travels with it; a slot's
+# `^:` id names THE POSITION. Both optional, minted only when something points at one.
+
+# LIFECYCLE. A slot MATERIALIZES the moment it gains something to say, and COLLAPSES to
+# absent the moment it loses everything. One predicate, read in both directions.
+
+# EACH CONTAINER EXTENDS THIS with exactly what IT honours — `sandwich-slot` and
+# `column-slot` add `size` + `collapsed`; `tabs` and `dock` name this base directly and add
+# nothing; `bar` has no slots at all. So an author can only write a field the container
+# actually acts on, which is soundness by construction rather than by documentation.
+
+# ENFORCEMENT is the substrate's, once: a container answers `slotFor(id)` and the
+# substrate checks at five seams, never destroying state it may not be allowed to write.
+
+
+#: The POSITION a child occupies in a container, carrying what belongs to the position
+#: rather than to the child. Every field is optional: a slot with nothing to say is not
+#: written at all, and the child sits bare in the container's field instead.
+extends: container-node
+fields:
+  #: The occupant, BY REFERENCE (`[[^^id]]` into the pool, or `[[file]]` naming a composition).
+  #: Reference-only: an inline record here is a type error. ABSENT is an empty slot that still
+  #: carries its rules — which is how a constrained-but-unfilled region stays constrained, rather
+  #: than silently losing its pin the moment it is emptied.
+  child?: mountable*
+  #: What may occupy this slot; absent admits anything. It governs every occupant-TYPE
+  #: change, not only a direct swap: a centre-wrap writes a CONTAINER here and a dissolve
+  #: writes the lone CHILD here, so both answer to it. Checked by CLOSURE, never by exact
+  #: type match. `[+]`, so a declared `admits` names at least one type — an empty one is
+  #: not expressible, deliberately, since a slot nothing may occupy has no use site.
+  admits?: type<projection>*[+]
+  #: The PER-SLOT default placeholder this position resolves to when EMPTY — the local override of the
+  #: composition-wide `slot-defaults.placeholder`. The empty-slot resolver reads
+  #: `(this ?? composition slot-defaults.placeholder)` as its `configured` rung (configured > sole > ask).
+  #: A def-ref to a `placeholder-projection` type; absent falls back to the composition default, then the
+  #: count. It belongs on the POSITION beside `admits` / `fixed` / `label`: "what shows when I am empty" is
+  #: a property of the slot, not of any child.
+  placeholder?: type<placeholder-projection>*
+  #: The occupant may not be dragged out, closed, or displaced by a restructure. Its reach
+  #: is DEEP: ANY operation that would displace the occupant is refused, not merely a
+  #: drag. So a `fixed` slot can never be emptied. It does NOT freeze a subtree — a fixed
+  #: slot may hold a container whose own slots are free, which is how "the frame is fixed,
+  #: its contents can still grow" needs no vocabulary of its own.
+  fixed?: Boolean
+  #: What the container's chrome TITLES this position. Absent falls back to the occupant's
+  #: human name, and only when the occupant draws no chrome of its own — so an unlabelled
+  #: position holding a container shows nothing, which is how stacked mastheads stay fixed
+  #: without a suppression rule of its own.
+  #:
+  #: It is a POSITION's name, not the occupant's, for the same reason `size` and `collapsed`
+  #: are: a region authored "Sidebar" keeps reading "Sidebar" when a different projection is
+  #: dragged in. Titling by the occupant's TYPE is what made a sandwich holding a column
+  #: render "column" above the column's own item headers.
+  label?: String
+  #: Draw NO per-child header/chrome at this position. For a self-chrome occupant — one that
+  #: draws its own top band, like a rail — the container's region header would stack a second bar
+  #: over the occupant's own (the "double chrome"); setting this drops it.
+  #:
+  #: A CONTAINER MUST CHOOSE TO IMPLEMENT IT. It is offered on the base because "does the container
+  #: frame this child" is a universal slot question, but honouring it is per-container: a container
+  #: that draws no per-child header (or whose chrome is not separable) simply IGNORES this field.
+  #:
+  #: ORTHOGONAL to the other fields, each keeping its own job. It hides the header ONLY — it does
+  #: not lock the position (`fixed` still enforces re-parenting), does not constrain the occupant
+  #: (`admits` still applies), and does not touch layout (a hidden-header occupant still sizes and
+  #: collapses). `label` becomes moot, since nothing displays it. A self-chrome shell position that
+  #: must also be pinned sets `hideHeader: true` AND `fixed: true`.
+  hideHeader?: Boolean

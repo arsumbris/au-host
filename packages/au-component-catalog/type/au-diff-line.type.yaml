@@ -1,0 +1,19 @@
+# <au-diff-line> — one line of a code diff, composed inside <au-code-block> to render a hunk.
+#: <au-diff-line> — one line of a code diff (add | del | context): a faint whole-line tint + a +/− gutter
+#: glyph in the tone colour, never an edge bar. Composed inside <au-code-block>. Code text is the default slot.
+extends: ui-component::component-contract
+fields:
+  #: Diff kind — add (tinted ok), del (tinted danger), or context (bare).
+  kind?: [context, add, del]
+  #: Old-file line number (blank on an added line).
+  oldNo?: String
+  #: New-file line number (blank on a removed line).
+  newNo?: String
+meta:
+  - type: ui-component-meta::component-contract
+    preview: |
+      <au-code-block language="diff" style="max-width:360px">
+        <au-diff-line kind="context" old-no="11" new-no="11">const closure = readSubtypes(kind)</au-diff-line>
+        <au-diff-line kind="del" old-no="12">  .map((t) => resolveTypeSites(t))</au-diff-line>
+        <au-diff-line kind="add" new-no="12">  .flatMap((t) => resolveTypeSites(t))</au-diff-line>
+      </au-code-block>

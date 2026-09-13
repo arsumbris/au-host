@@ -1,0 +1,4 @@
+type: theme
+name: Cool
+styles:
+  - ./cool.theme.css

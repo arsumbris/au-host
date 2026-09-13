@@ -1,0 +1,53 @@
+# Owned by component-contract. The NON-FIELD half of a component's interface contract.
+#
+# A `ui-component` subtype's `fields:` are its props (data-in). Everything else about the
+# contract — what it emits, what content regions it accepts, what it exposes for theming —
+# lives here, in a `meta:` block on that subtype.
+#
+# `-meta` suffix per the type-system convention for type-defs meant for `meta:`.
+#
+# Every field is optional: a leaf component may emit nothing, accept only default content,
+# and expose no states or parts.
+#
+# A type-def used in a `meta:` position mixes in `au.engine.meta::au-engine`, the engine's
+# nominal marker for meta types. Without it the type is rejected as
+# `non-meta-type-in-meta-position` and the workspace vocabulary aborts. `::au-engine` is a
+# universal peer, so no `deps` entry is needed.
+extends: au.engine.meta::au-engine
+fields:
+  # The CustomEvent names this component dispatches (events-out), e.g. `au-change`.
+
+  # CONTRACT RULE: they MUST be dispatched `composed: true, bubbles: true`. A composed event
+  # crosses the shadow boundary and retargets to the host element, so a consumer listens on
+  # the tag itself and never reaches inside. This is also what keeps a delegating wrapper
+  # retrofittable without event-forwarding code.
+
+  #: CustomEvent names dispatched. MUST be composed + bubbling so they cross the shadow boundary.
+  events?: String[]
+  # Named content regions, realized by the implementation as native shadow `<slot name>`s.
+  # The consumer builds the children in THEIR framework and the browser PROJECTS them in —
+  # never reparented, so this is React-safe.
+  #: Declared named content regions, realized as native shadow <slot name>.
+  slots?: String[]
+  # The `:state()` custom-state names the component exposes via ElementInternals, e.g.
+  # `loading` / `invalid`. Declared so a theme can target `au-button:state(loading)` and so a
+  # states matrix can force them.
+  #: :state() custom-state names the component exposes, for theming and tooling.
+  states?: String[]
+  # The `::part()` names the component exposes for STRUCTURAL overrides — the escape hatch
+  # beyond token values, e.g. `::part(label)`.
+  #
+  # Declared rather than incidental for two reasons: a theming surface can enumerate the real
+  # override anchors, and `exportparts` becomes generatable if a delegating wrapper is ever
+  # retrofitted (parts reach outward only one shadow level per `exportparts`).
+  #: ::part names exposed for structural overrides. Declared so theming can enumerate them.
+  parts?: String[]
+  # An OPTIONAL sample-composition HTML snippet the gallery renders VERBATIM instead of the
+  # auto-synthesized instance. Supports components that pure
+  # schema-synthesis can't showcase: GRAIN-REDUCED containers (an `<au-tree>` needs `<au-tree-item>`
+  # children the gallery can't infer), NATIVE-SLOT composites, overlays, data-heavy widgets.
+  # Author-declared because only the component author knows a meaningful sample; absent for leaves
+  # that synthesize fine. The gallery upgrades any custom elements in the snippet (they are registered).
+  #: Optional sample-composition HTML the gallery renders verbatim (the story/escape-hatch for
+  #: composites + grain-reduced containers auto-synthesis can't showcase).
+  preview?: String

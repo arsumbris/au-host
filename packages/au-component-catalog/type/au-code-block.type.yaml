@@ -1,0 +1,18 @@
+#: Copy confirms success after the clipboard write resolves; unavailable or rejected writes expose a retry label.
+# <au-code-block> — a framed monospace code surface with a copy affordance.
+#: <au-code-block> — a framed monospace code surface with a copy affordance. `code` renders a plain
+#: <pre>; `language` shows a chip; `copy` (default true) shows the copy button. Slot composed rows instead of `code`.
+extends: ui-component::component-contract
+fields:
+  #: The source to render as a plain <pre>. Omit and slot composed rows instead.
+  code?: String
+  #: Optional language label, shown as a chip in the head.
+  language?: String
+  #: Show the copy button. Default true.
+  copy?: Boolean
+  #: Explicit text to copy. Defaults to `code`; required when slotting composed rows.
+  copyText?: String
+meta:
+  - type: ui-component-meta::component-contract
+    parts: [head, body, pre]
+    preview: '<au-code-block language="ts" code="export const answer = 42;"></au-code-block>'

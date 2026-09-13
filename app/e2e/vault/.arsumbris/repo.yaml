@@ -1,0 +1,26 @@
+# The au-host E2E test vault — a folder-repo holding per-behaviour composition FIXTURES. Pointed at by
+# AU_ENTRY at launch (resolved by path, so this vault needs no device-registry entry of its own). Its
+# `deps` are the projection type-vocabularies the fixture compositions CLAIM (the peer gate needs a
+# declared dep to cross a type); host-bundle (in workspace.yaml discover) brings the type-defs into the
+# daemon graph, resolved on disk via the existing device registry.
+type: au.engine.repo::au-engine
+name: e2e-vault
+description: the au-host E2E test vault — per-behaviour composition fixtures
+deps:
+  - name: terminal
+  - name: au-host-sdk # composition, window, keymap / keybind / keystroke
+  - name: intent # save-composition-intent / delete-composition-intent (a keymap binds a peer intent)
+  - name: bento
+  - name: tabs
+  - name: editor # editor-pane
+  - name: keymap-editor # the keymap-editor pane-projection
+  - name: backlinks # the backlinks pane-projection (preview-selection-to-backlinks fixture)
+  - name: aup-git-activity # the git-activity pane-projection (git-activity fixture)
+  - name: file-tree
+  - name: hello
+  - name: column
+  - name: sandwich
+  - name: dock
+  - name: aup-reader
+  - name: bar
+  - name: status-bar

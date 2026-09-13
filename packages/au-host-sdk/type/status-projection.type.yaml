@@ -1,0 +1,8 @@
+# Owned by au-host-sdk. The STATUS role — items a status bar aggregates (the daemon
+# status indicator, the editor's Ln/Col). The role IS the type: a status bar names it
+# via `role: [[status-projection]]` (a `type<projection>*` def-ref) and discovers
+# members via `readSubtypes('status-projection')`. A `bar-projection` subtype.
+# Abstract: a projection kind. Only concrete status subtypes are instantiated.
+abstract: true
+extends: bar-projection
+fields: {}

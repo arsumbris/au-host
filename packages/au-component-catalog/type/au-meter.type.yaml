@@ -1,0 +1,24 @@
+# <au-meter> — a determinate progress / ratio bar: a rounded ink-fill track, monochrome by default.
+#: <au-meter> — a determinate progress / ratio bar. A rounded track (surface-3 + an inset hairline)
+#: with an ink FILL sized by `value` (0..1). Monochrome by default — progress is a weight, not a
+#: colour; a `tone` re-tints the fill to a status hue via color-mix (the au-status-dot technique),
+#: staying in the palette family. A horizontal bar, never a left-edge accent rail. `indeterminate`
+#: rides a token-eased sliding segment (static under reduced motion). Optional label + value read-out.
+extends: ui-component::component-contract
+fields:
+  #: Progress ratio 0..1 (clamped). Ignored when `indeterminate`.
+  value?: Number
+  #: An optional caption above the track (sans, muted).
+  label?: String
+  #: An optional read-out above the track, right-aligned (mono, tabular). e.g. "3/6" or "50%".
+  valueLabel?: String
+  #: Re-tint the fill to a status hue via color-mix; absent is monochrome ink.
+  tone?: [ok, warn, danger]
+  #: Unknown progress — a sliding segment (collapses to static under reduced motion).
+  indeterminate?: Boolean
+meta:
+  - type: ui-component-meta::component-contract
+    slots: []
+    states: [tone, indeterminate]
+    parts: [meter, head, label, value, track, fill]
+    preview: '<au-meter value="0.6" label="Progress" value-label="60%" style="width:220px"></au-meter> <au-meter value="0.92" tone="danger" label="Disk" value-label="92%" style="width:220px"></au-meter>'
