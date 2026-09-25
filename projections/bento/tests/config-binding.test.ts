@@ -11,6 +11,9 @@ import { describe, expect, it } from 'vitest'
 
 import { fromSubstrate, toSubstrate } from '../src/config-binding.ts'
 import type { Bento } from '../src/generated.ts'
+import { useBentoSchemas } from './schemas.ts'
+
+useBentoSchemas()
 
 const noRefs = async (): Promise<never> => {
   throw new Error('this fixture has no reference arms')
@@ -153,7 +156,9 @@ describe('what must NOT change', () => {
       },
     } as unknown as Bento
     const children = ((await roundTrip(cfg)).root as Record<string, unknown>)['children'] as unknown[]
-    expect(children[0]).toEqual({ type: 'bento-slot' })
+    // Nothing to say, so the codec keeps no record and bento re-materializes the placeholder via
+    // `emptyRecord()`: the field's slot type, owner-qualified so it is valid in any repo.
+    expect(children[0]).toEqual({ type: 'bento-slot::bento' })
     expect(children).toHaveLength(2)
   })
 

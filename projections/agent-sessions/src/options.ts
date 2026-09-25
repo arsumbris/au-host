@@ -25,11 +25,22 @@ export function openSessionOptions(
   dismissed: () => void,
   copyStart?: () => void,
 ) {
-  let release: (() => void) | undefined
+  // Whichever side closes the menu, the launcher learns once and focus returns to the trigger.
+  let settled = false
+  const settle = (): void => {
+    if (settled) return
+    settled = true
+    dismissed()
+    if (trigger.isConnected) trigger.focus({ preventScroll: true })
+  }
+  const close = (): void => {
+    handle?.close()
+    settle()
+  }
   const handle = host.popover?.open(
     trigger.getBoundingClientRect(),
     (element) => {
-      release = host.styles?.inject(STYLE, element)
+      const release = host.styles?.inject(STYLE, element)
       const panel = document.createElement('au-popover') as HTMLElement & {
         arrow: boolean
       }
@@ -43,7 +54,7 @@ export function openSessionOptions(
       gear.setAttribute('name', 'gear')
       edit.append(gear)
       edit.addEventListener('au-activate', () => {
-        handle?.close()
+        close()
         configure()
       })
       heading.append(text('span', 'Session profiles'), edit)
@@ -79,7 +90,7 @@ export function openSessionOptions(
           check.hidden = false
           summary.textContent = profileSummary(profile)
           chooseProfile(profile)
-          handle?.close()
+          close()
         })
         list.append(row)
       }
@@ -109,7 +120,7 @@ export function openSessionOptions(
           arow.toggleAttribute('selected', a.name === selectedAdapter)
           arow.addEventListener('click', () => {
             chooseAdapter(a.name)
-            handle?.close()
+            close()
           })
           alist.append(arow)
         }
@@ -119,7 +130,7 @@ export function openSessionOptions(
       panel.append(heading, ...(adapterSection ? [adapterSection] : []), profileSection, summary)
       if (copyStart) {
         const copy = button('Copy start command', () => {
-          handle?.close()
+          close()
           copyStart()
         }, 'ghost')
         copy.className = 'sessions-copy-command'
@@ -130,12 +141,9 @@ export function openSessionOptions(
         panel.append(copy)
       }
       element.append(panel)
+      return release
     },
-    () => {
-      release?.()
-      dismissed()
-      trigger.focus({ preventScroll: true })
-    },
+    settle,
   )
-  return handle
+  return handle && { close }
 }

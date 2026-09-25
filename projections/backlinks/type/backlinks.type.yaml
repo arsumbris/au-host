@@ -8,7 +8,7 @@ meta:
   # `entry` is relative to the owning package root; the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
   # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
 

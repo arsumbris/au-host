@@ -81,7 +81,10 @@ export class SurfaceWindows {
     // Capture the webContents id now: after `closed` the window is destroyed and touching
     // `win.webContents` throws "Object has been destroyed".
     const wcId = win.webContents.id
-    const init: SurfaceInit = { entryPath: req.entryPath, surfaceId: req.surfaceId, compositionId: req.compositionId, title: req.options?.title, viewerDefaults: req.viewerDefaults, slotDefaults: req.slotDefaults }
+    // The request IS the init plus this window's OS options: every init field is forwarded, so a field the
+    // authority adds reaches the surface without this copy knowing about it.
+    const { options: windowOptions, ...initFields } = req
+    const init: SurfaceInit = { ...initFields, title: windowOptions?.title }
     this.bySurfaceId.set(req.surfaceId, { win, init, opener })
     this.surfaceIdByWebContents.set(wcId, req.surfaceId)
 

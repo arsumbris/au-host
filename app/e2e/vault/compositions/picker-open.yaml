@@ -1,0 +1,37 @@
+# PICKER-OPEN fixture — two tabs groups (both open-capable) + a file-tree, in a sandwich.
+# Clicking a file fires an ambient open-intent that BOTH tabs groups genuinely claim → >1 claimer →
+# the CHOOSE strategy (the default) shows the spatial picker. The MRU/focus head is pre-highlighted,
+# so Enter commits it. The `picker-open-mru` twin adds `default-strategy: mru` to opt back to silent.
+type: composition::au-host-sdk
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabsL]]"
+    center: "[[^^tree]]"
+    right: "[[^^tabsR]]"
+  - ^: tabsL
+    type: tabs::tabs
+    tabs:
+      - "[[^^edL]]"
+  - ^: edL
+    type: editor-pane::editor
+    file: other.md
+  - ^: tabsR
+    type: tabs::tabs
+    tabs:
+      - "[[^^edR]]"
+  - ^: edR
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

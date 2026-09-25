@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo component-contract --out src/generated.ts"
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../codegen --repo component-contract --out src/generated.ts"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

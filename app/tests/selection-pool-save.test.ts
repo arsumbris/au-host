@@ -6,7 +6,7 @@ import { SelectionTree } from '../src/renderer/src/projections/selection-channel
 
 const schemas: ContainerSchemas = {
   containers: new Map([['custom-deck', { type: 'custom-deck', fields: [
-    { name: 'contents', list: true, slotTypes: [], nodeTypes: [] },
+    { name: 'contents', list: true, slotTypes: [], slotTypesQualified: [], nodeTypes: [] },
   ] }]]),
   nodes: new Map(),
 }

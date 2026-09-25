@@ -3,6 +3,8 @@
 // facts the live syntax layer cannot determine, such as broken wikilinks.
 
 import type { WireSemanticToken, WireShape } from '@arsumbris/au-engine-sdk/reads'
+// `shapeLabel` is owned by the SDK (the `WireShape` owner), total over the union and cardinality-aware.
+import { shapeLabel } from '@arsumbris/au-engine-sdk/reads'
 
 /** The colorable kinds a value can have. */
 export type FieldKind = 'string' | 'number' | 'bool' | 'enum' | 'ref'
@@ -31,40 +33,6 @@ export function shapeKind(shape: WireShape): FieldKind {
       return 'string' // String, Date, DateTime (Boolean/Url are never refined)
     default:
       return 'string' // union, intersection, unknown
-  }
-}
-
-/** A compact human label for a parsed shape, for the debug inspector. */
-export function shapeLabel(shape: WireShape): string {
-  switch (shape.kind) {
-    case 'primitive':
-      return shape.name
-    case 'enum':
-      return `enum[${shape.members.join(', ')}]`
-    case 'reference':
-      return `${shape.name}*`
-    case 'record':
-      return shape.name
-    case 'inline-or-reference':
-      return `${shape.name}&`
-    case 'list':
-      return `${shapeLabel(shape.inner)}[]`
-    case 'union':
-      return shape.branches.map(shapeLabel).join(' | ')
-    case 'intersection':
-      return shape.branches.map(shapeLabel).join(' & ')
-    case 'refined': {
-      // `Base{predicate}` — reconstruct the predicate for the debug inspector (schema 27).
-      const r = shape.refinement
-      if (r.pattern !== undefined) return `${shape.base}{/${r.pattern}/}`
-      const parts: string[] = []
-      if (r.lower) parts.push(`>${r.lower.inclusive ? '=' : ''}${r.lower.value}`)
-      if (r.upper) parts.push(`<${r.upper.inclusive ? '=' : ''}${r.upper.value}`)
-      if (r.integer) parts.push('integer')
-      return `${shape.base}{${parts.join(' & ')}}`
-    }
-    default:
-      return shape.kind
   }
 }
 

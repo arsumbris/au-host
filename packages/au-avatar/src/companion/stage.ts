@@ -81,7 +81,7 @@ export class CompanionStage {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true })
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     this.renderer.setClearColor(0, 0)
-    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFShadowMap
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.0
     this.scene.add(new THREE.HemisphereLight('#fff0d9', '#a3a9c5', 1.1))

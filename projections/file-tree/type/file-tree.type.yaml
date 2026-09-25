@@ -20,7 +20,7 @@ meta:
   # `entry` is relative to the owning package root; the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The intents this projection HANDLES (typed capability). Discovered in the
   # `subtypes('projection')` pass; the runtime handler binds at mount. The file-tree handles
   # ui-intent-highlight (flashes the row for the target file).

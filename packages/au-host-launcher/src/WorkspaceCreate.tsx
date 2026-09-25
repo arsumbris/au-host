@@ -58,6 +58,21 @@ export function WorkspaceCreate({host, initialTemplate, config, onConfigChange, 
   const [reloadCatalog,setReloadCatalog] = useState(0)
   const [error, setError] = useState('')
   const [created, setCreated] = useState('')
+  // Engine-binary resolvability, for the always-visible engine field. `config.binaryPath` (renderer) is
+  // independent of the main-side resolution, so we ASK main: an explicit field wins (validated for
+  // existence), else the auto-resolved `au` (paths.yaml → PATH → …). Drives the "ready / not found" hint
+  // so a first-run create surfaces the missing binary instead of dead-ending at the daemon start.
+  const [engine, setEngine] = useState<{kind:'checking'}|{kind:'found';path:string}|{kind:'missing'}>({kind:'checking'})
+  useEffect(() => {
+    let disposed = false
+    setEngine({kind:'checking'})
+    const explicit = config.binaryPath?.trim()
+    const probe = explicit
+      ? host.mcp.pathExists(explicit).then(ok => ok ? {kind:'found' as const, path:explicit} : {kind:'missing' as const})
+      : host.daemon.resolveBinary().then(path => path ? {kind:'found' as const, path} : {kind:'missing' as const})
+    probe.catch(() => ({kind:'missing' as const})).then(next => { if (!disposed) setEngine(next) })
+    return () => { disposed = true }
+  }, [host, config.binaryPath])
   const title = useRef<HTMLHeadingElement>(null)
   const launchCallback=useRef(onCreated)
   launchCallback.current=onCreated
@@ -154,9 +169,25 @@ export function WorkspaceCreate({host, initialTemplate, config, onConfigChange, 
             </SourceList></div>
           </details>
           {!!catalog?.warnings.length && <details className="starter-bring"><summary>Some starters or sources need attention</summary><ul>{catalog.warnings.map((warning,i)=><li key={i}>{warning}</li>)}</ul></details>}
-          <details className="starter-bring starter-connections"><summary><span>Connection settings<span>Engine and agent tools on this device</span></span><span className="starter-bring__toggle"><DisclosureChevron /></span></summary>
-            <div className="starter-bring__body"><p>These settings tell Ars Umbris where its installed tools live. They apply on this device; they are not part of your starter.</p>
-              <label className="starter-engine-path">Engine executable<span className="starter-field-note">Required to open a workspace</span><input value={config.binaryPath} onChange={e=>onConfigChange({binaryPath:e.target.value})} spellCheck={false} /></label>
+          {/* Engine executable is ALWAYS visible (not in a collapsed section): a new workspace auto-opens
+              on create, which starts the daemon and needs this binary. `engine` says whether it is
+              resolvable so a first-run user sees + fixes a missing `au` here instead of dead-ending. */}
+          <div className="starter-field starter-engine" data-status={engine.kind}>
+            <label htmlFor="workspace-engine">Engine executable <span>{engine.kind==='found'?'Ready':'Required'}</span></label>
+            <div>
+              <input id="workspace-engine" aria-invalid={engine.kind==='missing'}
+                placeholder={engine.kind==='found' && !config.binaryPath?.trim() ? engine.path : 'Path to the au engine binary…'}
+                value={config.binaryPath} onChange={e=>onConfigChange({binaryPath:e.target.value})} spellCheck={false} />
+              <button type="button" aria-label="Choose the au engine binary" onClick={async()=>{try{const file=await host.dialog.pickPath('file');if(file)onConfigChange({binaryPath:file})}catch(e){setError(String(e))}}}><span aria-hidden="true">↗</span></button>
+            </div>
+            <small data-error={engine.kind==='missing'}>
+              {engine.kind==='checking' ? 'Checking for the au engine…'
+                : engine.kind==='found' ? (config.binaryPath?.trim() ? `Using ${engine.path}` : `Found on this device: ${engine.path}`)
+                : 'au was not found on PATH or in paths.yaml. Choose the au engine binary — a new workspace opens as soon as it is created.'}
+            </small>
+          </div>
+          <details className="starter-bring starter-connections"><summary><span>Agent tools<span>Optional MCP tools on this device</span></span><span className="starter-bring__toggle"><DisclosureChevron /></span></summary>
+            <div className="starter-bring__body"><p>These settings tell Ars Umbris where its installed agent tools live. They apply on this device; they are not part of your starter.</p>
               <McpSetup host={host} />
             </div>
           </details>

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {test, expect} from '../fixtures/app'
 test.use({composition:'file-tabs-preference'})
 test('file-tree opens reuse document Tabs without a placement or viewer question', async ({page}) => {
@@ -13,5 +15,5 @@ test('file-tree opens reuse document Tabs without a placement or viewer question
   await page.locator('au-tree-row[data-kind="file"][data-path$="/refs-sample.md"]').click()
   await expect(page.getByRole('tab',{name:'refs-sample.md',exact:true})).toBeVisible()
   await expect(page.getByRole('tab',{name:'sample.md',exact:true})).toBeVisible()
-  await page.screenshot({path:'/private/tmp/au-file-tabs-preference.png'})
+  await page.screenshot({path: join(tmpdir(), 'au-file-tabs-preference.png')})
 })

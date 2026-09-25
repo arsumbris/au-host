@@ -1,23 +1,17 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {test, expect} from '../fixtures/app'
 test.use({composition:'document-surfaces'})
-test('document toolbar inherits its sidebar or framed surface', async ({page}) => {
+test('document toolbar is transparent over its sidebar or framed surface', async ({page}) => {
   const sidebar=page.locator('[data-pane-host="sidebar-reader"] .au-document-toolbar')
   const center=page.locator('[data-pane-host="center-reader"] .au-document-toolbar')
   await expect(sidebar).toBeVisible()
   await expect(center).toBeVisible()
-  const sidebarFill=await sidebar.evaluate(el=>getComputedStyle(el).backgroundColor)
-  const expectedSidebar=await page.evaluate(()=>{
-    const probe=document.createElement('div');probe.style.background='var(--au-color-bg)';document.body.append(probe)
-    const color=getComputedStyle(probe).backgroundColor;probe.remove();return color
-  })
-  expect(sidebarFill).toBe(expectedSidebar)
-  const expectedCenter=await center.evaluate(el=>{
-    let node:Element|null=el
-    while(node&&node.tagName!=='AU-PANE-FRAME') node=node.parentElement
-    return node ? getComputedStyle(node).backgroundColor : null
-  })
-  expect(await center.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(expectedCenter)
-  // A standalone Reader's opaque toolbar must not paint over the containing frame outline.
+  // The action row is transparent, so the document shows its containing surface through it, whether a
+  // sidebar or a framed pane.
+  expect(await sidebar.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+  expect(await center.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
+  // The toolbar must not paint over the containing frame outline.
   const frame = page.locator('au-pane-frame').filter({has: center}).last()
   const edge = await frame.evaluate(el => ({
     shadow: getComputedStyle(el, '::after').boxShadow,
@@ -27,5 +21,5 @@ test('document toolbar inherits its sidebar or framed surface', async ({page}) =
   expect(edge.shadow).not.toBe('none')
   expect(edge.pointerEvents).toBe('none')
   expect(edge.isolation).toBe('isolate')
-  await page.screenshot({path:'/private/tmp/au-document-surfaces.png'})
+  await page.screenshot({path: join(tmpdir(), 'au-document-surfaces.png')})
 })

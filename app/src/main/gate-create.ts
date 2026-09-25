@@ -9,9 +9,9 @@
 //
 // The FOLDER F is the daemon entry — there is no manifest file. Entry == root == home.
 //
-// Raw fs, daemon-free — the gate runs BEFORE any daemon is up (same as gate-inspect.ts). Members are
-// resolved BY NAME through the device repos.yaml, so every member needs both a `repo.yaml` identity
-// and a device location entry, else it is `edit-member-unmounted` / `discover-member-unmounted`.
+// Raw fs, daemon-free — the gate runs BEFORE any daemon is up (same as gate-inspect.ts). A created
+// workspace registers each located member in the device repos.yaml, one of the tiers the engine
+// resolves a member name through.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -19,13 +19,18 @@ import * as path from 'node:path'
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
+import { AuMembersError, runAuMembers } from '@arsumbris/au-engine-sdk'
+
+import { validateBinary } from './daemon'
 import { engineConfigDir } from './device-paths'
-import type { ClosureMember, ClosureResult, CreateWorkspaceResult, FoundDep } from '../shared/daemon-api'
+import { readLocalFile } from './local-file-read'
+import { resolveDaemonBinary } from './tool-paths'
+import type { ClosureMember, ClosureResult, CreateWorkspaceResult, FoundDep, MissingMembers } from '../shared/daemon-api'
 
 // The two hardwired ENTRY-POINT aggregator bundles a full host workspace needs. Their `deps` ARE the
 // closure (host-bundle → the UI projection/vocab set; mcp-bundle → the agent/mcp set), so the member
 // SET is discovered by reading their repo.yaml — NOT a hardcoded list here. A workspace that only runs the UI (no agent) would name host-bundle alone;
-// the create flow names both (the dogfood/dev shape). Adding a projection means editing
+// the create flow names both. Adding a projection means editing
 // the located host-bundle's repo.yaml; its dependency closure determines the member set.
 const BUNDLES = ['host-bundle', 'mcp-bundle']
 
@@ -132,23 +137,30 @@ export function deviceReposPath(): string {
 }
 
 /**
+ * STANDIN [[message - 260925104814 - composition verbs author the wrong member without a root, a disabled-overlay verb, and daemonless setup commands::au-engine]]:
+ * a daemonless engine command should register locations, the offline twin of `register`.
+ *
  * Merge `{ name, path }` location entries into the device-global `repos.yaml` (`au.engine.repos`),
  * upserting by name and preserving any existing entries (it is shared across every workspace). The
  * pre-daemon writer for member locations — once a daemon is up, `engine.register` is the live path.
  */
 function registerLocations(entries: { name: string; path: string }[]): void {
   const reposPath = deviceReposPath()
-  let doc: { repos?: { name: string; path: string; remote?: string }[] } = { repos: [] }
-  if (existsSync(reposPath)) {
-    try {
-      doc = parseYaml(readFileSync(reposPath, 'utf8')) || { repos: [] }
-    } catch {
-      doc = { repos: [] }
-    }
-  }
+  type Registry = { repos?: { name: string; path: string; remote?: string }[]; [key: string]: unknown }
+  const read = readLocalFile(reposPath, (text): Registry => {
+    const doc: unknown = parseYaml(text) ?? {}
+    if (typeof doc !== 'object' || Array.isArray(doc)) throw new Error('it is not a YAML mapping')
+    if ((doc as Registry).repos !== undefined && !Array.isArray((doc as Registry).repos)) throw new Error('its `repos` is not a list')
+    return doc as Registry
+  })
+  // The registry is shared by every workspace on this machine: one this process cannot read is never
+  // rewritten from nothing.
+  if (read.state === 'failed') throw new Error(`the device registry ${reposPath} could not be read (${read.cause}), so it was left untouched; fix or remove it, then retry`)
+  const doc: Registry = read.state === 'found' ? read.value : {}
   const byName = new Map((doc.repos ?? []).map((r) => [r.name, r]))
   for (const e of entries) byName.set(e.name, { ...byName.get(e.name), name: e.name, path: e.path })
   const merged = {
+    ...doc,
     repos: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
   }
   mkdirSync(path.dirname(reposPath), { recursive: true })
@@ -175,7 +187,12 @@ function registerLocations(entries: { name: string; path: string }[]): void {
 const REPO_TYPE = 'au.engine.repo::au-engine'
 const WORKSPACE_TYPE = 'au.engine.workspace::au-engine'
 
-/** Seed a member's `.arsumbris/repo.yaml` identity if absent (idempotent). */
+/**
+ * STANDIN [[message - 260925104814 - composition verbs author the wrong member without a root, a disabled-overlay verb, and daemonless setup commands::au-engine]]:
+ * a daemonless engine command should make a folder a repo, in the engine's own `repo.yaml` format.
+ *
+ * Seed a member's `.arsumbris/repo.yaml` identity if absent (idempotent).
+ */
 function scaffoldRepoYaml(memberRoot: string, name: string, description?: string): void {
   const regPath = path.join(memberRoot, '.arsumbris', 'repo.yaml')
   if (existsSync(regPath)) return
@@ -234,6 +251,9 @@ export function initGitRepo(folder: string, name: string): void {
 }
 
 /**
+ * STANDIN [[message - 260925104814 - composition verbs author the wrong member without a root, a disabled-overlay verb, and daemonless setup commands::au-engine]]:
+ * a daemonless engine command should make a folder a workspace entry, applying its own self-listing rule.
+ *
  * Write the entry's `.arsumbris/workspace.yaml` — the per-workspace composition.
  *
  * Two lists, two lifetimes:
@@ -334,57 +354,32 @@ export function createWorkspace(dir: string, rawName: string, located: FoundDep[
   }
 }
 
-/** The string entries of one list in a parsed doc (empty when absent or malformed). */
-function stringList(doc: unknown, key: string): string[] {
-  const v = (doc as Record<string, unknown> | null)?.[key]
-  return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []
-}
+/** How long the launcher waits for `au members` before reporting that the engine did not answer. */
+const MEMBERS_CHECK_TIMEOUT_MS = 15_000
 
 /**
- * Every member name an ENTRY folder declares: `workspace.yaml` `edit:` + `discover:`, plus the
- * entry's own `repo.yaml` `deps:`. The union is what must resolve for the workspace to mount whole.
- * The entry's own name is excluded — it resolves by being the entry, not by the registry.
+ * The declared members of a workspace entry that would not mount, so the launcher can offer a guided
+ * locate and hold Start. The engine answers it (`au members`), in the order `au daemon start` resolves
+ * members, with no daemon running. `binaryPath` is the launcher's configured `au`, else the resolved one,
+ * checked the same way a daemon start checks it before anything is spawned. The wait is bounded, and
+ * `signal` kills a check a newer one superseded. A folder that is not a repo declares nothing, so nothing
+ * is missing. Any other failure is reported, never read as "nothing missing".
  */
-function declaredMembers(entryDir: string): string[] {
-  const read = (p: string): unknown => {
-    try {
-      return parseYaml(readFileSync(p, 'utf8'))
-    } catch {
-      return null
-    }
-  }
-  const repoDoc = read(path.join(entryDir, '.arsumbris', 'repo.yaml'))
-  const wsDoc = read(path.join(entryDir, '.arsumbris', 'workspace.yaml'))
-  const self = typeof (repoDoc as { name?: unknown } | null)?.name === 'string' ? (repoDoc as { name: string }).name : null
-
-  const deps = (Array.isArray((repoDoc as { deps?: unknown } | null)?.deps) ? (repoDoc as { deps: unknown[] }).deps : [])
-    .map((d) => (d as { name?: unknown })?.name)
-    .filter((n): n is string => typeof n === 'string')
-
-  const all = [...stringList(wsDoc, 'edit'), ...stringList(wsDoc, 'discover'), ...deps]
-  return [...new Set(all)].filter((n) => n !== self)
-}
-
-/** The repo names present in the device-global `repos.yaml` (a `Set` for membership tests). */
-function deviceLocatedNames(): Set<string> {
+export async function missingLocations(entry: string, binaryPath: string, signal?: AbortSignal): Promise<MissingMembers> {
+  const binary = binaryPath.trim() || resolveDaemonBinary() || ''
+  const problem = validateBinary(binary)
+  if (problem) return { ok: false, error: `the members cannot be checked: ${problem}` }
   try {
-    const doc = parseYaml(readFileSync(deviceReposPath(), 'utf8'))
-    const repos = Array.isArray(doc?.repos) ? doc.repos : []
-    return new Set(repos.map((r: { name?: string }) => r?.name).filter((n: unknown): n is string => typeof n === 'string'))
-  } catch {
-    return new Set()
+    const out = await runAuMembers(binary, entry, { timeoutMs: MEMBERS_CHECK_TIMEOUT_MS, signal })
+    return { ok: true, missing: out.members.filter((m) => m.tier === 'unmounted').map((m) => m.name), complete: out.complete }
+  } catch (error) {
+    if (error instanceof AuMembersError) {
+      if (error.kind === 'not-a-repo') return { ok: true, missing: [], complete: true }
+      if (error.kind === 'timeout') return { ok: false, error: `the engine did not answer the member check within ${MEMBERS_CHECK_TIMEOUT_MS / 1000}s` }
+      if (error.kind === 'aborted') return { ok: false, error: 'the member check was superseded by a newer one' }
+    }
+    return { ok: false, error: `could not check the members: ${error instanceof Error ? error.message : String(error)}` }
   }
-}
-
-/**
- * The declared members of a workspace that are NOT located on this machine (absent from the device
- * `repos.yaml`), so they would fail to mount. The pre-daemon first-run detector: a freshly-cloned
- * workspace whose members the user has not yet located returns them here for a guided locate flow.
- * A folder that is not a repo declares nothing → empty.
- */
-export function missingLocations(entry: string): string[] {
-  const located = deviceLocatedNames()
-  return declaredMembers(entry).filter((name) => !located.has(name))
 }
 
 /** Register located members into the device `repos.yaml` (pre-daemon, raw). The open-time locate

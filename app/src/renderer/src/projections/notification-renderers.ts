@@ -8,9 +8,9 @@
 
 
 import { readSubtypes, type WireReader, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
-import { reportHostDiagnostic } from '@arsumbris/au-host-sdk'
+import { codeMetaBlock, reportHostDiagnostic } from '@arsumbris/au-host-sdk'
+import { NOTIFICATION_CONTENT_META } from '@arsumbris/intent'
 import type { ProjectionSource } from '@arsumbris/au-host-sdk'
-import { refName } from '@arsumbris/type-query'
 
 import { loadProjection, sourceKey, sourceLocation } from './loader'
 import { packageRootOf } from '../../../shared/package-root'
@@ -18,8 +18,6 @@ import type { NotificationContentRenderer } from './notification-surface'
 
 /** The base notification type whose subtypes may ship content renderers. */
 const BASE_TYPE = 'ui-notification'
-/** The locator meta a subtype carries to point at its content-renderer module + export. */
-const CONTENT_META_TYPE = 'notification-content-meta'
 /** The default export name when a locator omits `export`. */
 const DEFAULT_EXPORT = 'render'
 
@@ -37,9 +35,15 @@ export async function discoverNotificationRenderers(
   const subs = result.result.subtypes as WireSubtype[]
 
   for (const def of subs) {
-    // Match the locator meta by BARE name (the served `type_name` is qualified).
-    const block = def.meta_blocks?.find((b) => refName(b.type_name) === CONTENT_META_TYPE)
-    if (!block) continue
+    if (def.abstract) continue
+    // The renderer locator is the type's OWN block, never an ancestor's: a type loads only code it declares.
+    const code = codeMetaBlock(def, NOTIFICATION_CONTENT_META)
+    if (code.kind === 'absent') continue
+    if (code.kind === 'not-own') {
+      reportHostDiagnostic({ code: 'notification-renderer-not-own', severity: 'warning', subject: def.name, message: `declares no loadable content renderer: ${code.reason}` })
+      continue
+    }
+    const block = code.block
     const entry = block.body.find((f) => f.name === 'entry')?.value
     if (typeof entry !== 'string') continue
     const exp = block.body.find((f) => f.name === 'export')?.value

@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {test, expect} from '../fixtures/app'
 test.use({composition:'column-insert-size'})
 test('new content gets usable height beside large authored column weights', async ({page}) => {
@@ -9,5 +11,5 @@ test('new content gets usable height beside large authored column weights', asyn
   const sizes=await items.evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height))
   expect(sizes[2]).toBeGreaterThan(sizes.reduce((a,b)=>a+b,0)*0.2)
   await expect(items.last().locator('au-pane-header')).toBeVisible()
-  await page.screenshot({path:'/private/tmp/au-column-insert.png'})
+  await page.screenshot({path: join(tmpdir(), 'au-column-insert.png')})
 })

@@ -87,6 +87,24 @@ export function floatPaneRow(host: MountHost, paneId: string): ContextMenuItem |
 }
 
 /**
+ * The GENERIC "Layout rules…" pane-action row — the same for EVERY container, because a position's slot
+ * rules (`fixed` / `admits` / `label` / `hideHeader` + the container's extras) are edited through the
+ * HOST's `editSlotRule` (the single-writer `propose` path), not any container's own behaviour. `run`
+ * fires `au-open-slot-config` with the occupant's `^:` id; the host's `SlotConfigHost` opens the generic
+ * `au-typed-value-editor` form for that position. Always offered (even on a `fixed` pane — that is how you
+ * UN-fix it), keyed by the occupant id `editSlotRule` / `slotRuleOf` take.
+ */
+export function slotRulesRow(paneId: string): ContextMenuItem {
+  return {
+    id: 'pane.slot-rules',
+    label: 'Layout rules…',
+    icon: 'gear',
+    enabled: true,
+    run: () => window.dispatchEvent(new CustomEvent('au-open-slot-config', { detail: paneId })),
+  }
+}
+
+/**
  * The GENERIC "Move to other window" pane-action row — the same for EVERY container, because
  * moving a subtree across windows is a HOST capability (`host.children.pool.moveToWindow`), not a
  * container's own behaviour. It generalizes `floatPaneRow` ("open in a NEW window") to "move into an

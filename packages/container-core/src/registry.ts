@@ -20,8 +20,8 @@
 import type { ChooseRequest, ContainerDialect, ContainerPlacement, DropTarget, PaneId, PaneInstance } from '@arsumbris/au-host-sdk';
 import { reportHostDiagnostic, POOL_EDIT_NOOP, event, on } from '@arsumbris/au-host-sdk';
 import { mintBlockId } from './block-id.ts';
-import { groupingForKind, groupingForNewGroup, isGroupingKind, groupingChooser, groupingOutcomeForNewGroup, wrapTargetForKind, wrapTargets, wrapTargetOutcome } from './grouping.ts';
-import type { GroupingCapability } from './grouping.ts';
+import { admitsChildren, groupingForKind, groupingForNewGroup, isGroupingKind, groupingChooser, groupingOutcomeForNewGroup, wrapBuildFor, wrapChoice } from './grouping.ts';
+import type { GroupingCapability, WrapBuild } from './grouping.ts';
 import { displacementRefused, occupantRefused, restructureRefused, typeOfInstance } from './slots.ts';
 import { reparentSafeCenter } from './reparent.ts';
 import { containerRoots, contentDropTargets, dialectRegistry, findContainerRoot, registry, sameContainerRoot } from './singletons.ts';
@@ -207,6 +207,9 @@ export type WrapOutcome =
   | 'no-container'
   /** The workspace declares no grouping container to build the group with. */
   | 'no-grouping'
+  /** The container kind cannot hold this many children: its declared `arity-meta` refuses the count
+   *  (a frame takes one child, never two). */
+  | 'arity-refused'
   /** The holding container has no addressable pool record (legacy inline mount); `readyPoolEdit`
    *  has reported it. */
   | 'not-pooled';
@@ -243,12 +246,13 @@ export function wrapPane(
   if (pos == null) return 'no-container';
   const existing = placement.getSlotContent(pos);
   if (!existing) return 'no-container';
-  // The WRAP-TARGET registry (grouping ∪ spatial), NOT the drop's grouping-only lookup — so a spatial
-  // container (bento) resolves here. The caller (the floor / the wrap pane action) resolves the kind via
-  // `wrapTargetOutcome` + the sectioned picker; `groupingForNewGroup()` is only a no-kind last resort.
-  const cap =
-    (requestedKind ? wrapTargetForKind(requestedKind) : null) ?? groupingForNewGroup();
-  if (!cap) return 'no-grouping';
+  // The WRAP-TARGET registry (grouping ∪ spatial ∪ frame), NOT the drop's grouping-only lookup — so a
+  // spatial container (bento) resolves here. The caller resolves the kind via `wrapChoice(2)`;
+  // `groupingForNewGroup()` is only a no-kind last resort. A kind that does not admit two children (a
+  // frame) is never built around two, and says so.
+  const build = wrapBuildFor(requestedKind, 2);
+  if ('refused' in build) return wrapRefused(paneId, build);
+  const { cap } = build;
   // The wrap writes a CONTAINER (`cap.typeName`) into the slot, so it answers to the slot's own
   // `fixed` / `admits` — the same gate the center-drop wrap checks (SEAM 4). A fixed / restricted slot
   // refuses: the deliberate-lock respect case, not a bug.
@@ -290,8 +294,9 @@ export function wrapPaneSolo(paneId: PaneId, requestedKind?: string, placementOv
   if (pos == null) return 'no-container';
   const existing = placement.getSlotContent(pos);
   if (!existing) return 'no-container';
-  const cap = (requestedKind ? wrapTargetForKind(requestedKind) : null) ?? groupingForNewGroup();
-  if (!cap) return 'no-grouping';
+  const build = wrapBuildFor(requestedKind, 1);
+  if ('refused' in build) return wrapRefused(paneId, build);
+  const { cap } = build;
   if (restructureRefused(placement, pos, cap.typeName, 'group')) return 'refused';
   const pe = readyPoolEdit(placement);
   if (!pe) return 'not-pooled';
@@ -303,43 +308,58 @@ export function wrapPaneSolo(paneId: PaneId, requestedKind?: string, placementOv
   return 'wrapped';
 }
 
-/** How {@link wrapPaneInteractive} asks for a container kind and labels the options. */
+/** A wrap the build step refused, traced with its cause so a refusal stays observable. */
+function wrapRefused(paneId: PaneId, build: Exclude<WrapBuild, { cap: unknown }>): 'no-grouping' | 'arity-refused' {
+  if (on('placement')) event('placement', 'wrap-build-refused', { paneId, ...build });
+  return build.refused;
+}
+
+/**
+ * Why a wrap did not happen, in words a notification can show. Owned beside the outcome, so every
+ * caller that reports one says the same thing. `kind` is the container's display label, `n` the number
+ * of children the wrap asked it to hold.
+ */
+export function wrapOutcomeReason(outcome: Exclude<WrapOutcome, 'wrapped'>, ctx: { kind?: string; n?: number } = {}): string {
+  switch (outcome) {
+    case 'refused':
+      return 'the slot is fixed or does not admit a container';
+    case 'no-grouping':
+      return 'no container type is available to wrap into';
+    case 'arity-refused': {
+      const what = ctx.n === undefined ? 'that many panes' : ctx.n === 1 ? 'a single pane' : `${ctx.n} panes`;
+      return `${ctx.kind ?? 'that container'} cannot hold ${what}`;
+    }
+    case 'no-container':
+      return 'nothing holds that pane here';
+    case 'not-pooled':
+      return 'its container is not addressable in the composition';
+  }
+}
+
+/** How {@link wrapPaneInteractive} asks for a container kind. The options carry their own labels. */
 export interface WrapInteractiveOpts {
   /** Ask the user to pick a container kind (the host chooser). Called only for a GENUINE choice — a
    *  configured `group-into` or a sole wrap target is used silently, never a nag. */
   choose: (request: ChooseRequest) => Promise<string | null>;
-  /** Optional display label for a container type-name in the picker (else the bare type name). */
-  labelFor?: (typeName: string) => string;
 }
 
 /**
- * The interactive {@link wrapPaneSolo}: resolve the container kind (the composition's `group-into` /
- * a sole target used silently, else the family-SECTIONED chooser — Stack : grouping, Arrange : spatial),
- * then wrap. Mirrors the file-open floor's `pickWrapKind`, factored here so the substrate owns the flow
- * and the caller injects only the chooser + labels. Returns `'cancel'` when the user dismisses the picker.
+ * The interactive {@link wrapPaneSolo}: resolve the container kind through `wrapChoice(1)` (the
+ * composition's `group-into` / a sole target used silently, else the family-SECTIONED chooser — Stack,
+ * Arrange, Frame), then wrap. The substrate owns the flow; the caller injects only the chooser + labels.
+ * Returns `'cancel'` when the user dismisses the picker.
  */
 export async function wrapPaneInteractive(
   paneId: PaneId,
   opts: WrapInteractiveOpts,
   placementOverride?: ContainerPlacement,
 ): Promise<WrapOutcome | 'cancel'> {
-  const outcome = wrapTargetOutcome();
-  // None declared → let wrapPaneSolo report `no-grouping` (the honest terminal outcome).
-  if (!outcome || outcome.available.length === 0) return wrapPaneSolo(paneId, undefined, placementOverride);
+  const choice = wrapChoice(1);
+  // None admits a solo wrap → let wrapPaneSolo report `no-grouping` (the honest terminal outcome).
+  if (choice.options.length === 0) return wrapPaneSolo(paneId, undefined, placementOverride);
   // The composition said, or there is only one target → use it silently, no ask.
-  if ((outcome.reason === 'requested' || outcome.reason === 'only') && outcome.chosen) {
-    return wrapPaneSolo(paneId, outcome.chosen.typeName, placementOverride);
-  }
-  const bare = (t: string): string => t.split('::')[0] ?? t;
-  const SECTION = { grouping: 'Stack', spatial: 'Arrange' } as const;
-  const options = [...wrapTargets()]
-    .sort((a, b) => (a.family === b.family ? 0 : a.family === 'grouping' ? -1 : 1)) // Stack first, then Arrange.
-    .map((t) => ({
-      id: t.typeName,
-      label: opts.labelFor?.(t.typeName) ?? bare(t.typeName),
-      section: SECTION[t.family],
-    }));
-  const picked = await opts.choose({ title: 'Wrap in which container?', options });
+  if (choice.use) return wrapPaneSolo(paneId, choice.use, placementOverride);
+  const picked = await opts.choose({ title: 'Wrap in which container?', options: choice.options });
   if (!picked) return 'cancel';
   return wrapPaneSolo(paneId, picked, placementOverride);
 }
@@ -431,11 +451,11 @@ export function deregisterDialect(el: Element): void {
 }
 
 /**
- * Declare a surface as a CONTENT-DESTINATION (a file-tree folder row): it ACCEPTS a content drag and owns
- * the drop's outcome. The hit-test includes it in the deepest-wins up-walk — but only when its `accepts`
- * passes, so a refusing surface (a folder over a PANE drag) emits no target and the container zone beneath
- * it wins. General by construction: a projection registers it exactly as a chrome surface would (no
- * file-tree assumption in the seam). Returns a detach fn.
+ * Declare a surface as a CONTENT-DESTINATION (a file-tree folder row): it takes a content drag and owns
+ * the drop's outcome. The hit-test asks its `consider` verdict in the deepest-wins up-walk: `accept` offers
+ * it, `pass` lets the container zone around it win, `refuse` offers nothing at all (see `ContentDropVerdict`).
+ * General by construction: a projection registers it exactly as a chrome surface would (no file-tree
+ * assumption in the seam). Returns a detach fn.
  */
 export function registerDropTarget(el: Element, spec: ContentDropSpec): () => void {
   contentDropTargets.set(el, spec);
@@ -708,6 +728,17 @@ function groupIntoDeclaredContainer(
     });
     return;
   }
+  if (existing != null && !admitsChildren(capability!, 2)) {
+    // The group would hold two children and this kind's declared arity refuses two. Asked before any
+    // extract, so the refusal loses nothing.
+    reportHostDiagnostic({
+      code: 'drop-group-arity-refused',
+      severity: 'warning',
+      message: `a center-zone drop groups two panes, and '${capability!.typeName}' cannot hold two children, so the drop was refused`,
+      detail: { targetSlot: target.slotId, kind: capability!.typeName, min: capability!.minChildren, max: capability!.maxChildren },
+    });
+    return;
+  }
 
   // SEAM 4 — centre-wrap, and the SECOND destructive extract. Everything below is asked BEFORE it.
   //
@@ -763,6 +794,7 @@ function groupIntoDeclaredContainer(
       grouping: capability,
     });
     if (placed.ok && placed.edits.length > 0) tgtPool.propose(placed.edits);
+    else if (!placed.ok && on('placement')) event('placement', 'drop-refused', { targetSlot: target.slotId, reason: placed.reason });
     return;
   }
 
@@ -810,7 +842,7 @@ function dissolveIfCollapsed(
  */
   before: PaneId[],
 ): void {
-  // Use the source container's declared minChildren floor. A container without a floor never dissolves.
+  // Use the source container's declared floor (`arity-meta.min` on its type-def). A container without one never dissolves.
   const minChildren = groupingForKind(source.containerKind)?.minChildren;
   if (minChildren === undefined || minChildren <= 1) return;
   const panes = before;

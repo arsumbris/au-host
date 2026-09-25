@@ -23,7 +23,7 @@ fields:
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The rail can render at a COMPACT width: below its own ~140px narrow threshold it folds to a ~48px
   # icon-spine (its mark + foot gear), staying mounted. Declaring it lets an enclosing container (a
   # sandwich side) size the region to 48 and get the spine, instead of hiding the rail. 48 sits below

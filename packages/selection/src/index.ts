@@ -10,9 +10,9 @@
 
 import type { Range } from '@arsumbris/range'
 
-import type { FileSelection, LinkSelection, Selection } from './generated'
+import type { FileSelection, FolderSelection, LinkSelection, Selection } from './generated'
 
-export type { FileSelection, LinkSelection, Selection } from './generated'
+export type { FileSelection, FolderSelection, LinkSelection, Selection } from './generated'
 
 export function isFileSelection(selection: Selection): selection is FileSelection {
   return selection.type === 'file-selection'
@@ -21,6 +21,15 @@ export function isFileSelection(selection: Selection): selection is FileSelectio
 /** Construct a whole-file selection. */
 export function fileSelection(path: string, range?: Range): FileSelection {
   return range ? { type: 'file-selection', path, range } : { type: 'file-selection', path }
+}
+
+export function isFolderSelection(selection: Selection): selection is FolderSelection {
+  return selection.type === 'folder-selection'
+}
+
+/** Construct a folder selection, e.g. the payload of a folder dragged in the file tree. */
+export function folderSelection(path: string): FolderSelection {
+  return { type: 'folder-selection', path }
 }
 
 export function isLinkSelection(selection: Selection): selection is LinkSelection {
@@ -43,6 +52,7 @@ export function linkSelection(target: string, range?: Range): LinkSelection {
  */
 export function selectionIdentity(selection: Selection): string {
   if (isFileSelection(selection)) return `file:${selection.path}`
+  if (isFolderSelection(selection)) return `folder:${selection.path}`
   if (isLinkSelection(selection)) return `link:${selection.target}`
   // an unknown / custom kind: a stable, range- and block-id-free structural key.
   const { range: _range, ['^']: _block, ...rest } = selection as Record<string, unknown>

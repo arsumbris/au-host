@@ -394,7 +394,6 @@ export function mountLauncher(
     motion.removeEventListener('change', syncMist)
     mist?.destroy()
     resize.disconnect()
-    menu?.close()
     releaseConfig?.()
     clearInterval(timer)
     document.removeEventListener('pointerdown', track, true)

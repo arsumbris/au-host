@@ -56,17 +56,22 @@ interface Shared {
      *  only an async wrapper above the sync `routeDrop` ever calls it. */
     chooser: import('./grouping.ts').GroupingChooser | null;
   };
-  /** The host-installed WRAP-TARGET registry (see `grouping.ts`): the UNION of grouping ∪ spatial
+  /** The host-installed WRAP-TARGET registry (see `grouping.ts`): the UNION of grouping ∪ spatial ∪ frame
    *  containers, family-tagged, that the WRAP action offers — DECOUPLED from `grouping` (which is the
    *  drop's stack-group set). Same window-global holder + producer/consumer split as `grouping`: the wrap
    *  pane action runs inside a PROJECTION bundle, so a module-level slot would not be seen. */
   wrapTargets: {
     targets: import('./grouping.ts').WrapTarget[];
-    outcome: import('./grouping.ts').GroupingChoiceOutcome | null;
+    /** The composition's `grouping.group-into`, bare or qualified; `wrapChoice` applies it per child count. */
+    groupInto: string | undefined;
   };
   /** The host-installed TYPE-CLOSURE predicate `admits` is checked with (see `slots.ts`). Same
    *  producer/consumer split as `grouping`, so the same window-global holder. */
   slotTypes: { provider: import('./slots.ts').SlotTypeProvider | null };
+  /** The host-installed CONTAINER SCHEMAS (see `slots.ts`): which fields of each container hold its
+   *  children and which slot types each admits, derived from the type graph. The slot codec reads a
+   *  position's slot type here. Same producer/consumer split, so the same window-global holder. */
+  containerSchemas: { current: import('@arsumbris/au-host-sdk').ContainerSchemas | null };
   /** The host-installed live INTENT CENSUS getter (see `intent-census.ts`). On the window-global
    *  BECAUSE the layout-inspector is its OWN projection bundle: the host (app) is the producer and the
    *  inspector the consumer, in DIFFERENT bundles, so a module-level singleton would not be shared. */
@@ -91,8 +96,9 @@ function createShared(): Shared {
     contentDropTargets: new WeakMap(),
     containerRoots: new Set(),
     grouping: { provider: null, chooser: null },
-    wrapTargets: { targets: [], outcome: null },
+    wrapTargets: { targets: [], groupInto: undefined },
     slotTypes: { provider: null },
+    containerSchemas: { current: null },
     intentCensus: { provider: null },
     paneHeaders: new Map(),
   };
@@ -115,8 +121,9 @@ function init(): Shared {
     if (!existing.containerRoots) existing.containerRoots = new Set();
     if (!existing.grouping) existing.grouping = { provider: null, chooser: null };
     else if (existing.grouping.chooser === undefined) existing.grouping.chooser = null;
-    if (!existing.wrapTargets) existing.wrapTargets = { targets: [], outcome: null };
+    if (!existing.wrapTargets) existing.wrapTargets = { targets: [], groupInto: undefined };
     if (!existing.slotTypes) existing.slotTypes = { provider: null };
+    if (!existing.containerSchemas) existing.containerSchemas = { current: null };
     if (!existing.intentCensus) existing.intentCensus = { provider: null };
     if (!existing.paneHeaders) existing.paneHeaders = new Map();
     return existing;
@@ -150,14 +157,17 @@ export const grouping: {
   chooser: import('./grouping.ts').GroupingChooser | null;
 } = shared.grouping;
 
-/** The one shared holder for the host-installed WRAP-TARGET registry (grouping ∪ spatial). See `grouping.ts`. */
+/** The one shared holder for the host-installed WRAP-TARGET registry (grouping ∪ spatial ∪ frame). See `grouping.ts`. */
 export const wrapTargets: {
   targets: import('./grouping.ts').WrapTarget[];
-  outcome: import('./grouping.ts').GroupingChoiceOutcome | null;
+  groupInto: string | undefined;
 } = shared.wrapTargets;
 
 /** The one shared holder for the host-installed slot type-closure predicate. See `slots.ts`. */
 export const slotTypes: { provider: import('./slots.ts').SlotTypeProvider | null } = shared.slotTypes;
+
+/** The one shared holder for the host-installed container schemas. See `slots.ts`. */
+export const containerSchemas: { current: import('@arsumbris/au-host-sdk').ContainerSchemas | null } = shared.containerSchemas;
 
 /** The one shared holder for the host-installed live intent census getter. See `intent-census.ts`. */
 export const intentCensus: { provider: (() => import('./intent-census.ts').IntentCensus) | null } = shared.intentCensus;

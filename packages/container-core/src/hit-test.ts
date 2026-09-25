@@ -4,6 +4,7 @@
  * container schemas. The caller can select the first target for deepest-wins behavior.
  */
 
+import { isContentHostable } from './content-hostable.ts';
 import { contentDropTargets, dialectRegistry, dragStore } from './singletons.ts';
 import { DATA_ATTR, type DragSource, type DropHit } from './types.ts';
 
@@ -27,6 +28,8 @@ export function resolveTargetsAll(
   // The CONTENT this drag carries (opaque), so a content-destination's `accepts` can gate itself at
   // hit-test time. Read off the live store — a pane drag has none, so no content-destination ever offers.
   const content = dragStore.getState().drag?.content;
+  // A container zone would MINT a pane from the content, so it is offered only for content a pane can host.
+  const offerZones = content === undefined || isContentHostable(content);
   const targets: DropHit[] = [];
   const seen = new Set<Element>();
   // DON'T OFFER a target INSIDE the dragged pane: a container cannot accept its own ancestor
@@ -41,16 +44,19 @@ export function resolveTargetsAll(
   let cur: Element | null = el;
   while (cur) {
     if (draggedSlot && draggedSlot.contains(cur)) { cur = cur.parentElement; continue; }
-    // CONTENT-DESTINATION at this depth (deepest-first): included ONLY if it accepts this drag. A refusing
-    // surface (a folder over a pane drag — no `content`) offers nothing, so the container zone beneath it
-    // wins deepest-wins. A folder row is deeper than its enclosing container slot, so for a CONTENT drag it
-    // correctly wins; for a PANE drag it refuses and the container zone wins.
+    // CONTENT-DESTINATION at this depth (deepest-first). `accept` offers it; `pass` offers nothing and the
+    // walk goes on, so the container zone around it can win (a folder row under a PANE drag); `refuse` ends
+    // the walk, so an invalid drop never falls through to an ANCESTOR that would accept. A refusal only
+    // blocks what lies further out: what a deeper level already offered stands (a file in a member's root,
+    // dragged onto a subfolder, is refused by the member group around that folder, yet the folder took it).
     const cds = contentDropTargets.get(cur);
-    if (cds && cds.accepts(source, content)) {
-      targets.push({ kind: 'content-dest', el: cur, spec: cds });
+    if (cds) {
+      const verdict = cds.consider(source, content);
+      if (verdict === 'refuse') return targets;
+      if (verdict === 'accept') targets.push({ kind: 'content-dest', el: cur, spec: cds });
     }
     const dialect = dialectRegistry.get(cur);
-    if (dialect && !seen.has(cur)) {
+    if (dialect && offerZones && !seen.has(cur)) {
       seen.add(cur);
       targets.push(...dialect.resolveTargets(cur, point, source));
     }

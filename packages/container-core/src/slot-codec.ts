@@ -1,15 +1,22 @@
 /**
- * Reads and writes a container position's union of a bare projection and a slot record.
- * Slot type names and extra fields vary by container; normalization and identity are shared.
- * Slot records are recognized by type closure through the host-installed predicate, so a
- * subtype retains its position rules instead of being mistaken for a bare child projection.
+ * Reads and writes a container position's union of a bare child and a slot record.
+ *
+ * The codec is bound to a SITE, a container's child-bearing field, and asks the type graph what that
+ * field admits. It never declares a slot type of its own: the derived schema (`slotFieldOf`) says which
+ * slot types the field's union names, so a field typed to bare children (dock's `bar-projection*[]`
+ * edges) reads and writes bare children only, and a field typed to a slot subtype writes that subtype.
+ * A slot record is recognized by type closure (is-a `container-slot`), so a subtype keeps its rules.
  * Container-specific wrappers, entry ids and tree nodes remain owned by each container.
  */
 
-import { bareTypeName, reportHostDiagnostic } from '@arsumbris/au-host-sdk';
-import type { ContainerSlot, Occupant } from '@arsumbris/au-host-sdk';
+import { bareTypeName, reportHostDiagnostic, slotRuleMeaningful } from '@arsumbris/au-host-sdk';
+import type { ContainerSlot, Occupant, SlotField } from '@arsumbris/au-host-sdk';
 import { slotTypes } from './singletons.ts';
+import { slotFieldOf } from './slots.ts';
 import { mintBlockId } from './block-id.ts';
+
+/** The slot base every slot type descends from. A record whose type is-a this is a slot record. */
+const SLOT_ROOT = 'container-slot';
 
 /**
  * What a POSITION says, when it says anything.
@@ -22,6 +29,10 @@ import { mintBlockId } from './block-id.ts';
 export type SlotState<E extends object = Record<never, never>> = {
   /** The slot record's OWN `^:` id — the POSITION's identity, distinct from its occupant's. */
   id?: string;
+  /** The slot record's own `type:` as authored (`sandwich-slot::sandwich`, a third-party subtype).
+   *  Written back verbatim, so a subtype keeps its identity. Absent for a position read bare; a
+   *  freshly materialized record takes the field's declared slot type. Identity, never a rule. */
+  type?: string;
   /** What may occupy it, as authored def-ref links. Absent admits anything. */
   admits?: readonly string[];
   /** The occupant may not be dragged out, closed, or displaced by a restructure. */
@@ -71,13 +82,14 @@ export function persistedId(record: object | undefined): string | undefined {
 /** How a container declares the union it reads and writes. */
 export interface SlotCodecOptions<E extends object> {
   /**
-   * The slot type this container writes, BARE (`sandwich-slot`, or `container-slot` for a container
-   * that adds nothing). A record whose `type:` is this OR ANY SUBTYPE of it reads as a slot.
+   * The child position this codec reads and writes: a container or structural-node type (BARE, the
+   * module's own base type) and one of its child-bearing fields. The field's derived shape decides which
+   * slot types it admits; a subtype of the container inherits the field unchanged.
    */
-  slotType: string;
+  site: { type: string; field: string };
   /**
-   * The extra fields this container HONOURS, beyond the four base ones. Keys are checked against
-   * `E`, so a name that is not on the state type fails to compile.
+   * The extra fields this container HONOURS, beyond the base ones. Keys are checked against `E`, so a
+   * name that is not on the state type fails to compile.
    *
    * DECLARED HERE RATHER THAN DERIVED from the slot subtype's own fields, and the difference is the
    * point: the type-def says what may be AUTHORED, this says what the container ACTS ON. They should
@@ -85,12 +97,7 @@ export interface SlotCodecOptions<E extends object> {
    * honouring is code, so the code is what declares it.
    */
   extras?: readonly (keyof E & string)[];
-  /**
-   * Appended to the written `type:`, for a composition whose types are `::repo`-qualified.
-   * Empty for an unqualified one.
-   */
-  qualifier?: string;
-  /** The container's name, for the one error message this can raise. */
+  /** The container's name, for the diagnostics this can raise. */
   label: string;
 }
 
@@ -114,25 +121,28 @@ export interface SlotCodec<C, E extends object> {
    * on is the mirror of letting an author write one the container cannot act on.
    */
   toSeamSlot(slot: SlotState<E> | undefined): ContainerSlot | null;
+  /**
+   * An EMPTY slot record of this site's declared slot type, qualified by its owner: an unoccupied
+   * position a container must keep in its record (bento's branch needs two children). Throws when the
+   * site's shape is not derived or it admits no slot record, since neither can hold an empty position.
+   */
+  emptyRecord(): Record<string, unknown>;
 }
 
 /**
- * Is a value MEANINGFUL — i.e. worth writing, and enough on its own to keep a slot alive?
- *
- * ONE RULE for every field, base and extra alike: present, and not `false`. For example, `collapsed: false` and `fixed: false` say nothing,
- * and neither does an absent size. A single rule is also what keeps `speaks` and `write` from
- * drifting, which is the whole reason they sit in one file.
+ * Is a value MEANINGFUL — worth writing, and enough on its own to keep a slot alive? ONE RULE for
+ * every field, base and extra alike: present, not `false`, and (for a list) non-empty. `slotRuleMeaningful`
+ * is owned by au-host-sdk (the slot vocabulary's home), so the host's raw-pool-form `setSlotRules` and this
+ * resolved-form codec materialize / collapse a slot by the SAME predicate — no drift between the two writers.
  */
-function meaningful(v: unknown): boolean {
-  if (v === undefined || v === false) return false;
-  return !Array.isArray(v) || v.length > 0;
-}
+const meaningful = slotRuleMeaningful;
 
 export function makeSlotCodec<C, E extends object = Record<never, never>>(
   opts: SlotCodecOptions<E>,
 ): SlotCodec<C, E> {
-  const { slotType, extras = [], qualifier = '', label } = opts;
+  const { site, extras = [], label } = opts;
   const BASE = ['id', 'admits', 'fixed', 'placeholder', 'label', 'hideHeader'] as const;
+  const field = (): SlotField | undefined => slotFieldOf(site.type, site.field);
 
   const noRefs = (): never => {
     // A wikilink at a child position is a REFERENCED view. The model admits it (`child?` carries the
@@ -145,10 +155,20 @@ export function makeSlotCodec<C, E extends object = Record<never, never>>(
     if (value == null || typeof value !== 'object') return false;
     const t = bareTypeName((value as { type?: string }).type);
     if (!t) return false;
-    // BY CLOSURE when the host has installed the predicate, so a subtype of this container's slot
-    // reads as a slot. Without it — a unit test, or a mount before discovery has run — fall back to
-    // the exact name.
-    return slotTypes.provider ? slotTypes.provider.isA(t, slotType) : t === slotType;
+    // BY CLOSURE: slot types and projections are disjoint trees, so "is-a container-slot" is the whole
+    // question. Without the predicate (a unit test, or a mount before discovery) the field's own derived
+    // slot types, else the base name, are the exact-name floor.
+    const provider = slotTypes.provider;
+    if (provider) return provider.isA(t, SLOT_ROOT);
+    return field()?.slotTypes.includes(t) ?? t === SLOT_ROOT;
+  };
+
+  /** Does this site's field admit a slot record of type `t`? Unknown until schemas are installed. */
+  const admitted = (t: string): boolean => {
+    const f = field();
+    if (!f) return true;
+    const provider = slotTypes.provider;
+    return f.slotTypes.some((s) => (provider ? provider.isA(t, s) : t === s));
   };
 
   const speaks = (slot: SlotState<E> | undefined): boolean => {
@@ -179,10 +199,25 @@ export function makeSlotCodec<C, E extends object = Record<never, never>>(
     return { id: persistedId(child as object) ?? mintBlockId(), instance: child as C };
   };
 
+  /** The slot type a freshly materialized record at this site claims: the field's first declared
+   *  slot type, qualified by its owner so a composition in another repo claims it validly. */
+  const declaredType = (): string | undefined => {
+    const f = field();
+    return f?.slotTypesQualified[0] ?? f?.slotTypes[0];
+  };
+
   return {
     isSlotRecord,
     speaks,
     survivesEmpty,
+
+    emptyRecord(): Record<string, unknown> {
+      const type = declaredType();
+      if (type === undefined) {
+        throw new Error(`${label}: '${site.type}.${site.field}' ${field() ? 'admits no slot record' : 'has no derived shape (container schemas not installed)'}, so it cannot hold an empty position`);
+      }
+      return { type };
+    },
 
     toSeamSlot(slot: SlotState<E> | undefined): ContainerSlot | null {
       if (!speaks(slot)) return null;
@@ -207,24 +242,22 @@ export function makeSlotCodec<C, E extends object = Record<never, never>>(
         return { child: readChild(value)!, slot: {} as SlotState<E> };
       }
       const rec = value as Record<string, unknown>;
-      // FOOTGUN GUARD. `write` re-stamps ONE fixed `slotType`, discarding whatever `type` was read
-      // (safe only while there is ONE slot type per container). `isSlotRecord` accepts a SUBTYPE by
-      // closure — correctly, it IS a slot — but re-stamping the parent on the next save FLATTENS the
-      // subtype's identity, silently: exactly the "valid file that stops saying what its author
-      // wrote" the slot model exists to prevent. So the moment a second slot type per container
-      // exists, this fires LOUD at the read seam instead of corrupting quietly at the write seam.
-      // The real fix if a second type is ever wanted is per-type write handling, not this guard.
-      const recType = bareTypeName(rec['type'] as string | undefined);
-      if (recType && recType !== slotType) {
+      const recType = rec['type'] as string;
+      if (!admitted(bareTypeName(recType))) {
+        // The field's type holds no slot of this kind (dock's edges hold bars, bare), so no rule here
+        // can mean anything. The occupant is kept; the rules are dropped on the next save, and said so.
         reportHostDiagnostic({
-          code: 'slot-subtype-flattened',
+          code: 'slot-record-not-admitted',
           severity: 'warning',
-          message: `${label}: a '${recType}' slot record reads fine but will be RE-SERIALIZED as '${slotType}' on the next save — the codec re-stamps one slot type per container, so a distinct subtype loses its identity. Teach the codec per-type write handling before introducing a second slot type.`,
-          subject: recType,
-          detail: { read: recType, willWrite: slotType, container: label },
+          message: `${label}: '${site.field}' holds ${field()?.slotTypes.length ? `only ${field()!.slotTypes.join(' / ')} slot records` : 'no slot records'}, so a '${bareTypeName(recType)}' record there is read as its child alone; its rules are ignored and dropped on the next save.`,
+          subject: `${site.type}.${site.field}`,
+          detail: { site, read: recType, admits: field()?.slotTypes ?? [] },
         });
+        const kept = readChild(rec['child']);
+        return { ...(kept === undefined ? {} : { child: kept }), slot: {} as SlotState<E> };
       }
       const slot = {} as Record<string, unknown>;
+      slot['type'] = recType;
       const pid = persistedId(rec);
       if (pid !== undefined) slot['id'] = pid;
       const understood = new Set(['admits', 'fixed', 'placeholder', 'label', 'hideHeader', ...extras]);
@@ -259,8 +292,24 @@ export function makeSlotCodec<C, E extends object = Record<never, never>>(
         // has a bare branch at all.
         return body;
       }
+      // The record's own type when it was read as one, else the field's declared slot type, qualified
+      // by its owner so a composition authored in another repo claims it validly.
+      const f = field();
+      const type = slot.type ?? declaredType();
+      if (type === undefined) {
+        // The field admits no slot record (or the schemas are not installed), so these rules have no
+        // record to live in. The child stays bare; the dropped rules are named.
+        reportHostDiagnostic({
+          code: 'slot-rule-inexpressible',
+          severity: 'warning',
+          message: `${label}: '${site.field}' ${f ? 'holds no slot records' : 'has no derived shape yet'}, so the rules set on this position cannot be written; the child stays bare.`,
+          subject: `${site.type}.${site.field}`,
+          detail: { site, rules: Object.keys(slot).filter((k) => k !== 'type' && k !== 'carried') },
+        });
+        return body;
+      }
       const s = slot as Record<string, unknown>;
-      const out: Record<string, unknown> = { type: `${slotType}${qualifier}` };
+      const out: Record<string, unknown> = { type };
       if (meaningful(s['id'])) out['^'] = s['id'];
       // Preserve serialized key order: rules, container extras, label, then occupant.
       // Stable ordering avoids unnecessary diffs in composition files.

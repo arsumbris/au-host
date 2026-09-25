@@ -1,8 +1,8 @@
 // Behaviour: the cross-repo git activity projection renders its stream, a row expands to its detail, and a
 // changed file in the panel fires an open-intent — all in the running app, over the real recent_commits
-// read + subscription. The vault sits inside the au-host working tree, so the stream is non-empty. This
-// locks the render → expand → file-open path; the mutation FOLD is covered separately by group.test.ts,
-// and live-append / real-daemon grouping are manually verified (they need a controlled git tree).
+// read + subscription. The per-test vault is its own git repository whose root commit adds every fixture
+// file, so the stream holds that commit and its changed files. This locks the render → expand → file-open
+// path; the mutation FOLD is covered separately by group.test.ts.
 import { test, expect } from '../fixtures/app'
 
 test.use({ composition: 'git-activity' })

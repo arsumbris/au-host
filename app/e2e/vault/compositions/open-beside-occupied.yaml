@@ -1,0 +1,27 @@
+# A sandwich whose three regions are all OCCUPIED (file-tree | backlinks | hello) and no mounted viewer.
+# Sandwich does not claim an open, and no empty region holds a placeholder, so opening a file dead-ends
+# onto the open floor; "Choose a pane…" onto any pane joins the file to an occupied pane, so the layout
+# step wraps TWO children (frame-wrap.spec: a two-child wrap never offers a frame).
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center: "[[^^links]]"
+    right: "[[^^hi]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: links
+    type: backlinks::backlinks
+  - ^: hi
+    type: hello::hello

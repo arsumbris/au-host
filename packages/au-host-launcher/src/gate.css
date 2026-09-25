@@ -42,6 +42,13 @@
   outline: none;
   border-color: var(--au-color-accent);
 }
+.gate-engine-input { display: flex; gap: var(--au-space-2); align-items: stretch; }
+.gate-engine-input button {
+  flex: 0 0 auto; padding: 0 var(--au-space-3);
+  background: var(--au-color-bg); border: 1px solid var(--au-color-border);
+  border-radius: var(--au-radius-sm); color: var(--au-color-text);
+}
+.gate-engine-input button:hover { background: var(--au-chrome-hover); }
 
 .status-row {
   display: flex;

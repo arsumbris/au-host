@@ -23,9 +23,9 @@
  *
  */
 
-import type { ContainerPlacement, ContainerSlot } from '@arsumbris/au-host-sdk';
-import { reportHostDiagnostic, event, on } from '@arsumbris/au-host-sdk';
-import { findContainerRoot, slotTypes } from './singletons.ts';
+import type { ContainerPlacement, ContainerSchemas, ContainerSlot, SlotField } from '@arsumbris/au-host-sdk';
+import { bareTypeName, reportHostDiagnostic, event, on } from '@arsumbris/au-host-sdk';
+import { containerSchemas, findContainerRoot, slotTypes } from './singletons.ts';
 
 /** The gesture a refusal names, so a diagnostic says which seam refused and why. */
 export type SlotGesture = 'drag-start' | 'reorder' | 'move' | 'group' | 'dissolve' | 'close' | 'place';
@@ -63,6 +63,33 @@ export interface SlotTypeProvider {
 /** Install the type-closure predicate. `null` clears it (teardown). */
 export function setSlotTypeProvider(provider: SlotTypeProvider | null): void {
   slotTypes.provider = provider;
+}
+
+/**
+ * Install the derived container schemas: which fields of each container hold its children, and which
+ * slot types each field admits. `null` clears them (teardown).
+ *
+ * Injected for the same reason as the closure predicate: the answer is the TYPE GRAPH's, the host
+ * derives it once per discovery pass (`deriveContainerSchemas`), and this library never reads an engine.
+ * Every renderer that mounts containers installs it, so a floated window reads the same facts.
+ */
+export function setContainerSchemas(schemas: ContainerSchemas | null): void {
+  containerSchemas.current = schemas;
+}
+
+/**
+ * The derived shape of ONE child position: the field `field` of the container or structural node
+ * `type`. Undefined while no schemas are installed, or when the type holds no such field.
+ *
+ * A subtype of a container inherits its fields unchanged (width-only subtyping forbids a
+ * redeclaration), so a module asking by its own base type name reads the same field every subtype has.
+ */
+export function slotFieldOf(type: string, field: string): SlotField | undefined {
+  const schemas = containerSchemas.current;
+  if (!schemas) return undefined;
+  const name = bareTypeName(type);
+  const schema = schemas.containers.get(name) ?? schemas.nodes.get(name);
+  return schema?.fields.find((f) => f.name === field);
 }
 
 /**

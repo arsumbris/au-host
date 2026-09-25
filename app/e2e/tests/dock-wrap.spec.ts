@@ -21,7 +21,7 @@ test('docking into an occupied non-grouping region WRAPS, never replaces', async
   // the center editor's post-extract witness → clean-inverse can no longer apply on dock.
   await page.getByRole('button', { name: 'Pane actions' }).first().click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'tabs', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Tabs', exact: true }).click()
   await expect(page.locator('[data-container-kind="tabs"]').first()).toBeVisible()
 
   // 3) Dock the center editor via "Move to other window" (: sole other window = main → auto-picks

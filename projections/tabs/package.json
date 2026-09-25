@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo tabs --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../codegen --repo tabs --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

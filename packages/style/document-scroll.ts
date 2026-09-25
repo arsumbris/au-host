@@ -8,13 +8,17 @@ export function bindDocumentToolbar(root: HTMLElement, scroller: HTMLElement): (
     const offset = Math.min(Math.max(0, scroller.scrollTop), toolbar.offsetHeight)
     root.style.setProperty('--document-toolbar-offset', `${-offset}px`)
   }
+  // The toolbar is positioned, so it is the containing block of anything it holds. A panel anchored in
+  // it sizes against the whole view through `--document-view-size`, never the toolbar's own height.
   const measure = () => {
+    root.style.setProperty('--document-view-size', `${root.clientHeight}px`)
     root.style.setProperty('--document-toolbar-size', `${toolbar.offsetHeight}px`)
     root.style.setProperty('--document-scrollbar-inset', `${Math.max(0, scroller.offsetWidth - scroller.clientWidth)}px`)
     scroller.style.paddingBlockStart = 'var(--document-toolbar-size)'
     sync()
   }
   const observer = new ResizeObserver(measure)
+  observer.observe(root)
   observer.observe(toolbar)
   observer.observe(scroller)
   root.dataset.scrollToolbar = 'true'
@@ -28,6 +32,7 @@ export function bindDocumentToolbar(root: HTMLElement, scroller: HTMLElement): (
     toolbar.removeEventListener('focusin', reveal)
     scroller.style.paddingBlockStart = padding
     root.removeAttribute('data-scroll-toolbar')
+    root.style.removeProperty('--document-view-size')
     root.style.removeProperty('--document-toolbar-size')
     root.style.removeProperty('--document-toolbar-offset')
     root.style.removeProperty('--document-scrollbar-inset')

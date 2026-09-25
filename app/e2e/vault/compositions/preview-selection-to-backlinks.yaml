@@ -7,11 +7,18 @@
 #                                    NEVER into the center group, so it can't stand in for the preview.
 #     center: tabs G              — holds Backlinks; the file-tree's open-intent routes HERE (the single
 #                                    open-capable container), opening a transient preview editor tab in G.
+#     right:  hello               — fills the slot, which would otherwise show an open-capable placeholder
+#                                    that competes with G for the open.
 # Backlinks follows G, so only a selection published from WITHIN G reaches it. The preview editor opens
 # sample.md and publishes its file-selection (editor auto-publishes on open); it reaches Backlinks ONLY
 # because the fix keeps the preview's edge LIVE in the pool (its logical parent is G). Revert the fix and
 # the preview orphans to the window root, off G's bubble path → Backlinks never receives → this fails.
 type: composition::au-host-sdk
+# Opt out of the CHOOSE picker: preview-selection-to-backlinks / transient-preview-not-persisted share
+# this fixture and test the preview-open → selection flow, not the picker, so `mru` keeps the file open
+# a silent auto-pick.
+intent-routing:
+  default-strategy: mru
 windows:
   - "[[^^w]]"
 # md is eligible for both editor-pane and aup-reader (host-bundle discovery); the rung-2 default keeps the
@@ -29,6 +36,7 @@ projections:
     type: sandwich::sandwich
     left: "[[^^tree]]"
     center: "[[^^g]]"
+    right: "[[^^hi]]"
   - ^: tree
     type: file-tree::file-tree
   - ^: g
@@ -37,3 +45,5 @@ projections:
       - "[[^^bl]]"
   - ^: bl
     type: backlinks::backlinks
+  - ^: hi
+    type: hello::hello

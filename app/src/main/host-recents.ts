@@ -15,6 +15,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 import { hostConfigDir } from './device-paths'
 import { isFolderRepo } from './gate-inspect'
+import { moveAside, readLocalFile } from './local-file-read'
 import type { RecentComposition, RecentWorkspace, TouchWorkspace } from '../shared/daemon-api'
 
 /** The recents file: `~/.arsumbris/au-host/config/recents.yaml`. */
@@ -26,22 +27,27 @@ function now(): number {
   return Date.now()
 }
 
-/** Read + normalize the store. Never throws: missing / corrupt / wrong-shape → []. */
+/** Set when an unreadable recents file could not be moved aside: writing would destroy it, so nothing is. */
+let blocked = false
+
+/** Read + normalize the store. Never throws. Missing → []; unreadable or not a recents document → moved
+ *  aside, then []; one that will not move blocks writes for this session. */
 function readRaw(): RecentWorkspace[] {
-  let text: string
-  try {
-    text = fs.readFileSync(recentsFile(), 'utf8')
-  } catch {
-    return [] // no file = first run
+  const read = readLocalFile(recentsFile(), (text): unknown[] => {
+    const parsed: unknown = parseYaml(text)
+    if (parsed === null || parsed === undefined) return [] // an empty file holds no recents
+    const list = typeof parsed === 'object' ? (parsed as { workspaces?: unknown }).workspaces : undefined
+    if (!Array.isArray(list)) throw new Error('it has no `workspaces` list')
+    return list
+  })
+  if (read.state === 'absent') return [] // no file = first run
+  if (read.state === 'failed') {
+    const aside = moveAside(recentsFile())
+    if (!aside) blocked = true
+    console.error(`[recents] ${recentsFile()} was unusable (${read.cause}); ${aside ? `moved aside to ${aside}` : 'could not move it aside, not writing it this session'}`)
+    return []
   }
-  let parsed: unknown
-  try {
-    parsed = parseYaml(text)
-  } catch {
-    return [] // corrupt YAML degrades to first-run, not an error
-  }
-  const list = parsed && typeof parsed === 'object' ? (parsed as { workspaces?: unknown }).workspaces : undefined
-  if (!Array.isArray(list)) return []
+  const list = read.value
   const out: RecentWorkspace[] = []
   for (const item of list) {
     if (!item || typeof item !== 'object') continue
@@ -63,6 +69,7 @@ function readRaw(): RecentWorkspace[] {
 }
 
 function write(list: RecentWorkspace[]): void {
+  if (blocked) return
   try {
     fs.mkdirSync(path.dirname(recentsFile()), { recursive: true })
     fs.writeFileSync(recentsFile(), '# au-host launcher recents (local, per-machine; safe to delete).\n' + stringifyYaml({ workspaces: list }))

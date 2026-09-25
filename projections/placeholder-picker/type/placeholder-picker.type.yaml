@@ -13,7 +13,7 @@ meta:
   # Loadable-code metadata: `entry` is relative to this package root, so the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   - type: projection-presentation-meta::au-host-sdk
     title: Pick content
   # The intents this placeholder HANDLES. Declaring open-intent makes it a normal open TARGET in the

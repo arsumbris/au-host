@@ -78,6 +78,13 @@ export interface ActionResult {
   error?: string
 }
 
+/** The outcome of CLAIMING a workspace before opening it. `held`: another live instance holds it (and has
+ *  been focused). `error`: the claim could not be made (the message says why). Only `claimed: true` opens. */
+export type WorkspaceClaim =
+  | { claimed: true }
+  | { claimed: false; reason: 'held' }
+  | { claimed: false; reason: 'error'; message: string }
+
 /**
  * The adapter's own operation bins + agent-binary name, from `adapter-runtime-meta`.
  * The bin entries are paths RELATIVE to the adapter `dir`.
@@ -298,6 +305,13 @@ export interface GateInspection {
   /** Human-readable problems; empty when `ok` or `notARepo`. */
   problems: string[]
 }
+
+/** The members of a workspace entry the engine would not mount, from `au members`, or why that could not
+ *  be checked. `complete: false`: a locked dependency's snapshot is missing from the package cache, so
+ *  `missing` may not be the whole answer. */
+export type MissingMembers =
+  | { ok: true; missing: string[]; complete: boolean }
+  | { ok: false; error: string }
 
 /** A located repo on disk during a folder scan. */
 export interface FoundDep {

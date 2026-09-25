@@ -18,7 +18,7 @@ projections:
     left: "[[^^treeL]]"
     center:
       ^: center-slot
-      type: sandwich-slot::sandwich
+      type: container-slot::au-host-sdk
       admits:
         - "[[editor-pane::editor]]"
   - ^: treeL

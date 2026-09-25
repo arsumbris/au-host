@@ -5,7 +5,7 @@
 // per probe by design): reads from projections want a held connection so
 // per-ref versions stay comparable and subscriptions have a home.
 
-import { DaemonClient, manageConnection, toTypedSubscriber } from '@arsumbris/au-engine-sdk'
+import { DaemonClient, appliableFix, manageConnection, toTypedSubscriber } from '@arsumbris/au-engine-sdk'
 import type {
   ManagedConnection,
   ReadRequest,
@@ -15,7 +15,7 @@ import type {
 } from '@arsumbris/au-engine-sdk'
 import { readContent, readDeviceConfig, readResolveMember, readResolveTarget } from '@arsumbris/au-engine-sdk/reads'
 import { isAbsolute, normalize, relative, sep } from 'node:path'
-import type { WireDeviceConfigResult, WireReader } from '@arsumbris/au-engine-sdk/reads'
+import type { WireDeviceConfigResult, WireDiagnostic, WireReader } from '@arsumbris/au-engine-sdk/reads'
 
 import type { DeviceConfigResult, EngineReadResult, FileReadResult, FileWriteResult, RegisterResult } from '../shared/daemon-api'
 
@@ -165,6 +165,16 @@ export class EngineConnections {
     return this.mutate(entryPath, (client) => client.rename(from, to))
   }
 
+  /** Move or rename a folder as one saga (`move_dir`). */
+  async moveDir(entryPath: string, from: string, to: string): Promise<FileWriteResult> {
+    return this.mutate(entryPath, (client) => client.moveDir(from, to))
+  }
+
+  /** Delete a folder and its contents as one saga (`delete_dir`). */
+  async deleteDir(entryPath: string, dirPath: string): Promise<FileWriteResult> {
+    return this.mutate(entryPath, (client) => client.deleteDir(dirPath))
+  }
+
   /**
    * Read a file through the daemon's `content` read. An absent file maps to a not-ok read.
    * The response includes the source and its content hash together, providing the `expected_hash`
@@ -303,7 +313,7 @@ export class EngineConnections {
   }
 
   /** Shared mutation plumbing: resolve the client, map `TypedMutate` to a result. */
-  private async mutate(
+  async mutate(
     entryPath: string,
     run: (client: DaemonClient) => Promise<TypedMutate>,
   ): Promise<FileWriteResult> {
@@ -331,6 +341,39 @@ export class EngineConnections {
       // The connection may have died mid-mutate; the next call reconnects.
       return { ok: false, error: message(err) }
     }
+  }
+
+  /**
+   * The engine-authored applicable fixes for a diagnostic, TITLES ONLY (the
+   * serializable half). `appliableFix` is node-only — it takes the DaemonClient
+   * and `apply()` runs a mutation — so it runs HERE, never in the renderer; the
+   * renderer renders one button per title and drives `applyFix` by index. No
+   * client reachable → `[]`, so the banner simply shows no button.
+   */
+  async appliableFixes(entryPath: string, diag: WireDiagnostic): Promise<{ title: string }[]> {
+    let client: DaemonClient
+    try {
+      client = await this.client(entryPath)
+    } catch {
+      return []
+    }
+    return appliableFix(client, diag).map((fix) => ({ title: fix.title }))
+  }
+
+  /**
+   * Apply one of a diagnostic's fixes by index. Stateless across the render/apply
+   * split: the renderer hands back the SAME diagnostic, so the fix list is
+   * RE-RESOLVED here (`appliableFix` does no IO — only `apply()` does) and the
+   * chosen entry run. The `TypedMutate` maps through the shared `mutate` plumbing,
+   * so a topology failure (no editable member owns the file) surfaces as
+   * `{ ok: false }` rather than a wrong mutation.
+   */
+  async applyFix(entryPath: string, diag: WireDiagnostic, index: number): Promise<FileWriteResult> {
+    return this.mutate(entryPath, async (client) => {
+      const fix = appliableFix(client, diag)[index]
+      if (fix === undefined) throw new Error(`no applicable fix at index ${index} for '${diag.code}'`)
+      return fix.apply()
+    })
   }
 
   /**

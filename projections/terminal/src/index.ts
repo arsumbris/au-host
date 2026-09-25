@@ -62,7 +62,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   defaults.textContent = 'Terminal defaults and appearance…'
   defaults.setAttribute('variant', 'ghost')
   defaults.addEventListener('au-activate', () => {
-    settingsMenu?.close()
+    closeSettings()
     host.intent.fire(showPaneIntent('terminal-settings'))
   })
   const shellInput = document.createElement('au-input') as HTMLElement & {
@@ -116,13 +116,16 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   )
   shell.append(body)
   let settingsMenu: { close(): void } | undefined
-  let menuStyles: (() => void) | undefined
-  const openSettings = (anchor: DOMRect): void => {
+  const closeSettings = (): void => {
     settingsMenu?.close()
+    settingsMenu = undefined
+  }
+  const openSettings = (anchor: DOMRect): void => {
+    closeSettings()
     settingsMenu = host.popover?.open(
       anchor,
       (element) => {
-        menuStyles = host.styles?.inject(presentationStyle, element)
+        const menuStyles = host.styles?.inject(presentationStyle, element)
         const panel = document.createElement('au-popover') as HTMLElement & {
           arrow: boolean
         }
@@ -131,9 +134,9 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         panel.style.width = 'min(320px, calc(100vw - 32px))'
         panel.append(toolbar)
         element.append(panel)
+        return menuStyles
       },
       () => {
-        menuStyles?.()
         settingsMenu = undefined
       },
     )
@@ -288,7 +291,6 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     offConfig?.()
     mounted = false
     offPreferences?.()
-    settingsMenu?.close()
     shell.removeEventListener('contextmenu', contextMenu)
     dispose()
     styles?.()

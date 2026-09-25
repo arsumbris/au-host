@@ -5,9 +5,56 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
 
 import type { ReadRequest, SubscribeRequest } from '@arsumbris/au-engine-sdk/wire'
 
-import type { DaemonConfig, FoundDep, MainApi, SubscriptionEvent, SurfaceCommand, SurfaceEvent, SurfaceInit, SurfaceOpenRequest, TouchWorkspace, WorkspaceMemberListRole } from '../shared/daemon-api'
+import type { CompositionDraft, DaemonConfig, FoundDep, MainApi, SubscriptionEvent, SurfaceCommand, SurfaceEvent, SurfaceInit, SurfaceOpenRequest, TouchWorkspace, WorkspaceMemberListRole } from '../shared/daemon-api'
 
 let nextSubscriptionToken = 1
+
+/**
+ * A token-demux over ONE IPC channel. Every message on `channel` carries a numeric `token`; the
+ * renderer routes it to the single handler registered for that token. The shared `ipcRenderer`
+ * listener is installed on the first registration and removed when the last handler leaves.
+ *
+ * So a channel with N live subscriptions holds ONE `ipcRenderer` listener, and each delivered
+ * message runs ONE handler — not N raw listeners each token-filtering the same broadcast. This is
+ * the same demux the SDK's `createMountHost` and the in-process transport already do a layer up; the
+ * preload is where a renderer subscription actually binds an IPC listener, so it is the layer that
+ * must not fan out. It also keeps every token-routed channel at one listener, under Node's default
+ * per-event listener limit, so a busy composition never trips a spurious leak warning.
+ */
+function tokenChannel<M extends { token: number }>(channel: string): {
+  add: (token: number, handler: (message: M) => void) => void
+  remove: (token: number) => void
+} {
+  const handlers = new Map<number, (message: M) => void>()
+  let listening = false
+  const listener = (_event: unknown, message: M): void => {
+    handlers.get(message.token)?.(message)
+  }
+  return {
+    add(token, handler) {
+      if (!listening) {
+        ipcRenderer.on(channel, listener)
+        listening = true
+      }
+      handlers.set(token, handler)
+    },
+    remove(token) {
+      handlers.delete(token)
+      if (listening && handlers.size === 0) {
+        ipcRenderer.removeListener(channel, listener)
+        listening = false
+      }
+    },
+  }
+}
+
+// The token-routed channels the renderer subscribes over. Each demultiplexes by token behind one
+// shared listener (see `tokenChannel`), so the count of `ipcRenderer` listeners is fixed regardless
+// of how many subscriptions, ready-watchers, or terminals are live.
+const engineEvents = tokenChannel<{ token: number; event: SubscriptionEvent }>('engine:subscription-event')
+const engineReady = tokenChannel<{ token: number; ready: boolean }>('engine:ready-change')
+const terminalData = tokenChannel<{ token: number; data: string }>('terminal:data')
+const terminalExit = tokenChannel<{ token: number }>('terminal:exit')
 
 const api: MainApi = {
   platform: process.platform,
@@ -20,6 +67,9 @@ const api: MainApi = {
     status: (config: DaemonConfig) => ipcRenderer.invoke('daemon:status', config),
     start: (config: DaemonConfig) => ipcRenderer.invoke('daemon:start', config),
     stop: (config: DaemonConfig) => ipcRenderer.invoke('daemon:stop', config),
+    resolveBinary: () => ipcRenderer.invoke('daemon:resolve-binary'),
+    appliableFixes: (entryPath, diag) => ipcRenderer.invoke('daemon:appliable-fixes', entryPath, diag),
+    applyFix: (entryPath, diag, index) => ipcRenderer.invoke('daemon:apply-fix', entryPath, diag, index),
     onLog: (listener) => {
       const wrapped = (_event: unknown, line: string): void => listener(line)
       ipcRenderer.on('daemon:log', wrapped)
@@ -33,6 +83,7 @@ const api: MainApi = {
   },
   app: {
     initialEntry: () => ipcRenderer.invoke('app:initial-entry'),
+    claimWorkspace: (entry: string) => ipcRenderer.invoke('workspace:claim', entry),
   },
   windows: {
     open: (entry: string) => ipcRenderer.invoke('windows:open', entry),
@@ -104,7 +155,7 @@ const api: MainApi = {
     removeMember: (wsRoot: string, name: string) => ipcRenderer.invoke('workspace:remove-member', wsRoot, name),
     setMemberRole: (wsRoot: string, name: string, role: WorkspaceMemberListRole) => ipcRenderer.invoke('workspace:set-member-role', wsRoot, name, role),
     setMemberDisabled: (wsRoot: string, name: string, disabled: boolean) => ipcRenderer.invoke('workspace:set-member-disabled', wsRoot, name, disabled),
-    declarePeer: (memberRoot: string, memberName: string, peerName: string, remote?: string) => ipcRenderer.invoke('workspace:declare-peer', memberRoot, memberName, peerName, remote),
+    declarePeer: (entry: string, memberRoot: string, peerName: string, remote?: string) => ipcRenderer.invoke('workspace:declare-peer', entry, memberRoot, peerName, remote),
     scaffoldRegistry: (memberRoot: string, memberName: string, description?: string) => ipcRenderer.invoke('workspace:scaffold-registry', memberRoot, memberName, description),
     pickFolder: () => ipcRenderer.invoke('dialog:pick-path', 'directory'),
   },
@@ -121,6 +172,11 @@ const api: MainApi = {
     prune: (comp: string, liveNodeIds: string[]) => ipcRenderer.send('viewstate:prune', comp, liveNodeIds),
     drop: (comp: string) => ipcRenderer.send('viewstate:drop', comp),
   },
+  compositionDraft: {
+    get: (comp: string) => ipcRenderer.invoke('composition-draft:get', comp),
+    set: (comp: string, draft: CompositionDraft) => ipcRenderer.send('composition-draft:set', comp, draft),
+    clear: (comp: string) => ipcRenderer.send('composition-draft:clear', comp),
+  },
   theme: {
     changed: (state) => ipcRenderer.send('theme:changed', state),
     onApply: (cb) => ipcRenderer.on('theme:apply', (_e, state) => cb(state)),
@@ -130,25 +186,20 @@ const api: MainApi = {
       ipcRenderer.invoke('engine:read', entryPath, request),
     subscribe: (entryPath: string, request: SubscribeRequest, onEvent) => {
       const token = nextSubscriptionToken++
-      const listener = (_event: unknown, message: { token: number; event: SubscriptionEvent }): void => {
-        if (message.token === token) onEvent(message.event)
-      }
-      ipcRenderer.on('engine:subscription-event', listener)
+      // Register the demux handler BEFORE the invoke, so a fast reply's replayed event is caught.
+      engineEvents.add(token, (message) => onEvent(message.event))
       void ipcRenderer.invoke('engine:subscribe', token, entryPath, request)
       return () => {
-        ipcRenderer.removeListener('engine:subscription-event', listener)
+        engineEvents.remove(token)
         void ipcRenderer.invoke('engine:unsubscribe', token)
       }
     },
     watchReady: (entryPath: string, onReady: (ready: boolean) => void) => {
       const token = nextSubscriptionToken++
-      const listener = (_event: unknown, message: { token: number; ready: boolean }): void => {
-        if (message.token === token) onReady(message.ready)
-      }
-      ipcRenderer.on('engine:ready-change', listener)
+      engineReady.add(token, (message) => onReady(message.ready))
       void ipcRenderer.invoke('engine:watch-ready', token, entryPath)
       return () => {
-        ipcRenderer.removeListener('engine:ready-change', listener)
+        engineReady.remove(token)
         void ipcRenderer.invoke('engine:unwatch-ready', token)
       }
     },
@@ -180,6 +231,10 @@ const api: MainApi = {
       ipcRenderer.invoke('files:delete', entryPath, filePath, expectedHash),
     rename: (entryPath: string, from: string, to: string) =>
       ipcRenderer.invoke('files:rename', entryPath, from, to),
+    moveDir: (entryPath: string, from: string, to: string) =>
+      ipcRenderer.invoke('files:move-dir', entryPath, from, to),
+    deleteDir: (entryPath: string, dirPath: string) =>
+      ipcRenderer.invoke('files:delete-dir', entryPath, dirPath),
   },
   assets: {
     url: (entryPath: string, fileRef: string) => ipcRenderer.invoke('assets:url', entryPath, fileRef),
@@ -198,7 +253,7 @@ const api: MainApi = {
     inspect: (target: string) => ipcRenderer.invoke('gate:inspect', target),
     discoverClosure: (located: Record<string, string>) => ipcRenderer.invoke('gate:discover-closure', located),
     scanFor: (folder: string, names: string[]) => ipcRenderer.invoke('gate:scan-for', folder, names),
-    missingLocations: (entry: string) => ipcRenderer.invoke('gate:missing-locations', entry),
+    missingLocations: (entry: string, binaryPath: string) => ipcRenderer.invoke('gate:missing-locations', entry, binaryPath),
     locateMembers: (entries: FoundDep[]) => ipcRenderer.invoke('gate:locate-members', entries),
     scaffoldEntry: (dir: string, name?: string) => ipcRenderer.invoke('gate:scaffold-entry', dir, name),
     createWorkspace: (dir: string, name: string, deps: FoundDep[]) =>
@@ -256,18 +311,12 @@ const api: MainApi = {
     subscribe: listener => { const receive=(_event:unknown,value:import('@arsumbris/au-host-app').TerminalPreferences)=>listener(value);ipcRenderer.on('terminal:preferences-changed',receive);return()=>ipcRenderer.removeListener('terminal:preferences-changed',receive) },
   },
   terminal: {
-    // Mirrors engine.subscribe: mint a token, register the data/exit listeners FIRST
+    // Mirrors engine.subscribe: mint a token, register the data/exit demux handlers FIRST
     // (so the attach reply's replayed buffer is caught), then invoke attach.
     attach: (comp, node, opts, onData, onExit) => {
       const token = nextSubscriptionToken++
-      const dataListener = (_event: unknown, m: { token: number; data: string }): void => {
-        if (m.token === token) onData(m.data)
-      }
-      const exitListener = (_event: unknown, m: { token: number }): void => {
-        if (m.token === token) onExit()
-      }
-      ipcRenderer.on('terminal:data', dataListener)
-      ipcRenderer.on('terminal:exit', exitListener)
+      terminalData.add(token, (m) => onData(m.data))
+      terminalExit.add(token, () => onExit())
       // Do NOT void-swallow the attach rejection: if the main handler throws (e.g. pty.spawn
       // fails) the pane would otherwise sit blank with nothing in the renderer console. Surface
       // it into the xterm (via the already-registered onData) + the console, then signal exit.
@@ -278,8 +327,8 @@ const api: MainApi = {
         onExit()
       })
       const off = (): void => {
-        ipcRenderer.removeListener('terminal:data', dataListener)
-        ipcRenderer.removeListener('terminal:exit', exitListener)
+        terminalData.remove(token)
+        terminalExit.remove(token)
       }
       return {
         write: (data: string) => ipcRenderer.send('terminal:write', comp, node, data),

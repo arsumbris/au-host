@@ -1,4 +1,5 @@
 export { displayFilePath } from './file-label'
+export { memberOfPath, absoluteHostPath } from './member-path'
 // Projection mount contract.
 //
 // A projection is a separately-built repo (or local package) the host mounts
@@ -18,12 +19,11 @@ import type { EngineReadResult, ReadRequest, SubscribeRequest, SubscriptionEvent
 // configs. `ProjectionRuntimeMeta` is the type-level meta
 // (entry/contractVersion) each subtype carries to declare its loadable code.
 // Projections form a KIND hierarchy: `PaneProjection` (a full content surface),
-// `ContainerProjection` (holds child projections), `BarProjection` (a compact bar item,
-// carrying placement hints) and its role subtype `StatusProjection` (`status-projection`),
-// and `PlaceholderProjection` (what an empty slot shows — a picker, a recents launcher, a blank).
-// Every mountable surface is its own kind-typed `projection` subtype; the ROLE is the kind;
-// a bar aggregates a role via `readSubtypes(kind)` and names it with a `type<projection>*`
-// def-ref.
+// `ContainerProjection` (holds child projections), `BarProjection` (a strip on a frame edge),
+// `BarItemProjection` (a widget a bar lays out, carrying placement hints), and
+// `PlaceholderProjection` (what an empty slot shows — a picker, a recents launcher, a blank).
+// Every mountable surface is its own kind-typed `projection` subtype; a bar offers every
+// `bar-item-projection` subtype as an item to add.
 
 // `ContainerSlot` is the POSITION a child occupies in a container — a `ContainerNode`, so
 // disjoint from `Projection`, which is what makes each container's `<Projection | slot>`
@@ -65,12 +65,14 @@ export { POOL_EDIT_NOOP } from './container'
 export { deriveContainerSchemas, bareTypeName } from './slot-schema.ts'
 import { bareTypeName } from './slot-schema.ts' // also bound locally: viewersFor uses it
 export type { ContainerSchemas, SlotField, SlotSchema, SlotTypeView } from './slot-schema.ts'
+// TYPE IDENTITY — the host keys every type by `name::owner`, never a bare name. See type-key.ts.
+export * from './type-key.ts'
 
 // THE COMPOSITION POOL — normalize an authored composition into a flat pool, resolve the pool into
 // a mount tree, and validate the reference graph. Pure data → data over the type graph and the
 // parsed value, the natural extension of the slot traversal above. See ./composition-pool.ts
 
-export { normalizeToPool, resolvePoolToTree, serializePoolToComposition, poolRootType, recordMountType, validatePool, analyzePool, detectGhostRefCollapse, isPlaceholderRecord, COMPOSITION_PLACEHOLDER_TYPE, reachableRecordIds, reachableFromRoot, primaryContentId, parentMap, childRefIds, resolveLogicalParent, parseBlockRef, parseRef, isBlockRef, blockRef, recordId, linkPool, crossFileTargets, restoreCrossFileRefs, ENTRY_SCOPE, qualifyScopedId } from './composition-pool.ts'
+export { normalizeToPool, resolvePoolToTree, serializePoolToComposition, poolRootType, recordMountType, validatePool, analyzePool, detectGhostRefCollapse, isPlaceholderRecord, COMPOSITION_PLACEHOLDER_TYPE, reachableRecordIds, reachableFromRoot, primaryContentId, parentMap, childRefIds, resolveLogicalParent, parseBlockRef, parseRef, isBlockRef, blockRef, recordId, linkPool, crossFileTargets, restoreCrossFileRefs, ENTRY_SCOPE, qualifyScopedId, readSlotRules, setSlotRules, slotRuleMeaningful } from './composition-pool.ts'
 export type { CompositionPool, PoolRecord, PoolDiagnostic, PoolAnalysis, LogicalParentInput, ParsedRef, ScopeInfo, ScopeTable, LinkedPool, ForeignFile } from './composition-pool.ts'
 
 // PRESERVE WHAT YOU DO NOT OWN — a config serializer must not destroy composition-level
@@ -135,8 +137,8 @@ export type { ChromeTraceEvent } from './events-export.ts'
 export { declaredPropertyNames, rejectedTokenNames } from './tokens.ts'
 export type { RejectedToken, TokenDiagnostics } from './tokens.ts'
 import type { TokenDiagnostics } from './tokens.ts'
-import type { BarProjection, ContainerNode, ContainerProjection, ContainerSlot, Grouping, GroupingContainer, Intent, OpensMeta, PaneProjection, PlaceholderProjection, Projection, ProjectionPresentationMeta, ProjectionRuntimeMeta, Ref, SpatialContainer, StatusProjection } from './generated'
-export type { BarProjection, ContainerNode, ContainerProjection, ContainerSlot, Grouping, GroupingContainer, Intent, OpensMeta, PaneProjection, PlaceholderProjection, Projection, ProjectionPresentationMeta, ProjectionRuntimeMeta, Ref, SpatialContainer, StatusProjection }
+import type { ArityMeta, BarProjection, ContainerNode, ContainerProjection, ContainerSlot, FrameContainer, Grouping, GroupingContainer, Intent, OpensMeta, PaneProjection, PlaceholderProjection, Projection, ProjectionPresentationMeta, ProjectionRuntimeMeta, Ref, SpatialContainer, BarItemProjection } from './generated'
+export type { ArityMeta, BarProjection, ContainerNode, ContainerProjection, ContainerSlot, FrameContainer, Grouping, GroupingContainer, Intent, OpensMeta, PaneProjection, PlaceholderProjection, Projection, ProjectionPresentationMeta, ProjectionRuntimeMeta, Ref, SpatialContainer, BarItemProjection }
 
 // Agent-host transport CONTRACT: the framed command protocol au-host serves over
 // its socket and au-mcp's host-relay tools speak as clients. Value-vocab-free,
@@ -163,7 +165,7 @@ export type {
  * a required member. Additive optional capabilities do not require a version change; consumers
  * guard their use when a host may omit them.
  */
-export const MOUNT_CONTRACT_VERSION = 7
+export const MOUNT_CONTRACT_VERSION = 8
 
 /** How the host reaches a registered projection. */
 export type ProjectionSource =
@@ -247,6 +249,20 @@ export interface FilesControl {
    * (that is `renameType`'s job). `ok: false` carries the reason; it never throws.
    */
   rename(from: string, to: string): Promise<FileWriteResult>
+  /**
+   * Move or rename the FOLDER `from` to `to` as one engine saga (`move_dir`), rewriting every inbound
+   * path-addressed reference to a file inside it. Refuses, naming the paths, on content the engine does
+   * not catalogue (`node_modules`, an ignored path, a nested repo, a symlink), a dirty file, or a taken,
+   * self-nested or cross-repo destination. Preview it first with the `preview_mutation` read.
+   * `ok: false` carries the reason; it never throws. Optional: a host without it offers no folder moves.
+   */
+  moveDir?(from: string, to: string): Promise<FileWriteResult>
+  /**
+   * Delete the FOLDER `path` and everything in it as one engine saga (`delete_dir`). Nothing is
+   * rewritten, so a surviving file's link into the folder breaks. Preview it first with the
+   * `preview_mutation` read. `ok: false` carries the reason; it never throws. Optional, like `moveDir`.
+   */
+  deleteDir?(path: string): Promise<FileWriteResult>
 }
 
 /**
@@ -444,13 +460,27 @@ export interface IntentChannel {
  */
 export interface FocusChannel {
   /**
-   * Declare this container's active CHILD (a NON-DOM active-child notion) — `activeView` is the activated
-   * child's node id, or omit it to report the container itself. The host retains it into the focus recency.
-   * REAL DOM focus is the host's single ongoing source (a per-window tracker reports it); use `report` ONLY
-   * where a container activates a child that receives no DOM focus — e.g. a `tabs` group switching to a tab
-   * whose button, not its content, holds focus. A pane that gets real DOM focus never needs to call this.
+   * Declare this container's active CHILD into the focus recency WITHOUT moving DOM focus — `activeView` is
+   * the activated child's node id, or omit it to report the container itself. REAL DOM focus is the host's
+   * single ongoing source (a per-window tracker reports it), so a pane that gets real DOM focus never needs
+   * this. Use `report` only for a recency-ONLY nudge with no accompanying focus move (e.g. reflecting an
+   * active child a peer window changed). When a container CHANGES its visible child (a tab switch, a drop
+   * that activates a tab, a close that clamps to a survivor), call `focusPane` instead: it moves REAL DOM
+   * focus into the child, so the one source observes the change and the transient-current consumers
+   * (close-view, typing arbitration) agree with the recency. A `report` without a focus move is what leaves
+   * DOM focus stranded on the old child.
    */
   report(activeView?: string): void
+  /**
+   * Move REAL DOM focus into the child pane with this `^:`, so the host's one focus source observes the
+   * change through the same path the substrate spec mandates for a visible-child change. A container calls
+   * this when it makes a child visible/active by any non-click path — a drop that activates a tab, a
+   * programmatic switch, a close that clamps to a surviving sibling — so focus, recency, and the ring all
+   * agree. Idempotent: a no-op when that pane already holds DOM focus. The pane must be mounted/visible
+   * (call it after the switch has rendered, e.g. from an effect on the active index). Optional (additive):
+   * a host that predates it omits it, and a container falls back to `report`.
+   */
+  focusPane?(nodeId: string): void
   /**
    * The `^:` of the currently ACTIVE pane (the most-recently-focused, retained across focus moves), or
    * null when nothing has focus. The host owns this truth; a CONTAINER reads it to render its OWN
@@ -886,11 +916,23 @@ export interface ChromeContribution {
 }
 
 /**
- * Builds a preview card's content into `card`. `isCurrent` reports whether this card is
- * still the live one (the content may resolve async and should bail if superseded). The
- * host owns the card chrome; this owns what goes inside it.
+ * Releases what a `fill` acquired for its content (an injected stylesheet, a listener, a subscription).
+ * The surface calls it ONCE, when it removes the content, whatever removed it: a dismissal, the owner's
+ * `close()`, a superseding open, or the mount going away. The content's lifetime is the surface's to
+ * end, so its resources are bound to it here, the way `mount` returns its disposer.
  */
-export type FillFn = (card: HTMLElement, isCurrent: () => boolean) => void | Promise<void>
+export type FillTeardown = () => void
+
+/**
+ * Builds a surface's content into `card`. `isCurrent` reports whether this card is still the live one
+ * (the content may resolve async and should bail if superseded). The host owns the card chrome; this
+ * owns what goes inside it. It may return (or resolve to) a `FillTeardown`; a teardown that arrives
+ * after the content is already gone runs at once.
+ */
+export type FillFn = (
+  card: HTMLElement,
+  isCurrent: () => boolean,
+) => void | FillTeardown | Promise<void | FillTeardown>
 
 /** Builds a nested preview's content from a wikilink's resolved target path (the nesting hook). */
 export type LinkResolver = (path: string) => FillFn
@@ -902,6 +944,9 @@ export type LinkResolver = (path: string) => FillFn
  * `fill` owns the content. Shared across consumers (hover peeks, overflow popovers, the
  * bar's right-click menu). Not the intent channel — a singleton with no focus routing. A
  * preview is a projection in an overlay site.
+ *
+ * SCOPED TO THE MOUNT: a stack a view showed through its own `host` and left up is hidden by the host
+ * when that view unmounts (only if it is still the one showing). Showing after unmount shows nothing.
 
  */
 export interface PreviewSurface {
@@ -951,11 +996,14 @@ export interface OverlayOptions {
   /**
    * Whether an open layer at a blocking band (dropdown / overlay / popover) SUPPRESSES keybind dispatch
    * while it is up. Default `true`: a chord does not fire underneath a chooser, confirm dialog, or menu —
-   * a pending DECISION owns the keyboard. A keyboard-driven LAUNCHER that manages its own keys sets this
-   * `false` (the command palette, so `⌘K` still toggles it closed and typing reaches its search) — its
-   * shortcuts run through the keymap, not a hidden layer. Keybind-blocking is thus a per-LAYER property,
-   * independent of the z-stacking band. Ignored for a non-blocking band (toast / tooltip / raised / sticky),
-   * which never suppresses a chord regardless.
+   * a pending DECISION owns the keyboard. A layer that does NOT own the keyboard sets this `false`, so
+   * chords stay live even though it sits in a high z-band. Two kinds do:
+   * - a keyboard-driven LAUNCHER that manages its own keys (the command palette, so `⌘K` still toggles it
+   *   closed and typing reaches its search) — its shortcuts run through the keymap, not a hidden layer.
+   * - keyboard-PASSIVE decoration that traps no focus (a hover peek / preview card) — it is dismissed by
+   *   the pointer, never navigated by key, so it must not swallow a command chord.
+   * Keybind-blocking is thus a per-LAYER property, independent of the z-stacking band. Ignored for a
+   * non-blocking band (toast / tooltip / raised / sticky), which never suppresses a chord regardless.
    */
   keyguard?: boolean
 }
@@ -1075,6 +1123,10 @@ export interface MenuHandle {
  *
  * Each caller owns its complete row list; the surface has no cross-plugin contribution mechanism.
  * This capability is optional: guard host.contextMenu before opening a menu.
+ *
+ * SCOPED TO THE MOUNT: what a view opens through its own `host` is closed by the host when that view
+ * unmounts, so a view never tracks its overlays for its own teardown. Opening after the view has
+ * unmounted opens nothing.
  */
 export interface ContextMenuSurface {
   /**
@@ -1093,6 +1145,9 @@ export interface OverlaySite {
    *
    * Claim ONE layer per surface and keep it, rather than claiming per drawing: a layer is cheap but
    * it is a position in the ladder, and churning it makes the order depend on timing.
+   *
+   * A layer claimed through a view's own `host.overlay` is released by the host when that view
+   * unmounts; claiming after it unmounted yields a detached element that never reaches the document.
    */
   claim(options?: OverlayOptions): OverlayLayer
 }
@@ -1105,7 +1160,10 @@ export interface OverlaySite {
  * for the context menu, and `OverlayLayer`'s `release`.
  */
 export interface PopoverHandle {
-  /** Close this popover. Idempotent, and a no-op once a newer popover has superseded it. */
+  /**
+   * Close this popover. Idempotent, and a no-op once a newer popover has superseded it. The owner is
+   * closing it, so `onDismiss` does NOT fire; the fill's teardown does.
+   */
   close(): void
 }
 
@@ -1114,7 +1172,7 @@ export interface PopoverHandle {
  * focus-holding sibling of `preview` (a hover peek) and `contextMenu` (action rows only).
  *
  * The host owns the CHROME: claiming the overlay layer, anchoring to the trigger rect with viewport
- * edge-flip, and dismissal (Escape, an outside pointerdown, window blur/resize, or `handle.close()`).
+ * edge-flip, and closing: dismissal (Escape, an outside pointerdown, window blur/resize) or the owner's `handle.close()`.
  * The caller supplies the CONTENT via `fill` — the same frame-vs-content seam as `preview.show`'s
  * `fill` and the confirm modal. It holds arbitrary interactive controls (an input, a select), which is
  * what the rows-only `contextMenu` cannot host and the proximity-dismissed `preview` would fight (its
@@ -1125,13 +1183,22 @@ export interface PopoverHandle {
  * missing-site-kind tell. This is the site kind.
  *
  * OPTIONAL + additive, so `MOUNT_CONTRACT_VERSION` is UNCHANGED. Guard it — `host.popover?.open(...)`.
+ *
+ * SCOPED TO THE MOUNT: what a view opens through its own `host` is closed by the host when that view
+ * unmounts, so a view never tracks its overlays for its own teardown. Opening after the view has
+ * unmounted opens nothing. The owner's close path runs: no `onDismiss`, the fill's teardown.
  */
 export interface PopoverSurface {
   /**
    * Open a popover anchored to `anchor`, its content built by `fill`. Returns a handle that closes
-   * THIS popover. `onDismiss` fires ONCE when it closes for ANY reason (Escape / outside pointerdown /
-   * blur / resize / `handle.close()`), so a caller can sync its own trigger state — a pressed or
-   * `aria-expanded` icon that must un-press when the panel is dismissed out from under it.
+   * THIS popover.
+   *
+   * `onDismiss` fires ONCE when the SURFACE closes the popover out from under its owner: Escape, an
+   * outside pointerdown, window blur/resize, or a newer popover superseding it. The owner syncs its
+   * trigger state there (a pressed or `aria-expanded` icon that must un-press). It never fires for the
+   * owner's own `handle.close()`: the owner already knows, and a callback there would re-enter the
+   * owner's state from inside its own close. Content resources are released by the fill's
+   * `FillTeardown`, which runs on every path.
    *
    * Opening supersedes any live popover in the window; the superseded handle goes inert rather than
    * gaining the power to close its replacement.
@@ -1223,6 +1290,28 @@ export interface EngineReadiness {
  * A wide-effect-operation confirmation, shown by the host `ConfirmSurface` before a caller commits.
  *
  */
+/**
+ * A rich blast-radius row: an inbound referrer, how it addresses the target, and the referencing line
+ * in context. When a `ConfirmRequest` carries `affectedDetail`, the surface renders these rows (an
+ * addressing-form badge, an expandable line-in-context) in place of the plain `affected` path list.
+ */
+export interface AffectedRef {
+  /** Absolute path of the referrer file. */
+  path: string
+  /**
+   * How the referrer addresses the target: `name` (a bare `[[name]]`, unchanged when the target only
+   * moves) or `path` (a path-bearing spelling, which the move rewrites). Absent when unclassified, so
+   * the surface shows no badge rather than a false claim.
+   */
+  form?: 'name' | 'path'
+  /** 1-based line in `path` where the reference sits (the line the expanded context highlights). */
+  line?: number
+  /** The referencing line plus a few lines either side, so a row expands to show it without opening the file. */
+  context?: string[]
+  /** 1-based line number of `context[0]`, so the expanded view numbers the lines and marks the reference line. */
+  contextStart?: number
+}
+
 export interface ConfirmRequest {
   /** Heading, e.g. "Rename file" / "Delete file" / "Move file". */
   title: string
@@ -1251,12 +1340,20 @@ export interface ConfirmRequest {
    * gate, there is no blast radius to report" case, and renders nothing.
    */
   unavailable?: string
+  /**
+   * Rich rows for the blast radius. When present, the surface renders these (an addressing-form badge
+   * and an expandable line-in-context) instead of the plain `affected` list, and derives the same
+   * three states from the array's presence and length. A caller passes either `affected` or this.
+   */
+  affectedDetail?: AffectedRef[]
   /** Peek content for an affected row (the caller's `makeHoverContent(...).previewPath`). */
   previewContent?: LinkResolver
   /** An input field (rename's new name). `value` pre-fills it; the basename is pre-selected. */
   input?: { value: string }
   /** The confirm button label, e.g. "Rename" / "Delete" / "Move". */
   confirmLabel: string
+  /** Withdraws the question: aborting closes the dialog and resolves `{ confirmed: false }`. */
+  signal?: AbortSignal
 }
 
 /** The user's decision from a `ConfirmSurface.confirm`. `value` is the input on confirm. */
@@ -1268,6 +1365,10 @@ export interface ConfirmOutcome {
 /**
  * The host CONFIRM SURFACE: a per-window modal that previews a wide-effect file operation's blast
  * radius before the caller commits. Resolves the user's decision; performs no mutation itself.
+ *
+ * SCOPED TO THE MOUNT: what a view opens through its own `host` is withdrawn by the host (resolving `{ confirmed: false }`) when that view
+ * unmounts, so a view never tracks its overlays for its own teardown. Opening after the view has
+ * unmounted opens nothing.
  */
 export interface ConfirmSurface {
   confirm(request: ConfirmRequest): Promise<ConfirmOutcome>
@@ -1290,9 +1391,9 @@ export interface ChooseOption {
    *  option carries one, the chooser renders SPATIALLY — a selectable target drawn over each anchored
    *  pane's live rect (hover-border + click, a letter-hint, arrow-key spatial nav) — instead of the
    *  list. An option WITHOUT an anchor still appears (as a list row in the spatial mode's fallback panel),
-   *  so an off-screen candidate is never dropped. The pane id resolves to a rect at open time via
-   *  `getBoundingClientRect`; no rect is ever stored. Absent on every option → the plain list, unchanged.
-   *   */
+   *  so an off-screen candidate is never dropped. The HOST resolves the id to a rect at open time — a
+   *  container's several portaled regions add up to one extent — and no rect is ever stored. Absent on
+   *  every option → the plain list, unchanged. */
   anchor?: string
 }
 
@@ -1306,6 +1407,8 @@ export interface ChooseRequest {
    *  When given, the chooser records its open/pick events under it, so the ask + the choice thread back to
    *  the gesture that started them (the async-cause bridge). Trace-only; never affects the decision. */
   cause?: number
+  /** Withdraws the question: aborting closes the chooser and resolves `null`, as a cancel does. */
+  signal?: AbortSignal
 }
 
 /**
@@ -1315,6 +1418,9 @@ export interface ChooseRequest {
  * or a click; Escape cancels). Resolves the picked option's `id`, or `null` on cancel. Performs no
  * action — the host owns the MENU, the caller owns the ACTION.
  *
+ * SCOPED TO THE MOUNT: what a view opens through its own `host` is withdrawn by the host (resolving `null`) when that view
+ * unmounts, so a view never tracks its overlays for its own teardown. Opening after the view has
+ * unmounted opens nothing.
  */
 export interface ChooserSurface {
   choose(request: ChooseRequest): Promise<string | null>
@@ -1333,9 +1439,12 @@ export interface ShellControl {
   openExternal(url: string): Promise<void>
 }
 
+/** The recents `path` of the composition that has no file yet (a New, before Save as). */
+export const UNSAVED_COMPOSITION = 'unsaved'
+
 /** One recently-opened composition within a workspace (recency overlay for the launcher). */
 export interface RecentComposition {
-  /** The composition instance's file path. */
+  /** The composition instance's file path, or `UNSAVED_COMPOSITION` for the one with no file yet. */
   path: string
   /** Epoch ms of the last open. */
   lastOpened: number
@@ -1625,6 +1734,19 @@ export interface MountHost {
    */
   contextMenu?: ContextMenuSurface
   /**
+   * The rows the ENCLOSING container offers for THIS mount — the same rows its pane actions menu shows
+   * (move, remove, layout rules, and whatever that container adds). A projection that draws its own
+   * chrome (a bar has no pane header) appends them to its own right-click menu, so the container's
+   * actions reach it without either naming the other.
+   *
+   * The host resolves the mount's placement and asks it (`ContainerPlacement.paneActions`). Null when
+   * the mount has no container placement or the container offers no rows. Rows are built on each call,
+   * so they reflect the current layout.
+   *
+   * OPTIONAL + additive, so no contract bump. Guard it — `host.containerActions?.()`.
+   */
+  containerActions?(): readonly ContextMenuItem[] | null
+  /**
    * The host's INTERACTIVE anchored POPOVER — a floating panel you FILL with content, anchored to a
    * trigger rect. It holds focusable controls (an input, a select), unlike `contextMenu`'s rows, and
    * stays put until dismissed, unlike `preview`'s hover peek. The host owns anchoring + dismissal;
@@ -1782,25 +1904,19 @@ export interface MountHost {
        */
       stageGroup(groupInstance: OpaqueConfig): { rootId: string; edits: ReadonlyArray<{ id: string; record: OpaqueConfig }> }
       /**
-       * Apply a batch of pool record edits ATOMICALLY: merge each record by its `^:` id, then persist
-       * ONCE and re-derive the mount tree ONCE ("one commit, one re-render"). A structural gesture
-       * (re-parent / wrap / close) hands the host the affected containers' OWN new records; the host
-       * litigates over the flat pool and the tree re-derives, so a move is a single reference re-point
-       * — never an in-place mutation of a container's live runtime tree (the re-parent duplication +
-       * `removeChild` crash class). After applying, any record no longer reachable from `root` is
-       * REAPED: a CLOSE is an extract whose reference nobody re-adds, so its record is orphaned and
-       * dropped; a MOVE keeps the record, because the target now references it.
-
+       * PROPOSE a batch of pool edits to the host — the substrate's SOLE write channel.
+       * A container (or the host's own config overlay) BUILDS the edits (pure) and ASKS; the single-writer
+       * AUTHORITY applies them ATOMICALLY (or refuses): merge each record by its `^:` id, persist ONCE and
+       * re-derive the mount tree ONCE ("one commit, one re-render"). A structural gesture (re-parent / wrap /
+       * close) hands the host the affected containers' OWN new records; the host litigates over the flat pool
+       * and the tree re-derives, so a move is a single reference re-point — never an in-place mutation of a
+       * container's live runtime tree (the re-parent duplication + `removeChild` crash class). After applying,
+       * any record no longer reachable from `root` is REAPED: a CLOSE is an extract whose reference nobody
+       * re-adds, so its record is orphaned and dropped; a MOVE keeps the record, because the target now
+       * references it. A proposer never writes the pool itself — the authority is the one decision point; in
+       * the main window it applies locally, on a floated surface the proposal crosses UP to the authority.
        */
-      applyStructural(edits: ReadonlyArray<{ id: string; record: OpaqueConfig }>): void
-      /**
-       * PROPOSE a batch of pool edits to the host — the substrate's write channel.
-       * A container BUILDS the edits (pure) and ASKS; the HOST validates and applies (or refuses). The
-       * container does not write the pool itself — the write (`applyStructural`) is the host's. Additive;
-       * a host that predates it omits it (guard: fall back to `applyStructural` when absent).
-
-       */
-      propose?(edits: ReadonlyArray<{ id: string; record: OpaqueConfig }>): void
+      propose(edits: ReadonlyArray<{ id: string; record: OpaqueConfig }>): void
       /**
  * Float a pooled occupant into its own OS window. The source container passes its post-extraction
  * record as sourceEdit. The host creates a window record referencing the occupant and commits both
@@ -1830,8 +1946,8 @@ export interface MountHost {
        * SUBSCRIBE to structural/set pool changes (additive; a host that predates it omits this — guard).
        * Fired COALESCED (once per gesture), NOT for a plain dialect save (a resize). A container uses this
        * to RE-SEED its local model from its authoritative record when the SUBSTRATE changed it — a drag
-       * re-parent, a `closePane`, a `wrapPane` write the container's record via `applyStructural` WITHOUT
-       * going through the container's own commit, so its rendered anchors would otherwise go stale. The
+       * re-parent, a `closePane`, a `wrapPane` write the container's record through the host's atomic commit
+       * WITHOUT going through the container's own commit, so its rendered anchors would otherwise go stale. The
        * container re-reads `resolveRecord(host.instanceId)` on each event and re-renders (never remounts);
        * `useContainerModel` does this for a container that uses it. Returns an unsubscribe.
        */
@@ -2009,6 +2125,23 @@ export interface GroupingContainerModule<Self> extends ProjectionModule {
   buildGroup: GroupBuildFn<Self>
 }
 
+/** The fill field every `frame-container` declares on its base: a wrap into a frame fills it. */
+export const FRAME_FILL_FIELD = 'center'
+
+/**
+ * The `buildGroup` a frame gets when its module exports none: the ONE child fills `center`, every
+ * peripheral stays absent (so it shows the empty-slot placeholder). A frame module that exports its own
+ * `buildGroup` overrides this. A frame takes exactly one child (`arity-meta.max: 1`), which the wrap
+ * choice enforces before a build is ever called, so another count here is a caller bug and throws.
+ */
+export function frameBuildGroup(typeName: string): GroupBuildFn<Record<string, unknown>> {
+  return (children) => {
+    if (children.length !== 1) throw new Error(`${typeName}: a frame takes exactly one child, got ${children.length}`)
+    const child = children[0]!
+    return { type: typeName, [FRAME_FILL_FIELD]: { '^': child.id, ...(child.instance as Record<string, unknown>) } }
+  }
+}
+
 /** Brand marking a module object REGISTERED through `defineProjection`. Non-enumerable, so it is never
  *  seen as an export the loader would try to mount. */
 const DEFINED_PROJECTION = Symbol.for('au.host.definedProjection')
@@ -2179,6 +2312,11 @@ export interface MountHostInfo {
    * Forwarded by the adapter. OPTIONAL, matching the contract member. See `MountHost.contextMenu`.
    */
   contextMenu?: MountHost['contextMenu']
+  /**
+   * The enclosing container's rows for this mount, implemented by the host (the mount's placement →
+   * `paneActions`). OPTIONAL. Forwarded by the adapter. See `MountHost.containerActions`.
+   */
+  containerActions?: MountHost['containerActions']
   /**
    * The interactive popover surface, implemented by the host (the per-window layer + anchoring +
    * dismissal). Forwarded by the adapter. OPTIONAL, matching the contract member. See `MountHost.popover`.

@@ -1,0 +1,7 @@
+# An e2e fixture MEMBER: a consumed repo that owns an intent and ships a keymap naming it BARE, the form a
+# repo uses for its own types. Installed whole beside each run's vaults and discovered by the vault, so it
+# is read-only there: editing its keymap copies it into the vault first.
+type: au.engine.repo::au-engine
+name: e2e-shared
+deps:
+  - name: au-host-sdk

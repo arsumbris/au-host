@@ -10,6 +10,7 @@ import type {
   SubscriptionEvent,
 } from '@arsumbris/au-engine-sdk/wire'
 import type { HostCommand, HostResult, HostEvent, RecentComposition, RecentWorkspace, CanonicalKeystroke } from '@arsumbris/au-host-sdk'
+import type { WireDiagnostic } from '@arsumbris/au-engine-sdk/reads'
 export type { EngineReadResult, SubscriptionEvent }
 
 // The APP-OWNED capability DTOs now live in `@arsumbris/au-host-app`, the package that owns the
@@ -18,6 +19,7 @@ export type { EngineReadResult, SubscriptionEvent }
 // definition, not a copy. See `packages/au-host-app/src/dto.ts`.
 export type {
   ActionResult,
+  WorkspaceClaim,
   AdapterRuntime,
   AgentProfileData,
   ClosureMember,
@@ -26,6 +28,7 @@ export type {
   DiscoveredAdapter,
   FoundDep,
   GateInspection,
+  MissingMembers,
   ToolPaths,
   ToolPathsInfo,
   ToolPathsPatch,
@@ -52,12 +55,14 @@ export type {
 // scope, and `MainApi` below refers to them.
 import type {
   ActionResult,
+  WorkspaceClaim,
   AgentProfileData,
   ClosureResult,
   CreateWorkspaceResult,
   DiscoveredAdapter,
   FoundDep,
   GateInspection,
+  MissingMembers,
   ToolPathsInfo,
   ToolPathsPatch,
   TouchWorkspace,
@@ -166,6 +171,19 @@ export interface FileWriteResult {
  *  relays it verbatim without inspecting it, so this stays an opaque transport record. */
 export type ThemeSyncState = Record<string, unknown>
 
+/** An unsaved composition draft (the working layout not yet written to its file), plus the keys the
+ *  renderer needs to restore it correctly and detect the saved file changing underneath it. */
+export interface CompositionDraft {
+  /** The unsaved working composition config (opaque root projection instance). */
+  working: unknown
+  /** The file's NORMALIZED baseline key the draft is dirty against — restored as the dirty baseline so the
+   *  composition mounts already-dirty vs its file. */
+  baselineKey: string
+  /** The RAW stableStringify of the file composition at draft time. Compared to the file NOW to detect it
+   *  changed underneath the draft (git pull / edited elsewhere) — resolved with an ask-dialog on restore. */
+  fileRaw: string
+}
+
 export interface MainApi {
   /**
    * The host OS (`process.platform`: 'darwin' | 'win32' | 'linux' | …). Exposed for CHROME GEOMETRY
@@ -183,6 +201,18 @@ export interface MainApi {
     status(config: DaemonConfig): Promise<DaemonStatus>
     start(config: DaemonConfig): Promise<ActionResult>
     stop(config: DaemonConfig): Promise<ActionResult>
+    /** The main-side auto-resolved `au` binary (paths.yaml `au:` → PATH → login-shell → well-known dirs),
+     *  or null when none is found. The renderer's `config.binaryPath` is independent of this, so a setup
+     *  form uses it to show whether the engine is resolvable and to pre-fill / validate the field. */
+    resolveBinary(): Promise<string | null>
+    /** The engine-authored applicable fixes for a diagnostic (TITLES ONLY; `appliableFix` is node-only,
+     *  so it runs in main). The renderer renders one apply button per title and applies by index. `[]`
+     *  when the diagnostic carries no applicable fix, or no daemon is reachable. */
+    appliableFixes(entryPath: string, diag: WireDiagnostic): Promise<{ title: string }[]>
+    /** Apply the fix at `index` for `diag`. Stateless: main re-resolves the fix list from the same
+     *  diagnostic and runs the chosen entry. `{ ok:false }` on a topology failure (no editable member
+     *  owns the file) or a wire reject; on success re-read diagnostics and the fixed error clears. */
+    applyFix(entryPath: string, diag: WireDiagnostic, index: number): Promise<FileWriteResult>
     onLog(listener: (line: string) => void): () => void
     /** The owned daemon child exited. `entryPath` is the entry it was SERVING (null if unknown) —
      *  required to tell a crash of the daemon you just started from the deliberate stop of the
@@ -278,22 +308,26 @@ export interface MainApi {
    *  `.arsumbris/workspace.yaml` `edit:` / `discover:` lists + member `repo.yaml`).
    *  Member LOCATION is device-global — registered via `engine.register`, not here. */
   workspace: {
-    /** List a member in the entry's `workspace.yaml` + seed its `repo.yaml` identity.
-     *  `role` picks the LIST: `edit` = an authoring surface you edit live; `discover` = mounted for
-     *  type-discovery, pinned, not editable.
-     *  Register the member's location separately. */
+    /** Seed a member's `repo.yaml` identity, then list it in the entry's `workspace.yaml`; a failed
+     *  scaffold lists nothing. `role` picks the LIST: `edit` = an authoring surface you edit live;
+     *  `discover` = mounted for type-discovery, pinned, not editable. The engine refuses a name already
+     *  listed. Register the member's location separately. */
     addMember(wsRoot: string, member: { name: string; memberPath: string; role?: WorkspaceMemberListRole; description?: string }): Promise<WorkspaceEditResult>
-    /** Drop a member from the entry's `workspace.yaml` (its device `repos.yaml` entry is left; it's shared). */
+    /** Drop a member from every list of the entry's `workspace.yaml`, `disabled:` included (its device
+     *  `repos.yaml` entry is left; it's shared). The engine refuses the entry repo. */
     removeMember(wsRoot: string, name: string): Promise<WorkspaceEditResult>
     /** Move a member between the entry's `edit:` and `discover:` lists (change its role). The entry repo
-     *  is pinned to `edit:`; a `dep` is not workspace.yaml-listed and cannot be moved this way. */
+     *  is pinned to `edit:`, and a member already in the target role is refused (not idempotent); a
+     *  `dep` is not workspace.yaml-listed and cannot be moved this way. */
     setMemberRole(wsRoot: string, name: string, role: WorkspaceMemberListRole): Promise<WorkspaceEditResult>
     /** Enable / disable a declared member via the entry `workspace.yaml`'s `disabled:` overlay — it stays
-     *  declared (role kept) but mounts nothing while disabled. Add to disable, remove to re-enable. */
+     *  declared (role kept) but mounts nothing while disabled. Not idempotent: the engine refuses the entry
+     *  repo, an undeclared name, a duplicate disable, and re-enabling a name that is not disabled. */
     setMemberDisabled(wsRoot: string, name: string, disabled: boolean): Promise<WorkspaceEditResult>
-    /** Declare `peerName` as a cross-repo dependency of the member at `memberRoot` (edits/creates its
-     *  `.arsumbris/repo.yaml` `deps:`). Makes the repo self-describing; clears an `undeclared-peer`. */
-    declarePeer(memberRoot: string, memberName: string, peerName: string, remote?: string): Promise<WorkspaceEditResult>
+    /** Declare `peerName` as a cross-repo dependency of the member at `memberRoot` (its
+     *  `.arsumbris/repo.yaml` `deps:`); clears an `undeclared-peer`. The engine authors editable members
+     *  only (the entry or an `edit:` member) and refuses a peer already declared. */
+    declarePeer(entry: string, memberRoot: string, peerName: string, remote?: string): Promise<WorkspaceEditResult>
     /** Give a registry-less member a `repo.yaml` identity, so it stops being an anonymous implicit
      *  repo (and is device-registry-locatable). Idempotent. */
     scaffoldRegistry(memberRoot: string, memberName: string, description?: string): Promise<WorkspaceEditResult>
@@ -308,6 +342,12 @@ export interface MainApi {
      *  workspace instead of the recents pre-fill.
      */
     initialEntry(): Promise<string | null>
+    /**
+     * CLAIM a workspace before opening it (before its daemon starts). `claimed: false` means another live
+     * instance holds it and has been focused; the caller must not open the workspace here. A successful
+     * claim binds this instance's local stores (drafts, view-state) to the entry.
+     */
+    claimWorkspace(entry: string): Promise<WorkspaceClaim>
   }
   windows: {
     /** Open a workspace entry in its own host instance: focus the running instance for `entry` if
@@ -346,6 +386,17 @@ export interface MainApi {
     prune(comp: string, liveNodeIds: string[]): void
     /** Drop every entry for a composition (it was deleted). */
     drop(comp: string): void
+  }
+  /** MAIN-owned unsaved-composition draft store: the last unsaved working layout per composition path
+   *  (or 'unsaved') of the CLAIMED workspace, so a reopen restores the in-progress layout instead of the
+   *  saved file. Bound to the claim, so no entry is passed. */
+  compositionDraft: {
+    /** The stored draft for `comp`, or null. Read on reopen to restore / staleness-check. */
+    get(comp: string): Promise<CompositionDraft | null>
+    /** Write / replace the draft (fire-and-forget; main debounces the disk flush). */
+    set(comp: string, draft: CompositionDraft): void
+    /** Drop the draft — on save, discard, or delete. */
+    clear(comp: string): void
   }
   /** CROSS-WINDOW THEME SYNC. Theme is APP-GLOBAL per-machine state, so a change in any window must reach
    *  every other. `changed` relays this window's new state UP to main; main fans it OUT to every OTHER
@@ -403,6 +454,8 @@ export interface MainApi {
     delete(entryPath: string, path: string, expectedHash?: string): Promise<FileWriteResult>
     /** Move `from` to `to`, rewriting inbound references (engine `rename`). Same-repo only. */
     rename(entryPath: string, from: string, to: string): Promise<FileWriteResult>
+    moveDir(entryPath: string, from: string, to: string): Promise<FileWriteResult>
+    deleteDir(entryPath: string, dirPath: string): Promise<FileWriteResult>
   }
   // Engine FILE ASSETS as loadable URLs: resolve a `file*` reference to an absolute
   // path over the engine, serve its bytes on the `au-asset://` origin. Backs the
@@ -447,10 +500,10 @@ export interface MainApi {
     discoverClosure(located: Record<string, string>): Promise<ClosureResult>
     /** Scan a folder for repos matching any of `names` (the general form; open-time locate). */
     scanFor(folder: string, names: string[]): Promise<FoundDep[]>
-    /** The entry's declared members (`workspace.yaml` `edit:` + `discover:`, plus `repo.yaml` `deps`)
-     *  NOT located in the device `repos.yaml` (would not mount). The pre-daemon first-run detector
-     *  for a freshly-cloned workspace. */
-    missingLocations(entry: string): Promise<string[]>
+    /** The entry's declared members the engine would not mount, answered by `au members` before any
+     *  daemon runs, with `binaryPath` (else the resolved `au`). The first-run detector for a
+     *  freshly-cloned workspace. */
+    missingLocations(entry: string, binaryPath: string): Promise<MissingMembers>
     /** Register located members into the device `repos.yaml` (pre-daemon raw writer). */
     locateMembers(entries: FoundDep[]): Promise<{ ok: boolean; error?: string }>
     /** Turn an existing plain directory into a folder-repo entry (writes `.arsumbris/repo.yaml` +
@@ -663,6 +716,10 @@ export type SurfaceCommand =
   // proposes the reference-removal UP; the authority reaps the orphan + gathers the close-guard). Not
   // gen-guarded (a window command, not a record lifecycle).
   | { op: 'close-pane'; id: string }
+  // GROUPING-POLICY: the composition's `grouping` aspect (`group-into`, `group-new-panes`), which a floated
+  // window's wraps and new-pane grouping honour exactly as the main window's do. Composition-owned, so the
+  // authority mirrors it down: in the init, then on every change. Not gen-guarded (window-wide state).
+  | ({ op: 'grouping-policy' } & GroupingPolicy)
 
 /**
  * SURFACE → AUTHORITY. An event a surface reports for one of its mounted records — the projection
@@ -735,6 +792,17 @@ export type SurfaceEvent =
   // present content `^:` (the single-child container being dissolved); `newContentId` is its lone child, lifted
   // to become the window content. The window is located by `currentContentId` (any root, not just primary).
   | { kind: 'repoint-root'; currentContentId: string; newContentId: string }
+  // WRAP-ROOT: a floated window's ROOT-header "Wrap in a container" affordance — the symmetric twin of
+  // `repoint-root` (unwrap). The surface's root placement has no pool, so a local `wrapPaneSolo` would hit
+  // `not-pooled`; the surface proxies the wrap UP instead. The authority owns the window record, so it wraps
+  // THIS window's current content in a new single-child group and re-points `content` to it (a solo wrap: the
+  // content keeps its `^:`, so its view-state survives). `contentId` is the window's present content `^:` at
+  // the time of the affordance; the authority re-reads the window's current content fresh (the re-resolve
+  // invariant). `wrapKind` is the TWIN-PICK — the invoking (secondary) window picked WHICH container in its
+  // own chooser, so the pick renders where the user acted; absent means the authority resolves the default
+  // (composition `group-into` / sole target / `groupingForNewGroup`), never an ask (which would render in the
+  // wrong window).
+  | { kind: 'wrap-root'; contentId: string; wrapKind?: string }
   // CLOSE-WINDOW: the user CONFIRMED "Close" in the `confirm-close` dialog rendered in this window (a
   // deliberate discard, gated by the prompt). The authority splices this window's root and reaps its content
   // subtree, then closes the OS window — the panes leave the composition (the FILES are untouched). "Cancel"
@@ -777,6 +845,13 @@ export interface WindowSite {
   primary: boolean
 }
 
+/** The composition's grouping aspect as a window needs it: which container a wrap uses silently when it
+ *  admits the wrap's child count, and whether new document panes arrive grouped. */
+export interface GroupingPolicy {
+  groupInto?: string
+  groupNewPanes: boolean
+}
+
 /** Bootstrap params handed to a surface's mount agent once it signals ready. The agent boots EMPTY and
  *  waits for `mount` commands (the command protocol carries what to mount), so this is minimal: the
  *  engine root for entry-keyed reads, the surface's own identity, and the parent composition id for
@@ -807,6 +882,8 @@ export interface SurfaceInit {
    *  list immediately; kept fresh by the `windows-changed` command.
    */
   windows?: readonly WindowSite[]
+  /** The composition's grouping policy at open; kept fresh by the `grouping-policy` command. */
+  grouping?: GroupingPolicy
 }
 
 /** Request to open a surface window (a secondary mount surface the authority drives). Keyed by the

@@ -195,6 +195,38 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     void load(sel.path)
   })
 
+  // Also reflect the ACTIVE file across the WHOLE composition, not just this pane's local selection
+  // scope. Selection bubbles up the ENCLOSING container ONLY, so an editor in a different subtree (the
+  // main area) never reaches a backlinks pane docked to the side — the file-tree does only because it
+  // shares the dock. The active-pane focus signal is window-global and the open-surfaces index is
+  // host-wide, so together they name the focused file wherever it lives: the active pane's `^:` → its
+  // open surface → its file content. A non-file active pane (a terminal, or the backlinks pane itself,
+  // which declares no content) resolves to no file and leaves the last one showing.
+  function activeFile(): string | null {
+    const active = host.focus?.activePane?.() ?? null
+    if (!active) return null
+    for (const surface of host.openSurfaces?.list() ?? []) {
+      if (surface.surfaceId !== active) continue
+      for (const item of surface.contents) {
+        const sel = item.payload as Selection
+        if (isFileSelection(sel)) return sel.path
+      }
+    }
+    return null
+  }
+  function syncActiveFile(): void {
+    const file = activeFile()
+    if (file && file !== currentFile) {
+      currentFile = file
+      void load(file)
+    }
+  }
+  // Fire on active-pane changes AND on open-surfaces changes: the pane can stay the same while its file
+  // swaps in place (a viewer swap, a go-to-def in the same editor), which moves no focus but re-declares
+  // content. Both subscriptions fire immediately, so a file already open + focused at mount is picked up.
+  const offActive = host.focus?.watchActive?.(() => syncActiveFile())
+  const offSurfaces = host.openSurfaces?.subscribe(() => syncActiveFile())
+
   // Recover when the daemon becomes reachable (a mount-time read may have failed).
   const offReady = host.engineReady?.subscribe((ready) => {
     if (ready && alive && currentFile) void load(currentFile)
@@ -251,8 +283,17 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     modHeld = false
     clearHoverTimer()
   }
+  // Pointer left the list — drop the stale position. `lastPointer` only tracks moves OVER the list, so
+  // without this a later cmd-press (e.g. beginning a cmd+k) would re-run manageHover at the last row the
+  // pointer sat on and pop a stale peek there, whose keyguard then swallows cmd+k. The peek surface owns
+  // its own dismissal (its cones), so clearing here only stops the STALE re-trigger, never a live peek.
+  const onLeave = (): void => {
+    lastPointer = null
+    clearHoverTimer()
+  }
   if (preview) {
     list.addEventListener('mousemove', onMove)
+    list.addEventListener('mouseleave', onLeave)
     window.addEventListener('keydown', onModKey)
     window.addEventListener('keyup', onModKey)
     window.addEventListener('blur', onBlur)
@@ -262,10 +303,13 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     alive = false
     disposeStyles?.()
     offFollow?.()
+    offActive?.()
+    offSurfaces?.()
     offReady?.()
     clearHoverTimer()
     if (preview) {
       list.removeEventListener('mousemove', onMove)
+      list.removeEventListener('mouseleave', onLeave)
       window.removeEventListener('keydown', onModKey)
       window.removeEventListener('keyup', onModKey)
       window.removeEventListener('blur', onBlur)

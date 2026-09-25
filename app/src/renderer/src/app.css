@@ -148,7 +148,7 @@ button:disabled {
   min-height: 0;
   display: grid;
   place-content: center;
-  gap: var(--au-space-1-5);
+  gap: var(--au-space-2);
   text-align: center;
   padding: var(--au-space-6);
   color: var(--au-ink-3);
@@ -331,6 +331,9 @@ button:disabled {
 .composition-popover__error {
   color: var(--au-color-danger);
 }
+.composition-popover__fixes { display: flex; flex-wrap: wrap; gap: var(--au-space-1); }
+.host-empty__fixes { display: flex; flex-wrap: wrap; gap: var(--au-space-1); justify-content: center; }
+.host-empty__create { display: flex; gap: var(--au-space-2); justify-content: center; align-items: center; margin-top: var(--au-space-2); }
 
 .composition-popover__row { min-height: var(--au-row-h); }
 .composition-popover__row[selected]::after { content: '✓'; color: var(--au-ink-3); flex: none; }

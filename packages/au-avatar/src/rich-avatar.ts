@@ -209,7 +209,7 @@ export class RichAvatar {
     const rendererA = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
     rendererA.setPixelRatio(Math.min(devicePixelRatio, 2))
     rendererA.shadowMap.enabled = true
-    rendererA.shadowMap.type = THREE.PCFSoftShadowMap
+    rendererA.shadowMap.type = THREE.PCFShadowMap
     this.rendererA = rendererA
 
     // camera distance for SPHERE_FRACTION of viewport height
@@ -417,7 +417,7 @@ export class RichAvatar {
     const rb = new THREE.WebGLRenderer({ canvas: c, antialias: true, alpha: true })
     rb.setPixelRatio(Math.min(devicePixelRatio, 2))
     rb.shadowMap.enabled = true
-    rb.shadowMap.type = THREE.PCFSoftShadowMap
+    rb.shadowMap.type = THREE.PCFShadowMap
     rb.setClearColor(0x000000, 0)
     this.overlayEl = el
     this.overlayCanvas = c

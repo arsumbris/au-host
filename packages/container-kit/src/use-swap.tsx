@@ -4,10 +4,11 @@
 //
 // const swap = usePaneSwap(host)
 // Use swap.toggle(id) from the header, and swap.swapPicker(id, instance) while swap.isSwapping(id).
-// The id is the pane's own id, resolved through placementForPane and the container's slot lookup.
+// Every call takes the OCCUPANT's own id (its `data-pane-id`), never a position id: the menu, the keyboard
+// intent and the render must agree on it, and it is what placementForPane and setPaneContent address.
 // Swapping changes the viewer of the current document; it does not choose a different file.
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { holdPaneFrame } from './hold-pane-frame';
 import type { MountHost, ProjectionDescriptor } from '@arsumbris/au-host-sdk';
 import { placementForPane, setPaneContent, slotAdmits, slotFor } from '@arsumbris/container-core';
@@ -27,18 +28,46 @@ function withDocument(type: string, current: Instance): Instance {
 }
 
 export interface PaneSwap {
-  /** Is this slot currently showing the swap picker? */
-  isSwapping: (slotId: string) => boolean;
-  /** Open the swap picker on a slot. */
-  request: (slotId: string) => void;
+  /** Is this pane currently showing the swap picker? */
+  isSwapping: (paneId: string) => boolean;
+  /** Open the swap picker on a pane. */
+  request: (paneId: string) => void;
   /** Close the swap picker without swapping. */
   cancel: () => void;
   /** Open the picker on a slot, or close it if this slot's picker is already open (wire to a header
    *  swap button — one button toggles it). */
-  toggle: (slotId: string) => void;
-  /** The swap picker for a slot — render it in the pane BODY while `isSwapping(slotId)`. Returns null
+  toggle: (paneId: string) => void;
+  /** The swap picker for a slot — render it in the pane BODY while `isSwapping(paneId)`. Returns null
    *  otherwise, so `swap.swapPicker(id, instance)` is safe to place unconditionally. */
-  swapPicker: (slotId: string, current: Instance) => ReactNode;
+  swapPicker: (paneId: string, current: Instance) => ReactNode;
+}
+
+/**
+ * Register the routed `swap-pane-intent` handler for a container — the keyboard-command form of the ⋯ menu's
+ * "Swap pane" row. The container CLAIMS when the window's active pane (`host.focus.activePane`) is one of ITS
+ * children (`owns`) in a position that is not `fixed`, and opens the swap picker on it via `swap.request` — so a keyboard swap targets the
+ * FOCUSED pane, wherever it lives, through the same picker the menu uses. Only the holding container claims,
+ * so the routed-ambient walk reaches it. Refs keep the registration stable across renders (the swap object
+ * and the `owns` predicate are fresh each render). Every container that shows a "Swap pane" row calls this,
+ * so the shortcut behaves identically across container kinds.
+ */
+export function useSwapPaneIntent(host: MountHost, swap: PaneSwap, owns: (paneId: string) => boolean): void {
+  const swapRef = useRef(swap); swapRef.current = swap;
+  const ownsRef = useRef(owns); ownsRef.current = owns;
+  useEffect(() => {
+    // The focused child, unless its position is `fixed`: the menu hides Swap there, so the command declines
+    // too, rather than opening a picker whose every pick the seam refuses.
+    const activeChild = (): string | null => {
+      const a = host.focus.activePane?.() ?? null;
+      if (a == null || !ownsRef.current(a)) return null;
+      const placement = placementForPane(a);
+      return placement && slotFor(placement, a)?.fixed ? null : a;
+    };
+    return host.intent?.handle('swap-pane-intent', {
+      claim: () => activeChild() != null,
+      commit: () => { const a = activeChild(); if (a != null) swapRef.current.request(a); },
+    });
+  }, [host]);
 }
 
 function SwapInteraction({ children }: { children: ReactNode }): ReactNode {
@@ -50,21 +79,21 @@ function SwapInteraction({ children }: { children: ReactNode }): ReactNode {
 export function usePaneSwap(host: MountHost): PaneSwap {
   const [swapId, setSwapId] = useState<string | null>(null);
   const cancel = (): void => setSwapId(null);
-  const isSwapping = (slotId: string): boolean => swapId === slotId;
+  const isSwapping = (paneId: string): boolean => swapId === paneId;
   return {
     isSwapping,
-    request: (slotId) => setSwapId(slotId),
+    request: (paneId) => setSwapId(paneId),
     cancel,
-    toggle: (slotId) => setSwapId((cur) => (cur === slotId ? null : slotId)),
-    swapPicker: (slotId, current) => {
-      if (swapId !== slotId) return null;
+    toggle: (paneId) => setSwapId((cur) => (cur === paneId ? null : paneId)),
+    swapPicker: (paneId, current) => {
+      if (swapId !== paneId) return null;
       // Offer only viewers the SLOT admits, so a swap is never refused at the seam — the same admits
       // filter the placeholder-picker applies to an empty slot. A slot with no `admits` rule admits
       // everything (`slotAdmits` returns true), so the list is unchanged. A disallowed pick that still
       // reaches the seam by some other path is refused there and surfaced as a notification (the host
       // diagnostics stream), never a silent no-op.
-      const placement = placementForPane(slotId);
-      const slot = placement ? slotFor(placement, slotId) : null;
+      const placement = placementForPane(paneId);
+      const slot = placement ? slotFor(placement, paneId) : null;
       const all = describeForPicker(host);
       const descriptors: readonly ProjectionDescriptor[] = all.filter((d) => slotAdmits(slot, d.type));
       const admitsNote = admitsNoteFor(slot, all.length, descriptors.length);
@@ -80,7 +109,7 @@ export function usePaneSwap(host: MountHost): PaneSwap {
             // the pane keeps its identity (view-state, pty) and only its projection changes. `false` is a
             // real refusal (a `fixed` or `admits`-restricted slot) — keep the picker open then, so a
             // refusal reads differently from a completed swap rather than looking like a misclick.
-            if (setPaneContent(slotId, withDocument(id, current))) cancel();
+            if (setPaneContent(paneId, withDocument(id, current))) cancel();
           }}
         />
         </SwapInteraction>

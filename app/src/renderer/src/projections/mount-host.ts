@@ -17,9 +17,11 @@ import type { EngineReadResult, ReadRequest, SubscribeRequest, SubscriptionEvent
 import type { ChromeContribution, CloseGuardChannel, CompositionCommit, CompositionEditControl, DaemonControl, EngineReadiness, FilesControl, FocusChannel, IntentChannel, KeymapsControl, McpControl, HostApp, OpaqueConfig, OpenSurfaces, PreviewSurface, ScopeControl, SelectionChannel, ShellControl, TerminalChannel, ViewStore, WindowControl, WorkspaceControl, WorkspaceMember } from './host-config'
 import { getConfirmSurface } from './confirm-surface'
 import { getChooserSurface } from './chooser-surface'
+import { scopeChooser, scopeConfirm, scopeContextMenu, scopeOverlaySite, scopePopover, scopePreview, type MountLifetime } from './mount-lifetime'
 import { getContextMenuSurface } from './context-menu-surface'
 import { getPopoverSurface } from './popover-surface'
 import { getOverlaySite } from './overlay-site'
+import { placementForPane } from '@arsumbris/container-core'
 import type { DaemonConfig } from '../../../shared/daemon-api'
 import { themeControl } from './theme-store'
 import { tokenDiagnostics } from './token-registration'
@@ -99,6 +101,8 @@ export interface MountHostOptions {
   slotDefaults?: () => string | undefined
 
   // --- Per-record. ---
+  /** The mount's lifetime: the overlay surfaces this host hands out close what they opened when it ends. */
+  lifetime: MountLifetime
   config?: OpaqueConfig
   instanceId?: string
   windowRoot?: boolean
@@ -135,7 +139,7 @@ export function createInProcessMountHost(o: MountHostOptions): HostApp {
     entryPath, children, viewState, selection, daemon, mcp, engineReady, members, config, saveConfig,
     commitComposition, intent, focus, closeGuard, windowRoot, viewStore, terminal, instanceId, preview, listProjections,
     listContributions, subscribeContributions, describeProjections, compositionEdit, keymaps, viewerDefaults,
-    slotDefaults, onOwnConfigChange, openSurfaces,
+    slotDefaults, onOwnConfigChange, openSurfaces, lifetime,
   } = o
   // A no-op intent channel when a caller didn't supply one (keeps the contract
   // `intent` total). Every real mount routes through the composition runtime, which provides it.
@@ -158,8 +162,10 @@ export function createInProcessMountHost(o: MountHostOptions): HostApp {
   const terminalChannel: TerminalChannel = terminal ?? { attach: () => noopSession }
   // A no-op preview surface when none supplied (keeps the contract `preview` total). Every real
   // window passes the shared per-window singleton; a projection's hovers no-op without it.
-  const previewSurface: PreviewSurface =
-    preview ?? { show: () => {}, hide: () => {}, isOver: () => false, isShowing: () => false }
+  // Scoped to this mount like the other overlay surfaces: a card this view left up is hidden when it ends.
+  const previewSurface: PreviewSurface = preview
+    ? scopePreview(lifetime, preview)
+    : { show: () => {}, hide: () => {}, isOver: () => false, isShowing: () => false }
   const transport = createInProcessTransport({
     read: (request) => window.main.engine.read(entryPath, request),
     subscribe: (request, onEvent) => window.main.engine.subscribe(entryPath, request, onEvent),
@@ -208,23 +214,30 @@ export function createInProcessMountHost(o: MountHostOptions): HostApp {
     subscribeContributions: subscribeContributions ?? (() => () => {}),
     preview: previewSurface,
     // The per-window overlay site is a module singleton that owns its root. Host surfaces and
-    // projections claim layers through it whenever content must draw above the composition.
-    overlay: getOverlaySite(),
+    // projections claim layers through it whenever content must draw above the composition. This mount's
+    // view gets it SCOPED: a layer it claims is released when the mount ends (see mount-lifetime.ts).
+    overlay: scopeOverlaySite(lifetime, getOverlaySite()),
     // OPEN SURFACES — the per-node capability minted by the composition runtime (`setContent` bound to
     // this node's publisher; the reads host-wide). Present-or-absent, like `describeProjections`: a
     // caller that supplies none leaves it absent rather than a present-but-inert stub.
     ...(openSurfaces ? { openSurfaces } : {}),
     // The right-click MENU, built over that same site (it claims a `dropdown` layer) — so this file
     // hands a projection two capabilities that share one owner of the document. A per-window
-    // singleton like `theme` / `tokens` / `components`, and NOT installed as a no-op when absent:
-    // an optional member that is present-but-inert is indistinguishable from a working one, which
-    // is the trap `describeProjections` above already avoids.
-    contextMenu: getContextMenuSurface(getOverlaySite()),
+    // singleton like `theme` / `tokens` / `components`, scoped to this mount (a menu it opened closes
+    // when the mount ends), and NOT installed as a no-op when absent: an optional member that is
+    // present-but-inert is indistinguishable from a working one, which is the trap
+    // `describeProjections` above already avoids.
+    contextMenu: scopeContextMenu(lifetime, getContextMenuSurface(getOverlaySite())),
+    // The enclosing container's rows for THIS mount: resolve the mount's placement by its stable pane id
+    // (DOM-keyed, so it answers in whichever window the mount lives in) and ask it. Present only for a
+    // mount with a pane id; a root / id-less mount has no container to ask.
+    ...(instanceId ? { containerActions: () => placementForPane(instanceId)?.paneActions?.(instanceId) ?? null } : {}),
     projections: projectionReload,
     // The interactive anchored POPOVER, built over that same site (it claims a `dropdown` layer,
-    // beside the context menu). A per-window singleton like `contextMenu`, and NOT installed as a
-    // no-op when absent: a present-but-inert optional member is indistinguishable from a working one.
-    popover: getPopoverSurface(getOverlaySite()),
+    // beside the context menu). A per-window singleton like `contextMenu`, scoped to this mount the same
+    // way, and NOT installed as a no-op when absent: a present-but-inert optional member is
+    // indistinguishable from a working one.
+    popover: scopePopover(lifetime, getPopoverSurface(getOverlaySite())),
     // The app-global per-machine theme layer — a module singleton, same instance for every
     // node (a theme is app-wide `:root`, not per pane). The theming pane reads/saves through it.
     theme: themeControl,
@@ -247,8 +260,8 @@ export function createInProcessMountHost(o: MountHostOptions): HostApp {
     // App-owned terminal appearance and behavior preferences, backed by main through the preload bridge.
     terminalPreferences: window.main.terminalPreferences,
     windows: windowControl,
-    confirm: getConfirmSurface(),
-    chooser: getChooserSurface(),
+    confirm: scopeConfirm(lifetime, getConfirmSurface()),
+    chooser: scopeChooser(lifetime, getChooserSurface()),
     engineReady,
     commitComposition,
     compositionEdit,
@@ -281,7 +294,7 @@ function createWorkspaceControl(entryPath: string): WorkspaceControl {
     removeMember: (wsRoot, name) => window.main.workspace.removeMember(wsRoot, name),
     setMemberRole: (wsRoot, name, role) => window.main.workspace.setMemberRole(wsRoot, name, role),
     setMemberDisabled: (wsRoot, name, disabled) => window.main.workspace.setMemberDisabled(wsRoot, name, disabled),
-    declarePeer: (memberRoot, memberName, peerName, remote) => window.main.workspace.declarePeer(memberRoot, memberName, peerName, remote),
+    declarePeer: (memberRoot, peerName, remote) => window.main.workspace.declarePeer(entryPath, memberRoot, peerName, remote),
     scaffoldRegistry: (memberRoot, memberName) => window.main.workspace.scaffoldRegistry(memberRoot, memberName),
     pickFolder: () => window.main.workspace.pickFolder(),
     // register + deviceConfig are DAEMON ops, keyed by this host's entry.
@@ -393,6 +406,8 @@ export function createFilesControl(entryPath: string): FilesControl {
     exists: (filePath) => window.main.files.exists(entryPath, filePath),
     delete: (filePath, expectedHash) => window.main.files.delete(entryPath, filePath, expectedHash),
     rename: (from, to) => window.main.files.rename(entryPath, from, to),
+    moveDir: (from, to) => window.main.files.moveDir(entryPath, from, to),
+    deleteDir: (path) => window.main.files.deleteDir(entryPath, path),
   }
 }
 

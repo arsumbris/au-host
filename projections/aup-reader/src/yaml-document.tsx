@@ -1,34 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { MountHost } from '@arsumbris/au-host-sdk'
-import { readResolveMember, readTypes, readTypeClosure, subscribeChanges, type WireTypeDef, type WireTypeClosureEntry, type WireShape, type WireBodyItem } from '@arsumbris/au-host-sdk/engine-reads'
+import { readResolveMember, readTypes, readTypeClosure, subscribeChanges, shapeLabel, type WireTypeDef, type WireTypeClosureEntry, type WireShape, type WireBodyItem } from '@arsumbris/au-host-sdk/engine-reads'
 import { parseYamlDocuments } from './yaml-documents'
 import { YamlPreview } from './yaml-preview'
 import { CodeBlock } from './code-block'
 import { PropertyValue } from './frontmatter'
 
 interface Definition { type: WireTypeDef; closure?: WireTypeClosureEntry }
-
-function shapeLabel(shape: WireShape): string {
-  switch (shape.kind) {
-    case 'primitive': return shape.name
-    case 'record': return shape.name
-    case 'reference': return `${shape.name}*`
-    case 'inline-or-reference': return `${shape.name}&`
-    case 'enum': return `[${shape.members.join(', ')}]`
-    case 'list': return `${shapeLabel(shape.inner)}[${shape.max !== undefined ? `${shape.min}..${shape.max}` : shape.min === 0 ? '' : shape.min === 1 ? '+' : `${shape.min}..`}]`
-    case 'tuple': return `(${shape.elements.map(shapeLabel).join(', ')})`
-    case 'union': case 'intersection': return `<${shape.branches.map(shapeLabel).join(shape.kind === 'union' ? ' | ' : ' & ')}>`
-    case 'pinned': return `${shapeLabel(shape.inner)}@`
-    case 'def-reference': return shape.bound ? `type<${shape.bound.kind === 'single' ? shape.bound.name : shape.bound.branches.join(shape.bound.op === 'union' ? ' | ' : ' & ')}>*` : 'type*'
-    case 'compound-reference': return `<${shape.branches.join(shape.op === 'union' ? ' | ' : ' & ')}>${shape.mode === 'ref' ? '*' : '&'}`
-    case 'refined': {
-      const r = shape.refinement
-      const constraints = [r.lower && `${r.lower.inclusive ? '>=' : '>'} ${r.lower.value}`, r.upper && `${r.upper.inclusive ? '<=' : '<'} ${r.upper.value}`, r.integer && 'integer', r.pattern !== undefined && `pattern ${r.pattern}`].filter(Boolean)
-      return `${shape.base}{${constraints.join(', ')}}`
-    }
-    default: return 'any'
-  }
-}
 
 function shapeReferences(shape: WireShape | null): string[] {
   if (!shape) return []

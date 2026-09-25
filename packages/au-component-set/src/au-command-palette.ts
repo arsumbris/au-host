@@ -243,18 +243,26 @@ export class AuCommandPaletteElement extends AuElement {
     }
   `
 
+  // The matching items in DISPLAY order. Grouped, a group's rows render together in the group's
+  // first-appearance position, so the list is reordered to match: the keyboard, Enter and the active
+  // descendant all index this one sequence, and the arrow keys walk exactly what the eye sees.
   private get filtered(): Item[] {
     const q = this._query.trim().toLowerCase()
     const all = this.items ?? []
-    return q
+    const matches = q
       ? all.filter(
           (i) => i.label.toLowerCase().includes(q) || (i.detail ?? '').toLowerCase().includes(q),
         )
       : all
+    if (this.variant === 'compact') return matches
+    const byGroup = new Map<string | undefined, Item[]>()
+    for (const item of matches) byGroup.set(item.group, [...(byGroup.get(item.group) ?? []), item])
+    return [...byGroup.values()].flat()
   }
 
-  // Cluster the filtered items into sections by their `group` (first-appearance order). An ungrouped
-  // run forms a leading headerless section. Compact collapses everything into one flat section.
+  // Cluster the (display-ordered) filtered items into sections by their `group`, so each group's rows are
+  // contiguous and a row's index is its position on screen. Ungrouped rows form a headerless section at
+  // their first appearance. Compact collapses everything into one flat section.
   private sectionsFor(items: Item[]): Section[] {
     if (this.variant === 'compact') return [{ rows: items.map((item, index) => ({ item, index })) }]
     const sections: Section[] = []

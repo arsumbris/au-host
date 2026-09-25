@@ -3,4 +3,4 @@ fields: {}
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./fixtures/guarded-pane.js
-    contractVersion: 7
+    contractVersion: 8

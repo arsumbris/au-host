@@ -2,3 +2,6 @@
 # Playwright E2E output
 test-results/
 playwright-report/
+
+# Scale test-fixture: the generator (e2e/scale/generate.ts) is committed, its generated vault is not.
+/e2e/scale/vault/

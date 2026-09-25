@@ -1,4 +1,5 @@
 import {describe, expect, it} from 'vitest'
+import {UNSAVED_COMPOSITION} from '@arsumbris/au-host-sdk'
 import {readWorkspaceStartup, selectStartupPath} from '../src/renderer/src/projections/workspace-startup'
 import type {WireReader} from '@arsumbris/au-host-sdk/engine-reads'
 
@@ -9,6 +10,12 @@ describe('authored workspace startup', () => {
   it('restores a valid user choice; stale recents do not displace the authored start', () => {
     expect(selectStartupPath(['a','b'],['b'],{kind:'composition',path:'a'})).toEqual({kind:'composition',path:'b'})
     expect(selectStartupPath(['a'],['gone'],{kind:'composition',path:'a'})).toEqual({kind:'composition',path:'a'})
+  })
+  it('restores the unsaved composition only when it was last open and its draft survives', () => {
+    expect(selectStartupPath(['a'],[UNSAVED_COMPOSITION,'a'],{kind:'legacy'},true)).toEqual({kind:'unsaved'})
+    expect(selectStartupPath(['a'],[UNSAVED_COMPOSITION,'a'],{kind:'legacy'},false)).toEqual({kind:'composition',path:'a'})
+    expect(selectStartupPath(['a'],['a',UNSAVED_COMPOSITION],{kind:'legacy'},true)).toEqual({kind:'composition',path:'a'})
+    expect(selectStartupPath(['a'],[UNSAVED_COMPOSITION],{kind:'pending'},true).kind).toBe('pending')
   })
   it('keeps explicit empty starts empty despite discovered layouts and rejects non-compositions', () => {
     expect(selectStartupPath(['foreign'],[],{kind:'empty'})).toEqual({kind:'empty'})

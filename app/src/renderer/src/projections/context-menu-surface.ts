@@ -250,15 +250,21 @@ export function createContextMenuSurface(site: OverlaySite): ContextMenuSurface 
     const h = el.offsetHeight
     const vw = window.innerWidth
     const vh = window.innerHeight
+    // PREFERRED position, flipped to the other side of the anchor when it would overflow (a submenu clears
+    // its parent, not merely the viewport). The flip is the preference; the clamp below is the hard floor.
     let left = at.left
-    if (left + w > vw - MARGIN) {
-      left = avoid ? avoid.left - w + SUBMENU_OVERLAP : at.left - w
-      left = Math.max(MARGIN, left)
-    }
+    if (left + w > vw - MARGIN) left = avoid ? avoid.left - w + SUBMENU_OVERLAP : at.left - w
     let top = at.top
-    if (top + h > vh - MARGIN) top = Math.max(MARGIN, vh - h - MARGIN)
-    el.style.left = `${Math.max(MARGIN, left)}px`
-    el.style.top = `${Math.max(MARGIN, top)}px`
+    if (top + h > vh - MARGIN) top = vh - h - MARGIN
+    // FINAL into-viewport clamp — the floor that makes an off-screen menu impossible whether or not the flip
+    // fired. The flip depends on `w` being the SETTLED width, but a custom-element menu (`<au-menu>` + its
+    // rows) reaches full size only after it upgrades, so an early measurement can miss the flip threshold and
+    // leave the menu off the right edge with nothing to pull it back. `max-width`/`max-height` keep the menu
+    // within the viewport, so clamping the near edge never pins a too-large menu.
+    left = Math.max(MARGIN, Math.min(left, vw - w - MARGIN))
+    top = Math.max(MARGIN, Math.min(top, vh - h - MARGIN))
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
   }
 
   /** Custom-element rows finish rendering after insertion. Refit when their real size arrives. */
@@ -266,7 +272,10 @@ export function createContextMenuSurface(site: OverlaySite): ContextMenuSurface 
     const fit = () => { if (level.el.isConnected) place(level.el, at, avoid) }
     const observer = new ResizeObserver(fit)
     observer.observe(level.el)
-    level.releasePlacement = () => observer.disconnect()
+    // The `<au-menu>` finishes upgrading + laying out AFTER insertion, so refit on the next frame against the
+    // SETTLED size (not the initial, often min-width, measurement). The observer covers later content changes.
+    const raf = requestAnimationFrame(fit)
+    level.releasePlacement = () => { observer.disconnect(); cancelAnimationFrame(raf) }
     fit()
   }
 

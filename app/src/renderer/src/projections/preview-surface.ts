@@ -18,6 +18,7 @@
 // au-host-sdk. This file is the
 // host-side IMPLEMENTATION behind `MountHost.preview`.
 import type { FillFn, LinkResolver, PreviewSurface } from '@arsumbris/au-host-sdk'
+import { runFill, type FillLifetime } from './fill-lifetime'
 
 import { getOverlaySite } from './overlay-site'
 import { adoptHostSheet } from './adopt-sheet'
@@ -27,6 +28,11 @@ export type { FillFn, LinkResolver, PreviewSurface }
 const MARGIN = 8
 const CONE_PAD = 16 // grow each card box before the cone hull, a forgiving safe zone
 const DWELL_MS = 240
+// The TIME-HALF of the safe zone. The cones are geometry; this forgives a transient exit from EVERY cone
+// (the pointer moving faster than pointermove samples across a thin gap, or a card re-clamping/jumping as
+// its content settles under an in-flight pointer) so a preview never vanishes while the pointer is heading
+// INTO it. A move back into any cone cancels the pending dismissal.
+const DISMISS_GRACE_MS = 250
 
 // ─── geometry: convex hull + point-in-polygon (screen coords, y-down) ────────
 interface Pt {
@@ -171,6 +177,8 @@ interface Frame {
   cone: SVGSVGElement // this frame's own cone overlay, z-indexed just below its card
   gen: number
   resize: ResizeObserver
+  /** The caller's content; ended when the frame is removed. */
+  content?: FillLifetime
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg'
@@ -186,6 +194,7 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
   let dragging = false
   let dwellTimer: ReturnType<typeof setTimeout> | undefined
   let dwellSpan: Element | null = null
+  let dismissTimer: ReturnType<typeof setTimeout> | undefined
   let listening = false
 
   // INTERLEAVED z-order: cone₀ < card₀ < cone₁ < card₁ < … so each child's cone sits ABOVE its
@@ -272,6 +281,11 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
     dwellSpan = null
   }
 
+  function clearDismiss(): void {
+    if (dismissTimer) clearTimeout(dismissTimer)
+    dismissTimer = undefined
+  }
+
   // Prefer reading space beside the source; fall back vertically in narrow windows.
   // Bound the preview height so its shared scroll area carries long content.
   function clamp(card: HTMLElement, anchor: DOMRect, _depth: number): void {
@@ -309,6 +323,7 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
       const f = frames.pop()!
       f.resize.disconnect()
       f.el.remove()
+      f.content?.end()
       f.cone.remove()
     }
     if (frames.length === 0) stopListening()
@@ -335,7 +350,8 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
     renderCones()
     // `isCurrent` goes false once this frame is dropped (truncated) or superseded at its depth.
     const isCurrent = (): boolean => frame.gen === myGen && frames.includes(frame)
-    void Promise.resolve(fill(el, isCurrent)).then(() => {
+    frame.content = runFill(fill, el, isCurrent)
+    void frame.content.settled.then(() => {
       if (isCurrent()) {
         const header = el.querySelector(':scope > .au-pcard-header')
         const path = el.dataset.previewFile
@@ -382,7 +398,21 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
     // Keep-alive: the deepest frame whose cone still holds the pointer; drop everything deeper.
     let deepest = -1
     for (let i = 0; i < frames.length; i++) if (pointInPolygon(pt, coneOf(frames[i]))) deepest = i
-    truncate(deepest + 1)
+    const keep = deepest + 1
+    if (keep === 0) {
+      // Pointer is inside NO cone. Do NOT tear the whole stack down on this one sample — defer the
+      // dismissal by DISMISS_GRACE_MS so a transient exit (see the constant) is forgiven. A move back into
+      // any cone cancels it (below). Full-stack dismissal only; a partial (nested) drop stays immediate.
+      clearDwell()
+      if (!dismissTimer)
+        dismissTimer = setTimeout(() => {
+          dismissTimer = undefined
+          if (!dragging) truncate(0)
+        }, DISMISS_GRACE_MS)
+      return
+    }
+    clearDismiss() // back inside a cone — abandon any pending dismissal
+    truncate(keep)
     if (frames.length === 0) return
     // Child-spawn: cmd + a `data-preview-path` link inside some card → dwell → spawn at depth+1.
     if (!modHeld || !resolver) return clearDwell()
@@ -474,10 +504,15 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
     resolver = null
     opener = null
     clearDwell()
+    clearDismiss()
   }
 
   return {
     show(key, rect, fill, linkResolver, onOpen) {
+      // A caller shows a card only while the pointer is on its source, so any pending whole-stack
+      // dismissal (armed when the pointer left the previous card's cone) is stale: cancel it, or it would
+      // close this card moments after it opens.
+      clearDismiss()
       // A fresh root: the same key already at the root is a no-op (hover jitter guard).
       if (frames.length >= 1 && frames[0].key === key) return
       resolver = linkResolver ?? null
@@ -497,8 +532,12 @@ function createPreviewSurface(root: HTMLElement): PreviewSurface {
 }
 
 // One preview surface per renderer window. It claims the overlay site's `popover` band, above
-// confirm's `overlay` band, so a preview can appear above an open confirmation dialog.
+// confirm's `overlay` band, so a preview can appear above an open confirmation dialog. `keyguard: false`
+// because a hover peek is keyboard-PASSIVE decoration: it traps no keyboard focus, so it must not suppress
+// command chords the way a modal / menu / chooser does. `popover` is a blocking band by default; this is the
+// per-layer override the palette launcher also uses (see `OverlayOptions.keyguard`). Set once here — every
+// projection reaches the peek through `host.preview`, so no consumer ever declares a band or this flag.
 let singleton: PreviewSurface | null = null
 export function getPreviewSurface(): PreviewSurface {
-  return (singleton ??= createPreviewSurface(getOverlaySite().claim({ level: 'popover' }).el))
+  return (singleton ??= createPreviewSurface(getOverlaySite().claim({ level: 'popover', keyguard: false }).el))
 }

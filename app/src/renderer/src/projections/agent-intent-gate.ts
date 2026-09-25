@@ -8,15 +8,13 @@
 
 import { readSubtypes, type WireField, type WireReader, type WireShape, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
 import { refName } from '@arsumbris/type-query'
+import { INTENT_ROUTING_META, metaBlock, typeKey } from '@arsumbris/au-host-sdk'
+import { INTENT_AGENT_META } from '@arsumbris/intent'
 
 import type { DiscoveredProjection } from './discovery'
 
 /** The base whose subtypes are intents. */
 const BASE_TYPE = 'intent'
-/** The trust declaration. See `packages/intent/type/intent-agent-meta.type.yaml`. */
-const AGENT_META_TYPE = 'intent-agent-meta'
-/** The routing declaration, the SINGLE source of an intent's kind/dispatch. */
-const ROUTING_META_TYPE = 'intent-routing-meta'
 /** The projection base. Named explicitly because `subtypes('projection')` returns the subtypes of
  *  the base and correctly NOT the base itself, so it never appears in a discovered `kinds` closure. */
 const PROJECTION_BASE = 'projection'
@@ -150,10 +148,10 @@ export function buildGateTable(
   const isProjectionType = (name: string): boolean => projectionNames.has(name)
 
   for (const def of defs) {
-    // Match meta blocks by BARE name: the served `type_name` is `::repo`-qualified for a peer's
-    // meta type (`intent-agent-meta::intent` on a projection-repo intent) and bare for an own one.
-    const agent = def.meta_blocks?.find((b) => refName(b.type_name) === AGENT_META_TYPE)
-    const routingBlock = def.meta_blocks?.find((b) => refName(b.type_name) === ROUTING_META_TYPE)
+    // The agent declaration is read from the def's OWN meta (see `declaredFirable`); the routing, own or
+    // inherited. An own block's `type_name` resolves in the def's repo.
+    const agent = def.meta_blocks?.find((b) => typeKey(b.type_name, def.repo) === INTENT_AGENT_META)
+    const routingBlock = metaBlock(def, INTENT_ROUTING_META)
     const routing: DeclaredRouting = {}
     if (routingBlock) {
       const kind = fieldOf(routingBlock, 'kind')
@@ -161,13 +159,13 @@ export function buildGateTable(
       if (kind === 'routed' || kind === 'broadcast') routing.kind = kind
       if (dispatch === 'ambient' || dispatch === 'firer-relative') routing.dispatch = dispatch
     }
-    const privilegedFields = privilegedFieldsOf(def.fields ?? [], isProjectionType)
+    const privilegedFields = privilegedFieldsOf(def.effective_fields, isProjectionType)
     out.set(refName(def.name), {
       hasDeclaration: agent !== undefined,
-      // LITERAL, never inherited. `meta:` is not inherited by the type system, and the engine's own
-      // `required:` rule is literal for the same reason: a subtype ADDS fields, so inheriting the
-      // parent's permission would grant it for a payload the parent never declared. It also means a
-      // third party subtyping a firable intent is NOT firable until they say so.
+      // LITERAL: the def's own declaration, not an inherited one. A subtype ADDS fields, so inheriting
+      // the parent's permission would grant it for a payload the parent never declared. A third party
+      // subtyping a firable intent is NOT firable until they say so. The engine's `required:` rule is
+      // literal for the same reason.
       declaredFirable: agent ? fieldOf(agent, 'firable') === true : false,
       privilegedPayload: privilegedFields.length > 0,
       privilegedFields,

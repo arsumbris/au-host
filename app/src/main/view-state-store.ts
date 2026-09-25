@@ -1,4 +1,6 @@
-// MAIN-OWNED restorable view-state auto-store: `~/.arsumbris/au-host/data/view-state.json`.
+// MAIN-OWNED restorable view-state auto-store: one file per workspace,
+// `~/.arsumbris/au-host/data/view-state/<workspaceKey>.json`, bound to the workspace this instance has CLAIMED,
+// so exactly one process writes it (see `local-store-file.ts` for the atomic write).
 
 // High-frequency RESTORABLE view-state (editor cursor/scroll/folds, file-tree expansion) kept LOCAL and
 // per-machine, outside the git-tracked composition config. Keyed by composition id + pool `^:` node id +
@@ -8,19 +10,12 @@
 
 
 // A BOUNDED CACHE, not a ledger: an LRU cap bounds growth; prune-on-save / drop-on-delete remove dead panes
-// and compositions. The DISK write is DEBOUNCED (cursor moves are frequent); the in-memory map is the truth
+// and compositions. The DISK write is DEBOUNCED (cursor moves are frequent) and atomic; the in-memory map is the truth
 // between flushes, so a read is always current. Per-machine, NON-git, disposable — a missing / corrupt file
 // behaves as first-run and NEVER errors.
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-
-import { hostDataDir } from './device-paths'
-
-/** The view-state file: `~/.arsumbris/au-host/data/view-state.json`. */
-export function viewStateFile(): string {
-  return path.join(hostDataDir(), 'view-state.json')
-}
+import { workspaceStoreFile } from './device-paths'
+import { LocalStoreFile } from './local-store-file'
 
 interface Entry {
   v: unknown
@@ -30,40 +25,25 @@ interface Entry {
 type Store = Record<string, Record<string, Record<string, Entry>>>
 
 const MAX_ENTRIES = 1000
-const FLUSH_DEBOUNCE_MS = 400
 
 export class ViewStateStore {
-  private store: Store | null = null // lazily loaded on first access.
-  private flushTimer: ReturnType<typeof setTimeout> | null = null
+  private file: LocalStoreFile<Store> | null = null
 
-  private load(): Store {
-    if (this.store) return this.store
-    try {
-      this.store = JSON.parse(fs.readFileSync(viewStateFile(), 'utf8')) as Store
-    } catch {
-      this.store = {} // missing / corrupt → first-run, never an error.
-    }
-    return this.store
+  /** Bind to the CLAIMED workspace's file. Rebinding flushes the previous one first. */
+  open(entry: string): void {
+    this.close()
+    this.file = new LocalStoreFile<Store>(workspaceStoreFile('view-state', entry), () => ({}))
   }
 
-  /** Schedule a debounced disk write (frequent cursor moves coalesce into one flush). */
-  private scheduleFlush(): void {
-    if (this.flushTimer) return
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null
-      this.flushNow()
-    }, FLUSH_DEBOUNCE_MS)
+  /** Flush and unbind (the workspace closed, or the app quits). Unbound, reads are empty and writes drop. */
+  close(): void {
+    this.file?.flushNow()
+    this.file = null
   }
 
-  /** Write the in-memory store to disk now (best-effort; a failure never breaks the host). */
-  flushNow(): void {
-    if (!this.store) return
-    try {
-      fs.mkdirSync(path.dirname(viewStateFile()), { recursive: true })
-      fs.writeFileSync(viewStateFile(), JSON.stringify(this.store))
-    } catch {
-      // storage full / unavailable — view-state is best-effort, drop silently.
-    }
+  /** The bound workspace's value, or a throwaway empty one while unbound (so a write before a claim drops). */
+  private store(): Store {
+    return this.file?.get() ?? {}
   }
 
   /** Evict least-recently-used entries until within MAX_ENTRIES. */
@@ -83,7 +63,7 @@ export class ViewStateStore {
 
   /** One composition's entire node->sub->value subtree, for a renderer to hydrate its cache. */
   loadComposition(comp: string): Record<string, Record<string, unknown>> {
-    const nodes = this.load()[comp] ?? {}
+    const nodes = this.store()[comp] ?? {}
     const out: Record<string, Record<string, unknown>> = {}
     for (const [node, subs] of Object.entries(nodes)) {
       out[node] = {}
@@ -97,7 +77,7 @@ export class ViewStateStore {
    *  was hydrated at ITS boot and predates the pane's latest state; the destination refreshes just this node
    *  so restore reads authoritative truth rather than the stale local cache. */
   loadNode(comp: string, node: string): Record<string, unknown> {
-    const subs = this.load()[comp]?.[node] ?? {}
+    const subs = this.store()[comp]?.[node] ?? {}
     const out: Record<string, unknown> = {}
     for (const [sub, entry] of Object.entries(subs)) out[sub] = entry.v
     return out
@@ -105,15 +85,15 @@ export class ViewStateStore {
 
   /** Write one (composition, node, subKey) value; refresh recency, cap, schedule a flush. */
   set(comp: string, node: string, sub: string, value: unknown): void {
-    const store = this.load()
+    const store = this.store()
     ;((store[comp] ??= {})[node] ??= {})[sub] = { v: value, t: Date.now() }
     this.evict(store)
-    this.scheduleFlush()
+    this.file?.touch()
   }
 
   /** Drop a composition's entries whose node is NOT live (removed from the saved layout / transient previews). */
   prune(comp: string, liveNodeIds: string[]): void {
-    const store = this.load()
+    const store = this.store()
     const nodes = store[comp]
     if (!nodes) return
     const live = new Set(liveNodeIds)
@@ -125,23 +105,15 @@ export class ViewStateStore {
       }
     }
     if (Object.keys(nodes).length === 0) delete store[comp]
-    if (changed) this.scheduleFlush()
+    if (changed) this.file?.touch()
   }
 
   /** Drop every entry for a composition (it was deleted). */
   drop(comp: string): void {
-    const store = this.load()
+    const store = this.store()
     if (!(comp in store)) return
     delete store[comp]
-    this.scheduleFlush()
+    this.file?.touch()
   }
 
-  /** Flush pending writes on app quit (so the last cursor position survives a restart). */
-  dispose(): void {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer)
-      this.flushTimer = null
-    }
-    this.flushNow()
-  }
 }

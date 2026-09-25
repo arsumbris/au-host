@@ -2,6 +2,11 @@
 # Float the tabs, then click a file in main’s tree. The sole open handler is in the
 # secondary window, so the authority must claim and commit remotely and the file must render there.
 type: composition::au-host-sdk
+# Opt out of the CHOOSE picker: cross-window-route / -promote / -trace share this fixture and test
+# deterministic ambient routing (and firer-relative promote), not the picker, so `mru` keeps the
+# ambient open a silent auto-pick of the focus/MRU head.
+intent-routing:
+  default-strategy: mru
 windows:
   - "[[^^w]]"
 viewer-defaults:

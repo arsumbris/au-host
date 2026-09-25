@@ -159,7 +159,10 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         title.textContent = def.name;
         const context = document.createElement('p');
         context.className = 'au-type-context';
-        context.textContent = `${def.repo} · ${def.fields.length} fields`;
+        // The type's fields are its EFFECTIVE shape, own plus inherited; an inherited one names its origin.
+        const effective = def.effective_fields;
+        const isOwn = (f: (typeof effective)[number]): boolean => f.origin.name === def.name && f.origin.repo === def.repo;
+        context.textContent = `${def.repo} · ${effective.length} fields`;
         const actions = document.createElement('div');
         actions.className = 'au-type-detail-actions';
         const open = button('Open source', () => openType(def));
@@ -187,27 +190,28 @@ function mount(container: HTMLElement, host: MountHost): () => void {
             s.append(p);
         }
         const fields = section('Fields');
-        if (!def.fields.length) {
+        if (!effective.length) {
             const p = document.createElement('p');
             p.className = 'au-type-context';
-            p.textContent = 'No fields declared on this type.';
+            p.textContent = 'This type has no fields.';
             fields.append(p);
         }
         else {
             const list = document.createElement('dl');
             list.className = 'au-type-fields';
-            for (const f of def.fields) {
+            for (const f of effective) {
                 const row = document.createElement('div');
                 row.className = 'au-type-field';
                 const name = document.createElement('dt');
                 const declaration = `${stringify(f.name + (f.required ? '' : '?')).trimEnd()}: ${f.shape}`;
                 name.append(yamlView(declaration));
                 const shape = document.createElement('dd');
-                shape.textContent = f.required ? 'Required' : 'Optional';
+                shape.textContent = (f.required ? 'Required' : 'Optional') + (isOwn(f) ? '' : ` · from ${f.origin.name}::${f.origin.repo}`);
                 if (f.doc) {
                     const doc = document.createElement('div');
                     shape.append(doc);
-                    documentation.push(mountDocumentation(doc, f.doc, host, def.source?.file));
+                    // An inherited field's doc resolves its links in its origin's file, which this view does not hold.
+                    documentation.push(mountDocumentation(doc, f.doc, host, isOwn(f) ? def.source?.file : undefined));
                 }
                 shape.style.fontFamily = 'var(--au-font-sans)';
                 row.append(name, shape);

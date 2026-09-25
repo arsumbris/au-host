@@ -10,7 +10,7 @@ import { displayFilePath } from '@arsumbris/au-host-sdk'
 // projection using an app-owned capability (the trust boundary is the agent bridge, not the type).
 
 
-import { defineProjection, formatChord, bareTypeName, type ProjectionModule, type MountHost, type CanonicalKeystroke, type KeyName, type KeyModifier } from '@arsumbris/au-host-sdk'
+import { defineProjection, formatChord, bareTypeName, COMMAND_META, keystrokeEquals, metaBlock, memberOfPath, type ProjectionModule, type MountHost, type CanonicalKeystroke, type KeyName, type KeyModifier } from '@arsumbris/au-host-sdk'
 import type { HostApp, KeymapsControl } from '@arsumbris/au-host-app'
 import { readInstancesOf, readSubtypes, type WireSubtype, type WireReader } from '@arsumbris/au-host-sdk/engine-reads'
 
@@ -28,6 +28,7 @@ interface KeymapFile {
 
 import { STYLE } from './style'
 import {parseDocument} from 'yaml'
+import { copyIntoRepo } from './requalify'
 
 
 /** Strip `[[ ]]` from a wikilink value, PRESERVING the `::repo` qualifier + inner name. Accepts a raw string
@@ -68,6 +69,77 @@ function parseKeybind(rec: unknown): Keybind | null {
   return { chord, intent, when: when && when.length ? when : undefined }
 }
 
+/** Two chords are equal when their keystrokes match in order (semantic — mod-order-independent — via the
+ *  SDK's `keystrokeEquals`, not a formatted-string compare). */
+function chordEquals(a: readonly CanonicalKeystroke[], b: readonly CanonicalKeystroke[]): boolean {
+  return a.length === b.length && a.every((k, i) => keystrokeEquals(k, b[i]!))
+}
+
+type ConflictKind = 'none' | 'tie' | 'focus' | 'win' | 'shadowed'
+interface ConflictInfo {
+  conflicts: { intent: string; keymapName: string; scoped: boolean }[]
+  kind: ConflictKind
+  winner?: string // the intent that wins, for 'shadowed'
+}
+
+/**
+ * Which ACTIVE-keymap bindings share `draft`'s chord, and how the binding being edited/added resolves
+ * against them — mirroring the runtime resolver's precedence so the warning matches what will actually
+ * happen: within one keymap the resolver ASKS (tie); a focus-scoped binding wins while its view is focused
+ * (focus); otherwise the binding in the higher (later) active keymap wins (win / shadowed).
+ * `exclude` is the binding currently being edited (skip itself); null for a new binding.
+ */
+function analyzeChordConflict(
+  draft: readonly CanonicalKeystroke[],
+  targetKeymapName: string,
+  targetScope: readonly string[] | undefined,
+  exclude: { path: string; index: number } | null,
+  files: readonly KeymapFile[],
+  active: readonly string[],
+): ConflictInfo {
+  if (!draft.length) return { conflicts: [], kind: 'none' }
+  const activeSet = new Set(active)
+  const scopedOf = (kb: Keybind, km: KeymapFile): boolean => !!(kb.when ?? km.when)?.length
+  const conflicts = files
+    .filter((f) => activeSet.has(f.name))
+    .flatMap((f) => f.keybinds.map((binding, index) => ({ f, binding, index })))
+    .filter(({ f, binding, index }) => !(exclude && f.path === exclude.path && index === exclude.index) && chordEquals(binding.chord, draft))
+    .map(({ f, binding }) => ({ intent: binding.intent, keymapName: f.name, scoped: scopedOf(binding, f) }))
+  if (!conflicts.length) return { conflicts, kind: 'none' }
+  const orderOf = (name: string): number => active.indexOf(name)
+  const targetOrder = orderOf(targetKeymapName)
+  const targetScoped = !!(targetScope && targetScope.length)
+  // Same keymap (same order index) as the target → a within-file duplicate the resolver asks on.
+  if (conflicts.some((c) => orderOf(c.keymapName) === targetOrder)) return { conflicts, kind: 'tie' }
+  // A focus-scoped binding beats a global one only while its view is focused → the outcome is conditional.
+  const scopedInvolved = targetScoped || conflicts.some((c) => c.scoped)
+  const globalInvolved = !targetScoped || conflicts.some((c) => !c.scoped)
+  if (scopedInvolved && globalInvolved) return { conflicts, kind: 'focus' }
+  // All the same scope-class, different keymaps → the higher (later) active keymap wins.
+  const maxOrder = Math.max(targetOrder, ...conflicts.map((c) => orderOf(c.keymapName)))
+  if (targetOrder === maxOrder) return { conflicts, kind: 'win' }
+  return { conflicts, kind: 'shadowed', winner: conflicts.find((c) => orderOf(c.keymapName) === maxOrder)?.intent }
+}
+
+/** Render `info` into `el` as a clear conflict warning (icon + text) or the reassuring no-conflict note. */
+function renderConflict(el: HTMLElement, info: ConflictInfo, label: (intent: string) => string): void {
+  el.replaceChildren()
+  const list = info.conflicts.map((c) => `${label(c.intent)} (${c.keymapName}${c.scoped ? ', scoped' : ''})`).join(', ')
+  const text =
+    info.kind === 'none' ? 'No identical shortcut in the active keymaps.'
+    : info.kind === 'tie' ? `Also bound to ${list} in the same keymap — you'll be asked which runs each time.`
+    : info.kind === 'focus' ? `Also bound to ${list} — a focused-view binding wins while its view is active; the other runs elsewhere.`
+    : info.kind === 'win' ? `Also bound to ${list} — this binding wins (highest in the active order); the other is shadowed.`
+    : `Also bound to ${list} — ${label(info.winner!)} wins (a higher keymap in the active order); THIS binding is shadowed. Reorder the keymaps or pick another shortcut.`
+  el.dataset.conflict = info.kind === 'none' ? 'clear' : 'warn'
+  if (info.kind !== 'none') {
+    const icon = document.createElement('au-icon')
+    icon.setAttribute('name', 'alert-circle'); icon.setAttribute('size', 'xs')
+    el.append(icon)
+  }
+  el.append(document.createTextNode(text))
+}
+
 export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, host: MountHost) => {
   const root = document.createElement('div')
   root.className = 'au-kme'
@@ -83,7 +155,7 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
   }
 
   let files: KeymapFile[] = []
-  let labels = new Map<string, string>() // bare intent name -> command label
+  let labels = new Map<string, string>() // qualified intent id (`name::repo`) -> command label
   let error: string | null = null
   let busy = false
   let query = ''
@@ -96,7 +168,7 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
   let pendingImport: {name: string; content: string; count: number} | null = null
 
   const fileByName = (name: string): KeymapFile | undefined => files.find((f) => f.name === name)
-  const memberOf = (path: string) => host.workspace.members.find((m) => path.startsWith(m.root))
+  const memberOf = (path: string) => memberOfPath(host.workspace.members, path, host.entry.path)
   const isConsumed = (f: KeymapFile): boolean => !memberOf(f.path)?.editable
 
   async function load(): Promise<void> {
@@ -117,63 +189,67 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
     if ('ready' in intentRes && intentRes.ready && intentRes.result) {
       const subs = Array.isArray(intentRes.result) ? intentRes.result : (intentRes.result as { subtypes?: unknown[] }).subtypes ?? []
       for (const def of subs as WireSubtype[]) {
-        const block = def.meta_blocks?.find(meta => bareTypeName(meta.type_name) === 'command-meta')
+        const block = metaBlock(def, COMMAND_META)
         const label = block?.body.find(field => field.name === 'label')?.value
-        if (typeof label === 'string') labels.set(def.name, label)
+        if (typeof label === 'string') labels.set(`${def.name}::${def.repo}`, label)
       }
     }
     render()
   }
 
-  const cmdLabel = (intent: string): string => labels.get(intent) ?? labels.get(bareTypeName(intent)) ?? bareTypeName(intent)
+  const cmdLabel = (intent: string): string =>
+    labels.get(intent) ?? [...labels].find(([id]) => bareTypeName(id) === bareTypeName(intent))?.[1] ?? bareTypeName(intent)
 
-  /** Persist a keymap's keybinds. Editable member → guarded in-place write. Consumed (shipped) → copy into a
-   *  writable member under a distinct `-local` name (no `[[name]]` collision), then re-point the active list. */
+  /** The member a keymap's edits land in: its own member when editable, else the writable member a consumed
+   *  (shipped) keymap is copied into. */
+  const destinationOf = (km: KeymapFile) => (isConsumed(km) ? host.workspace.members.find((m) => m.editable) : memberOf(km.path))
+
+  /** A keybind's intent as a qualified id: a bare name is owned by the repo of the file it is written in.
+   *  Undefined when a bare name sits in a file no member owns, so it names no known intent. */
+  const intentIdOf = (intent: string, path: string): string | undefined => {
+    if (intent.includes('::')) return intent
+    const owner = memberOf(path)?.name
+    return owner ? `${intent}::${owner}` : undefined
+  }
+
+  /** The wikilink naming an intent from a file in `repo`: bare for an intent that repo owns, `::owner`
+   *  otherwise, since a bare name resolves only in the file's own repo. */
+  const intentRef = (intentId: string, repo: string | undefined): string => {
+    const [name, owner] = intentId.split('::')
+    return owner && owner !== repo ? `[[${name}::${owner}]]` : `[[${name}]]`
+  }
+
+  /** Persist a keymap's keybinds. An editable keymap is edited in place under the read hash. A consumed
+   *  (shipped) keymap is first copied into a writable member under a distinct `-local` name, with its
+   *  references rewritten for that repo, and the active list re-pointed at the copy; the edit then lands
+   *  in the copy the same way. */
   async function persist(km: KeymapFile, index: number, chord: CanonicalKeystroke[], intent?: string): Promise<void> {
     busy = true
     error = null
     status = ''
     render()
     try {
-      const cur = await host.files.read(km.path)
+      const path = isConsumed(km) ? await copyShared(km) : km.path
+      if (!path) return
+      const cur = await host.files.read(path)
       if (!cur.ok || typeof cur.content !== 'string') throw new Error('Could not read the keymap. Your change has not been saved.')
       const document = parseDocument(cur.content)
       if (document.errors.length) throw new Error('The keymap contains invalid YAML. Fix its source before rebinding.')
       if (intent) {
         const bindings = document.toJS()?.keybinds
         if (!Array.isArray(bindings) || bindings.length !== km.keybinds.length) throw new Error('This keymap changed. Reload before adding a shortcut.')
-        document.addIn(['keybinds'], {intent: `[[${intent}]]`, chord})
+        document.addIn(['keybinds'], {intent: intentRef(intent, memberOf(path)?.name), chord})
       } else {
+        // The binding must still be the one on screen. Intents compare by identity: a copy writes the
+        // same intent in the form its own repo needs.
         const current = parseKeybind(document.toJS()?.keybinds?.[index])
-        if (!current || current.intent !== km.keybinds[index]?.intent || JSON.stringify(current.chord) !== JSON.stringify(km.keybinds[index]?.chord)) throw new Error('This shortcut changed in the file. Reload it before trying again.')
+        const shown = km.keybinds[index]
+        const sameIntent = !!current && !!shown && (intentIdOf(current.intent, path) ?? current.intent) === (intentIdOf(shown.intent, km.path) ?? shown.intent)
+        if (!sameIntent || JSON.stringify(current!.chord) !== JSON.stringify(shown!.chord)) throw new Error('This shortcut changed in the file. Reload it before trying again.')
         document.setIn(['keybinds', index, 'chord'], chord)
       }
-      const yaml = document.toString()
-      if (!isConsumed(km)) {
-        const res = await host.files.write(km.path, yaml, cur.ok ? cur.hash : undefined)
-        if (!res.ok) error = `write failed: ${res.error ?? 'unknown'}`
-      } else {
-        const target = host.workspace.members.find((m) => m.editable)
-        if (!target) {
-          error = 'no writable member to copy the shipped keymap into'
-        } else {
-          const stem = km.name.replace(/\.keymap$/, '')
-          let copyName = `${stem}-local.keymap`
-          let copyPath = `${target.root}/${copyName}.yaml`
-          let suffix = 2
-          while ((await host.files.read(copyPath)).ok) {
-            copyName = `${stem}-local-${suffix++}.keymap`
-            copyPath = `${target.root}/${copyName}.yaml`
-          }
-          const res = await host.files.write(copyPath, yaml)
-          if (!res.ok) error = `copy failed: ${res.error ?? 'unknown'}`
-          else {
-            // Re-point the active list: the shipped name out, the local copy in (kept at the same position).
-            const order = keymaps!.list().map((n) => (n === km.name ? copyName : n))
-            keymaps!.reorder(order.includes(copyName) ? order : [...order, copyName])
-          }
-        }
-      }
+      const res = await host.files.write(path, document.toString(), cur.hash)
+      if (!res.ok) error = `write failed: ${res.error ?? 'unknown'}`
       if (!error) { status = 'Shortcut saved. Save the composition to keep any keymap-list changes.'; editing = null; adding = false }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Could not save the shortcut.'
@@ -181,6 +257,34 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
       busy = false
       await load() // re-read (the new copy appears, hashes refresh)
     }
+  }
+
+  /** Copy a consumed keymap into the writable member and put the copy in its place in the active list.
+   *  The copy is equivalent to the shipped keymap, so it is activated before any edit lands in it.
+   *  Returns the copy's path, or undefined with `error` set. */
+  async function copyShared(km: KeymapFile): Promise<string | undefined> {
+    const target = destinationOf(km)
+    const source = memberOf(km.path)
+    if (!target || !source) {
+      error = 'no writable member to copy the shipped keymap into'
+      return undefined
+    }
+    const stem = km.name.replace(/\.keymap$/, '')
+    let copyName = `${stem}-local.keymap`
+    let copyPath = `${target.root}/${copyName}.yaml`
+    let suffix = 2
+    while ((await host.files.read(copyPath)).ok) {
+      copyName = `${stem}-local-${suffix++}.keymap`
+      copyPath = `${target.root}/${copyName}.yaml`
+    }
+    const copied = await copyIntoRepo(host.files, km.path, copyPath, source.name, target.name)
+    if (!copied.ok) {
+      error = copied.error
+      return undefined
+    }
+    const order = keymaps!.list().map((n) => (n === km.name ? copyName : n))
+    keymaps!.reorder(order.includes(copyName) ? order : [...order, copyName])
+    return copyPath
   }
 
   async function chooseImport(file: File): Promise<void> {
@@ -259,18 +363,24 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
       panel.append(el('h2', '', 'Add shortcut'), el('p', '', 'Choose a command and a keymap, then click the field to record its shortcut. Unassigned means no binding in the active keymaps.'))
       const intentSelect = document.createElement('au-combobox') as HTMLElement & {options: {value:string;label:string}[]; value:string}
       intentSelect.setAttribute('label', 'Command'); intentSelect.setAttribute('placeholder', 'Find a command…')
-      intentSelect.options = [...labels.entries()].map(([intent,label]) => ({value:intent, label: `${label}${files.some(file => activeSet.has(file.name) && file.keybinds.some(kb => bareTypeName(kb.intent) === bareTypeName(intent))) ? '' : ' · Unassigned'}`})).sort((a,b)=>a.label.localeCompare(b.label))
+      intentSelect.options = [...labels.entries()].map(([intent,label]) => ({value:intent, label: `${label}${files.some(file => activeSet.has(file.name) && file.keybinds.some(kb => intentIdOf(kb.intent, file.path) === intent)) ? '' : ' · Unassigned'}`})).sort((a,b)=>a.label.localeCompare(b.label))
       intentSelect.value = newIntent
       const mapSelect = document.createElement('au-select') as HTMLElement & {options: {value:string;label:string}[]; value:string}
       mapSelect.setAttribute('label', 'Save in keymap'); mapSelect.options = active.map(name => ({value:name,label:name})); mapSelect.value = newMap
       const capture = document.createElement('au-chord-input') as HTMLElement & {chord:CanonicalKeystroke[]}
       capture.setAttribute('aria-label', 'Shortcut for new command'); capture.chord = draft
+      const review = el('p', 'au-kme-bind__scope au-kme-conflict')
       const save = mkBtn('Add binding', true, () => { const km = fileByName(newMap); if(km && newIntent && draft.length) void persist(km, km.keybinds.length, draft, newIntent) })
-      const update = () => save.toggleAttribute('disabled', busy || !newIntent || !fileByName(newMap) || !draft.length)
+      const update = () => {
+        save.toggleAttribute('disabled', busy || !newIntent || !fileByName(newMap) || !draft.length)
+        // A NEW binding is global, saved into `newMap`; nothing to exclude. Warn as soon as a chord is recorded.
+        renderConflict(review, analyzeChordConflict(draft, newMap, undefined, null, files, active), cmdLabel)
+      }
       intentSelect.addEventListener('au-change', () => {newIntent = intentSelect.value; update()})
       mapSelect.addEventListener('au-change', () => {newMap = mapSelect.value; update()})
       capture.addEventListener('au-chord-change', event => {draft = (event as CustomEvent<{chord:CanonicalKeystroke[]}>).detail.chord; update()})
-      panel.append(intentSelect, mapSelect, capture, save, mkBtn('Cancel new shortcut', busy, () => {adding=false;render()}))
+      update()
+      panel.append(intentSelect, mapSelect, capture, review, save, mkBtn('Cancel new shortcut', busy, () => {adding=false;render()}))
       content.append(panel)
     }
 
@@ -330,10 +440,9 @@ export const keymapEditor: ProjectionModule['mount'] = (container: HTMLElement, 
           capture.setAttribute('placeholder', 'Record shortcut…')
           capture.chord = draft
           if (busy) capture.setAttribute('disabled', '')
-          const review = el('p', 'au-kme-bind__scope')
+          const review = el('p', 'au-kme-bind__scope au-kme-conflict')
           const updateReview = () => {
-            const shared = files.filter(f => activeSet.has(f.name)).flatMap(f => f.keybinds.map((binding, index) => ({f, binding, index}))).filter(({f, binding, index}) => !(f.path === km.path && index === i) && formatChord(binding.chord) === formatChord(draft))
-            review.textContent = shared.length ? `Also assigned to ${shared.map(({binding}) => cmdLabel(binding.intent)).join(', ')}. Scope and keymap order determine which binding runs.` : 'No identical shortcut in the active keymaps.'
+            renderConflict(review, analyzeChordConflict(draft, km.name, kb.when ?? km.when, { path: km.path, index: i }, files, active), cmdLabel)
           }
           capture.addEventListener('focus', () => { editor.dataset.recording = 'true'; recording.textContent = 'Recording — press your shortcut. Esc stops recording.' })
           capture.addEventListener('blur', () => { delete editor.dataset.recording; recording.textContent = 'Shortcut ready to review. Click the field to record again.' })

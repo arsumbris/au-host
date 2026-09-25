@@ -3,9 +3,49 @@
 Contract and API history of `@arsumbris/au-host-sdk`, the host/projection mount contract.
 This tracks breaking contract changes and notable additions, rather than semver releases.
 The package stays at `0.0.0`; entries are date-grouped, newest first.
+Release markers (`## 0.0.2-alpha`) group the dated entries that shipped in that
+arsumbris release. Dated entries above the newest marker are not released yet.
 
 au-host-sdk depends on `@arsumbris/engine-sdk` for the engine wire types it forwards.
 A wire-shape change there can ripple into the engine surface re-exposed via `MountHost`.
+
+## 0.0.2-alpha
+
+Mount contract **8**. The breaking changes are the entry below. Additions since 0.0.1-alpha, all optional
+(a host may omit them, so guard their use):
+
+- `TypeKey`, the `name::owner` type-identity vocabulary, on the `./type-key` subpath export.
+- `memberOfPath(members, path)`: which workspace member owns a path.
+- `MountHost.containerActions`, `FocusChannel.focusPane`, `setSlotRules`, `UNSAVED_COMPOSITION`.
+- `files.moveDir` / `files.deleteDir`: folder moves and deletes through the engine's previewed verbs.
+- a `FillFn` may return a teardown.
+- `SlotField.admittedSlotTypes`: every slot type a field admits, its declared ones plus their subtypes. The pool reads a slot SUBTYPE at a field declaring its base (a `sandwich-slot` at a `container-slot` center) as a slot wrapper, as the engine validates it.
+
+## 2026-09-25 — `MOUNT_CONTRACT_VERSION` 7 → 8 (BREAKING)
+
+Breaking. The handshake is strict integer equality, so every projection (incl. cross-repo ones) must re-declare `contractVersion: 8` to mount.
+Collects the contract breaks since 0.0.1-alpha.
+
+### Removed
+
+- `applyStructural` from the pool contract. `propose` is the sole public pool write channel. A container that wrote structure directly migrates to `propose`.
+- The `status-projection` kind. Bars and their items use `bar-projection` (the BAR) and `bar-item-projection` (an ITEM).
+  - a bar is no longer a container: it holds inline items and derives its orientation from its dock edge.
+  - the bar's `role`, the `bar-item` wrapper and the dock's reposition intent are gone. Dock edges are bare `bar-projection*[]`.
+
+### Renamed
+
+- The `status-bar` projection package is `engine-status` (`@au-projections/engine-status`).
+- Bar items: `engine-status-bar-item`, `editor-bar-item`, `notification-bar-item`.
+
+### Changed
+
+- Discovery loads only code a type declares itself. A concrete projection that only INHERITS an ancestor's code meta, declares several, or misses a required one is rejected, with its reason. Entries resolve against the type's own package.
+- `arity-meta` and the `frame-container` kind are new. `sandwich` and `dock` extend `frame-container` and inherit `center`, whose slot is a `container-slot`.
+
+## 0.0.1-alpha
+
+The first public release. Mount contract 7.
 
 ## 2026-09-11 — Navigation sequence inspection
 

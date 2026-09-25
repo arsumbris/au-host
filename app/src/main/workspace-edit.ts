@@ -1,64 +1,33 @@
-// Add / remove / declare workspace members in the SCHEMA-16 FOLDER-REPO on-disk model.
+// Add / remove / re-role / enable / disable workspace members and declare peers, in the folder-repo model.
 //
-// Two committed files, all raw fs (the mutation channel can't write `.arsumbris/`, and these are
-// engine config — same rationale as gate-create.ts):
-//   <entry>/.arsumbris/workspace.yaml — the composition: `edit:` + `discover:` name lists.
-//   <member>/.arsumbris/repo.yaml — a member's identity + deps (au.engine.repo): `name` + `deps`.
+// Two files, two LIFETIMES, which is why membership never touches `repo.yaml`:
+//   - `<entry>/.arsumbris/workspace.yaml` is per-WORKSPACE composition (`edit:` / `discover:` / `disabled:`).
+//   - `<member>/.arsumbris/repo.yaml` is a repo's identity and INTRINSIC `deps`, folded into its closure-hash
+//     (= identity) and travelling with the repo. Adding a workspace member must not change what a repo IS.
+// So the member verbs edit `workspace.yaml`; only declarePeer touches a `repo.yaml`.
 //
-// The two files have two LIFETIMES, and that is why membership never touches `repo.yaml`:
-//   - `workspace.yaml` is per-WORKSPACE composition, read only when its folder is the entry.
-//   - `repo.yaml deps` is a repo's INTRINSIC type-dependencies, folded into its closure-hash (=
-//     identity) and travelling with the repo. Adding a workspace member must not change what a repo IS.
-// So addMember/removeMember edit `workspace.yaml`; only declarePeer touches a `repo.yaml`.
+// Every edit goes through the engine's governed composition verbs: a byte-splice that keeps comments and
+// order, one git commit per mutation, the standard mutation frame. A verb with no `root` authors the
+// served entry's `workspace.yaml`, and the engine refuses to take the entry repo out of its own `edit:`.
+// The verbs are not idempotent: the engine refuses a no-op (a name already listed, already in the target
+// role, already disabled, or not disabled) with nothing written. Only `scaffoldRegistry` writes a file
+// itself (see it).
 //
-// Member LOCATION is NOT written here — it is device-global (`~/.arsumbris/au-engine/config/repos.yaml`), written
-// via the daemon `register` mutation (`engine.register`). So a full "add a local member" is:
-// addMember (this file) + register (the caller).
+// Member LOCATION is NOT written here. It is device-global (`~/.arsumbris/au-engine/config/repos.yaml`),
+// written via the daemon `register` mutation, so a full "add a local member" is addMember + register.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import * as path from 'node:path'
 
-import { parseDocument, YAMLMap, YAMLSeq, Scalar } from 'yaml'
+import type { DaemonClient, TypedMutate } from '@arsumbris/au-engine-sdk'
+import { parseDocument } from 'yaml'
 
-import type { WorkspaceEditResult, WorkspaceMemberListRole } from '../shared/daemon-api'
+import type { FileWriteResult, WorkspaceEditResult, WorkspaceMemberListRole } from '../shared/daemon-api'
 
-/**
- * The entry folder's composition file is `<entry>/.arsumbris/workspace.yaml`.
- * The entry must be a repo. Its workspace file is optional and is created on first edit;
- * a single-repo workspace can omit it until another member is added.
- */
-function findWorkspace(entry: string): { entryName: string; wsPath: string } | { error: string } {
-  const repoPath = path.join(entry, '.arsumbris', 'repo.yaml')
-  if (!existsSync(repoPath)) {
-    return { error: `${entry} is not a folder-repo (no .arsumbris/repo.yaml) — scaffold it before editing members` }
-  }
-  let entryName: string
-  try {
-    const doc = parseDocument(readFileSync(repoPath, 'utf8'))
-    const n = doc.get('name')
-    if (typeof n !== 'string') return { error: `${repoPath} declares no name` }
-    entryName = n
-  } catch (e) {
-    return { error: `cannot read ${repoPath}: ${(e as Error).message}` }
-  }
-  return { entryName, wsPath: path.join(entry, '.arsumbris', 'workspace.yaml') }
-}
+/** Run one governed mutation against the daemon serving `entry` (`EngineConnections.mutate`). */
+export type Mutate = (entry: string, run: (client: DaemonClient) => Promise<TypedMutate>) => Promise<FileWriteResult>
 
-/**
- * Parse the entry's `workspace.yaml`, creating an in-memory one when absent.
- *
- * A created file MUST list the entry repo in `edit:` — a `workspace.yaml` that omits its own
- * containing repo is a hard engine error (`workspace-omits-containing-repo`). So we seed it here
- * rather than writing a file the engine would immediately reject.
- */
-function loadWorkspaceDoc(wsPath: string, entryName: string): ReturnType<typeof parseDocument> {
-  if (existsSync(wsPath)) return parseDocument(readFileSync(wsPath, 'utf8'))
-  const doc = parseDocument('')
-  const edit = new YAMLSeq()
-  edit.add(entryName)
-  doc.set('edit', edit)
-  return doc
-}
+const result = (r: FileWriteResult): WorkspaceEditResult => (r.ok ? { ok: true } : { ok: false, error: r.error })
 
 /** A repo we can mount: a directory carrying a package.json, a type/ dir, or .arsumbris/. */
 function looksLikeRepo(dir: string): boolean {
@@ -70,37 +39,6 @@ function looksLikeRepo(dir: string): boolean {
   return existsSync(path.join(dir, 'package.json')) || existsSync(path.join(dir, 'type')) || existsSync(path.join(dir, '.arsumbris'))
 }
 
-function ensureSeq(doc: ReturnType<typeof parseDocument>, key: string): YAMLSeq {
-  const node = doc.get(key)
-  if (node instanceof YAMLSeq) return node
-  const seq = new YAMLSeq()
-  doc.set(key, seq)
-  return seq
-}
-
-/** The bare string values already in an `edit:` / `discover:` seq. */
-function stringItems(seq: unknown): string[] {
-  if (!(seq instanceof YAMLSeq)) return []
-  return seq.items
-    .map((it) => (it instanceof Scalar ? it.value : it))
-    .filter((v): v is string => typeof v === 'string')
-}
-
-/** The `name`s already declared in a map-seq (`deps:` entries). */
-function declaredNames(seq: unknown): string[] {
-  if (!(seq instanceof YAMLSeq)) return []
-  return seq.items.map((it) => (it instanceof YAMLMap ? (it.get('name') as string | undefined) : undefined)).filter((n): n is string => typeof n === 'string')
-}
-
-/** Remove a bare string from a seq, if present. */
-function removeString(seq: unknown, value: string): boolean {
-  if (!(seq instanceof YAMLSeq)) return false
-  const idx = seq.items.findIndex((it) => (it instanceof Scalar ? it.value : it) === value)
-  if (idx < 0) return false
-  seq.delete(idx)
-  return true
-}
-
 const NAME_RE = /^[A-Za-z0-9._-]+$/
 
 /** Path to a member's `.arsumbris/repo.yaml`. */
@@ -109,6 +47,9 @@ function repoYamlPath(memberRoot: string): string {
 }
 
 /**
+ * STANDIN [[message - 260925104814 - composition verbs author the wrong member without a root, a disabled-overlay verb, and daemonless setup commands::au-engine]]:
+ * the engine owns the `repo.yaml` format, so a daemonless "make this folder a repo" command should write it.
+ *
  * Give a member a `repo.yaml` identity (`name`, optional `description`) when it has none.
  * This makes a device-registry-located member identity-verifiable. An existing name is left untouched.
  */
@@ -129,151 +70,62 @@ export function scaffoldRegistry(memberRoot: string, memberName: string, descrip
 }
 
 /**
- * Add a member: list `name` in the entry's `workspace.yaml` and give the member a `repo.yaml` identity.
- * Its device-global LOCATION is registered separately by the caller (`engine.register(name, memberPath)`).
+ * Add a member: give it a `repo.yaml` identity, then list `name` in the entry's `workspace.yaml`.
+ * Identity comes first, so a member is never listed without a repo to mount; a failed scaffold aborts
+ * the add with nothing listed. Its device-global LOCATION is registered separately by the caller
+ * (`engine.register(name, memberPath)`).
  *
- * `role` picks the LIST — it IS the member's role in this workspace:
+ * `role` picks the LIST, which IS the member's role in this workspace:
  *  - `edit`     (default) an authoring surface, mounted live at HEAD.
  *  - `discover` mounted so type-discovery composes its parts, pinned, NOT editable.
- * A member has ONE role: listing a name in both is a hard engine error
- * (`workspace-member-role-conflict`), so an existing membership in the other list is refused here.
+ * The engine refuses a name already listed (a member has one role) and creates `workspace.yaml`
+ * self-complete when it is absent.
  */
-export function addMember(
+export async function addMember(
+  mutate: Mutate,
   entry: string,
   member: { name: string; memberPath: string; role?: WorkspaceMemberListRole; description?: string },
-): WorkspaceEditResult {
-  const ws = findWorkspace(entry)
-  if ('error' in ws) return { ok: false, error: ws.error }
+): Promise<WorkspaceEditResult> {
   const { name, memberPath, description } = member
-  const role: WorkspaceMemberListRole = member.role ?? 'edit'
-  if (!NAME_RE.test(name)) return { ok: false, error: `invalid member name '${name}'` }
   if (!existsSync(memberPath)) return { ok: false, error: `path does not exist: ${memberPath}` }
   if (!looksLikeRepo(memberPath)) return { ok: false, error: `${memberPath} is not a repo (no package.json / type/ / .arsumbris/)` }
-
-  const doc = loadWorkspaceDoc(ws.wsPath, ws.entryName)
-  const other: WorkspaceMemberListRole = role === 'edit' ? 'discover' : 'edit'
-  // `an edit` / `a discover` — the article is user-facing copy in an error dialog.
-  const article = (r: WorkspaceMemberListRole): string => (r === 'edit' ? 'an' : 'a')
-  if (stringItems(doc.get(role)).includes(name)) return { ok: false, error: `'${name}' is already ${article(role)} '${role}' member` }
-  if (stringItems(doc.get(other)).includes(name)) {
-    return { ok: false, error: `'${name}' is already ${article(other)} '${other}' member — a member has one role; remove it first` }
-  }
-
-  ensureSeq(doc, role).add(name)
-  try {
-    mkdirSync(path.dirname(ws.wsPath), { recursive: true })
-    writeFileSync(ws.wsPath, doc.toString())
-  } catch (e) {
-    return { ok: false, error: `write failed: ${(e as Error).message}` }
-  }
-  // Seed the member's own identity so it mounts as a proper repo (best-effort — it is already
-  // listed; a scaffold failure doesn't undo that).
-  scaffoldRegistry(memberPath, name, description)
-  return { ok: true }
+  const identity = scaffoldRegistry(memberPath, name, description)
+  if (!identity.ok) return { ok: false, error: `${name} was not added: ${identity.error}` }
+  return result(await mutate(entry, (client) => client.addWorkspaceMember(name, member.role ?? 'edit')))
 }
 
 /**
- * Declare `peerName` as a cross-repo dependency of the member rooted at `memberRoot`, by editing (or
- * creating) that member's `.arsumbris/repo.yaml` `deps:` list.
- * Clears an `undeclared-peer` diagnostic. A `remote` (for
- * standalone fetch) is recorded when supplied. Idempotent.
+ * Declare `peerName` as a cross-repo dependency of the member rooted at `memberRoot` (its `repo.yaml`
+ * `deps:`), which clears an `undeclared-peer` diagnostic. A `remote` is recorded when supplied. The new
+ * peer stays `peer-unmounted` until it is resolved. The engine authors editable members only (the entry
+ * or an `edit:` member) and refuses a peer already declared.
  */
-export function declarePeer(memberRoot: string, memberName: string, peerName: string, remote?: string): WorkspaceEditResult {
-  if (!NAME_RE.test(peerName)) return { ok: false, error: `invalid peer name '${peerName}'` }
-  const regPath = repoYamlPath(memberRoot)
-  const doc = existsSync(regPath) ? parseDocument(readFileSync(regPath, 'utf8')) : parseDocument('')
-  if (typeof doc.get('name') !== 'string') doc.set('name', memberName)
-
-  const deps = ensureSeq(doc, 'deps')
-  if (declaredNames(deps).includes(peerName)) return { ok: true } // idempotent
-  deps.add(doc.createNode(remote ? { name: peerName, remote } : { name: peerName }))
-
-  try {
-    mkdirSync(path.dirname(regPath), { recursive: true })
-    writeFileSync(regPath, doc.toString())
-  } catch (e) {
-    return { ok: false, error: `write failed: ${(e as Error).message}` }
-  }
-  return { ok: true }
+export async function declarePeer(mutate: Mutate, entry: string, memberRoot: string, peerName: string, remote?: string): Promise<WorkspaceEditResult> {
+  return result(await mutate(entry, (client) => client.addRepoDependency(peerName, { root: memberRoot, ...(remote ? { remote } : {}) })))
 }
 
 /**
- * Change a member's ROLE by moving its name between the entry's `edit:` and `discover:` lists.
- * Only these two roles are workspace.yaml-listed and movable — the entry repo is pinned to `edit:`, and
- * a `dep` lives in a member's own `repo.yaml`, not here. Idempotent when already in the target list.
+ * Change a member's ROLE by moving its name between the entry's `edit:` and `discover:` lists. The engine
+ * keeps the entry repo in `edit:` and refuses a member already in the target role. A `dep` lives in a
+ * member's own `repo.yaml`, not here.
  */
-export function setMemberRole(entry: string, name: string, role: WorkspaceMemberListRole): WorkspaceEditResult {
-  const ws = findWorkspace(entry)
-  if ('error' in ws) return { ok: false, error: ws.error }
-  if (name === ws.entryName) {
-    return { ok: false, error: `'${name}' is the entry repo — it must stay an 'edit' member` }
-  }
-  if (!existsSync(ws.wsPath)) return { ok: false, error: `'${name}' is not a declared member (no workspace.yaml)` }
-  const doc = parseDocument(readFileSync(ws.wsPath, 'utf8'))
-  const other: WorkspaceMemberListRole = role === 'edit' ? 'discover' : 'edit'
-  if (stringItems(doc.get(role)).includes(name)) return { ok: true } // already this role, idempotent
-  const article = (r: WorkspaceMemberListRole): string => (r === 'edit' ? 'an' : 'a')
-  if (!removeString(doc.get(other), name)) {
-    return { ok: false, error: `'${name}' is not ${article(other)} '${other}' member` }
-  }
-  ensureSeq(doc, role).add(name)
-  try {
-    writeFileSync(ws.wsPath, doc.toString())
-  } catch (e) {
-    return { ok: false, error: `write failed: ${(e as Error).message}` }
-  }
-  return { ok: true }
+export async function setMemberRole(mutate: Mutate, entry: string, name: string, role: WorkspaceMemberListRole): Promise<WorkspaceEditResult> {
+  return result(await mutate(entry, (client) => client.setWorkspaceMemberRole(name, role)))
 }
 
 /**
- * Enable / disable a declared member via the entry `workspace.yaml`'s `disabled:` OVERLAY list — a member
- * stays declared in `edit:` / `discover:` (its role remembered) but, while disabled, mounts nothing. Add
- * the name to disable, remove it to re-enable. The member must already be a declared edit/discover member
- * (a `disabled:` entry naming no declared member is the engine's `disabled-member-not-declared` warning).
- * The entry repo cannot be disabled. Idempotent.
+ * Enable / disable a declared member via the entry `workspace.yaml`'s `disabled:` OVERLAY list. A member
+ * stays declared in `edit:` / `discover:` (its role remembered) but, while disabled, mounts nothing. The
+ * engine refuses the entry repo, an undeclared name, a duplicate disable, and re-enabling a name that is
+ * not disabled. Re-enabling the last one leaves `disabled: []`.
  */
-export function setMemberDisabled(entry: string, name: string, disabled: boolean): WorkspaceEditResult {
-  const ws = findWorkspace(entry)
-  if ('error' in ws) return { ok: false, error: ws.error }
-  if (name === ws.entryName) return { ok: false, error: `'${name}' is the entry repo — it cannot be disabled` }
-  if (!existsSync(ws.wsPath)) return { ok: false, error: `'${name}' is not a declared member (no workspace.yaml)` }
-  const doc = parseDocument(readFileSync(ws.wsPath, 'utf8'))
-  const declared = stringItems(doc.get('edit')).includes(name) || stringItems(doc.get('discover')).includes(name)
-  if (!declared) return { ok: false, error: `'${name}' is not a declared edit/discover member` }
-  if (disabled) {
-    const list = ensureSeq(doc, 'disabled')
-    if (stringItems(list).includes(name)) return { ok: true } // idempotent
-    list.add(name)
-  } else {
-    if (!removeString(doc.get('disabled'), name)) return { ok: true } // already enabled
-    const rest = doc.get('disabled')
-    if (rest instanceof YAMLSeq && rest.items.length === 0) doc.delete('disabled') // don't leave an empty overlay
-  }
-  try {
-    writeFileSync(ws.wsPath, doc.toString())
-  } catch (e) {
-    return { ok: false, error: `write failed: ${(e as Error).message}` }
-  }
-  return { ok: true }
+export async function setMemberDisabled(mutate: Mutate, entry: string, name: string, disabled: boolean): Promise<WorkspaceEditResult> {
+  return result(await mutate(entry, (client) => client.setWorkspaceMemberDisabled(name, disabled)))
 }
 
-/** Remove a member: drop it from whichever of the entry's `edit:` / `discover:` lists holds it. Its
- *  device-global location entry (`repos.yaml`) is left in place — it is shared across workspaces, not
- *  this workspace's to clear. Refuses to remove the entry repo itself, which must stay in `edit:`. */
-export function removeMember(entry: string, name: string): WorkspaceEditResult {
-  const ws = findWorkspace(entry)
-  if ('error' in ws) return { ok: false, error: ws.error }
-  if (name === ws.entryName) {
-    return { ok: false, error: `'${name}' is the entry repo — a workspace.yaml must list its own repo in edit:` }
-  }
-  if (!existsSync(ws.wsPath)) return { ok: false, error: `'${name}' is not a declared member (no workspace.yaml)` }
-  const doc = parseDocument(readFileSync(ws.wsPath, 'utf8'))
-  const dropped = removeString(doc.get('edit'), name) || removeString(doc.get('discover'), name)
-  if (!dropped) return { ok: false, error: `'${name}' is not a declared member` }
-  try {
-    writeFileSync(ws.wsPath, doc.toString())
-  } catch (e) {
-    return { ok: false, error: `write failed: ${(e as Error).message}` }
-  }
-  return { ok: true }
+/** Remove a member from whichever of the entry's lists hold it, `disabled:` included. Its device-global
+ *  location entry (`repos.yaml`) is left in place: it is shared across workspaces, not this workspace's to
+ *  clear. The engine refuses removing the entry repo. */
+export async function removeMember(mutate: Mutate, entry: string, name: string): Promise<WorkspaceEditResult> {
+  return result(await mutate(entry, (client) => client.removeWorkspaceMember(name)))
 }

@@ -48,7 +48,7 @@ meta:
   # the OWNING PACKAGE ROOT (where this type-def lives), so the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # tabs can hold N children as one node, so it is a group target — declared by the KIND
   # (`extends: grouping-container`), not a meta. The substrate discovers it via
   # `readSubtypes(grouping-container)` and calls the `buildGroup` export in the module `entry` above (the
@@ -68,6 +68,7 @@ meta:
       - "[[promote-intent::intent]]"
       - "[[show-pane-intent::intent]]"
       - "[[reveal-pane-intent::intent]]"
+      - "[[swap-pane-intent::intent]]"
   # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
   # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
 

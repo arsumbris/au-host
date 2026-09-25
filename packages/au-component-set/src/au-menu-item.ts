@@ -150,24 +150,30 @@ export class AuMenuItemElement extends AuElement {
   }
 
   render() {
+    const hasLabel = this.label != null && this.label !== ''
+    // The accessible name is the label alone. The description is announced as a description, and the
+    // shortcut as a key binding, so neither changes what the item is called.
     return html`
       <div
         class="item"
         part="item"
         role="menuitem"
         aria-disabled=${this.disabled ? 'true' : 'false'}
+        aria-labelledby=${hasLabel ? 'label' : nothing}
+        aria-describedby=${this.description ? 'desc' : nothing}
+        aria-keyshortcuts=${this.shortcut || nothing}
         @click=${this.onClick}
       >
         ${this.icon
           ? html`<au-icon class="icon" part="icon" name=${this.icon} size="sm" aria-hidden="true"></au-icon>`
           : nothing}
         <span class="content">
-          ${this.label != null && this.label !== ''
-            ? html`<span class="label" part="label">${this.label}</span>`
+          ${hasLabel
+            ? html`<span id="label" class="label" part="label">${this.label}</span>`
             : nothing}
-          ${this.description ? html`<span class="desc" part="description">${this.description}</span>` : nothing}
+          ${this.description ? html`<span id="desc" class="desc" part="description">${this.description}</span>` : nothing}
         </span>
-        ${this.shortcut ? html`<span class="shortcut" part="shortcut">${this.shortcut}</span>` : nothing}
+        ${this.shortcut ? html`<span class="shortcut" part="shortcut" aria-hidden="true">${this.shortcut}</span>` : nothing}
         ${this.submenu
           ? html`<au-icon class="chevron" part="chevron" name="chevron-right" size="sm" aria-hidden="true"></au-icon>`
           : nothing}

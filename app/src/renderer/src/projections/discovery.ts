@@ -4,32 +4,18 @@
 
 import { readSubtypes, type WireMetaBlock, type WireReader, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
 import { refName } from '@arsumbris/type-query'
-import { checkProjectionMeta } from '@arsumbris/au-host-sdk'
+import { checkProjectionMeta, codeMetaBlock, FIRES_INTENT_META, HANDLES_INTENT_META, metaBlock, PROJECTION_RUNTIME_META } from '@arsumbris/au-host-sdk'
+import { EDITS_COMPOSITION_CONFIG_META } from '@arsumbris/intent'
 
 import { packageRootOf } from '../../../shared/package-root'
 
 /** The open base every projection subtype extends. */
 const BASE_TYPE = 'projection'
-/** The meta record type a projection subtype carries to declare its loadable code. */
-const RUNTIME_META_TYPE = 'projection-runtime-meta'
-/** The meta record type a projection subtype carries to declare which intents it HANDLES
- *  (the typed-capability declaration). Read in the SAME `subtypes` pass, so "who
- *  handles intent X" is a client-side filter, no new engine read.
- *   */
-const HANDLES_INTENT_META_TYPE = 'handles-intent-meta'
-/**
- * The meta record type a projection subtype carries to declare which intents it FIRES — the
- *  mirror of HANDLES_INTENT_META_TYPE. Read in the SAME `subtypes` pass. Makes "who fires intent X"
- *  a static type-graph fact (firing otherwise lives only in code), and the runtime `host.intent.fire`
- *  is gated on it.
- */
-const FIRES_INTENT_META_TYPE = 'fires-intent-meta'
-/**
- * The meta record type a projection subtype carries to declare which composition-config ASPECTS it
- *  may EDIT — the composition-edit-rights axis, a def-ref list BOUNDED to `composition-config`. Read in
- *  the SAME `subtypes` pass; the host gates a composition-aspect write on it (warn rung).
- */
-const EDITS_META_TYPE = 'edits-composition-config-meta'
+// The meta a projection subtype carries, own or inherited, each read in the same `subtypes` pass:
+//  - `projection-runtime-meta`: its loadable code.
+//  - `handles-intent-meta`: the intents it HANDLES, so "who handles X" is a client-side filter.
+//  - `fires-intent-meta`: the intents it FIRES, a static type-graph fact `host.intent.fire` is gated on.
+//  - `edits-composition-config-meta`: the composition-config ASPECTS it may EDIT (a warn-rung gate).
 
 /**
  * A projection subtype that DECLARES loadable code but failed the contract handshake, so it is
@@ -80,9 +66,9 @@ export interface DiscoveredProjection {
   customTokenEntry?: string[]
   /**
    * The KIND closure: every ancestor type name in this projection's closure (its kinds — e.g.
-   * `pane-projection` / `status-projection` / `bar-projection` / `container-projection`, plus
-   * `projection`). The role-as-kind contribution query (a bar aggregating role KIND K) is just the
-   * projections whose `kinds` include K — computed here in the SAME `subtypes` pass, no chrome metas.
+   * `pane-projection` / `bar-item-projection` / `bar-projection` / `container-projection`, plus
+   * `projection`). The kind query (a bar listing the `bar-item-projection` subtypes) is just the
+   * projections whose `kinds` include the kind — computed here in the SAME `subtypes` pass.
    */
   kinds: string[]
   /**
@@ -90,9 +76,8 @@ export interface DiscoveredProjection {
    * in its `kinds` closure. This is the OWNERSHIP boundary — a projection is responsible for these
    * and for nothing else on the instance, and the host guarantees the rest at `saveConfig`.
    *
-   * DERIVED, never declared. Computed in this same `subtypes` pass, because each subtype carries
-   * its own `fields` and the pass already walks the ancestor chain for `kinds`. So there is no
-   * second read, no meta to author, and no hand-maintained list that can rot.
+   * DERIVED, never declared. Read in this same `subtypes` pass from the engine's served effective
+   * fields, so there is no second read, no meta to author, and no hand-maintained list that can rot.
    *
    */
   ownedFields: string[]
@@ -171,19 +156,10 @@ function kindClosureOf(def: WireSubtype, byName: ReadonlyMap<string, WireSubtype
   return out
 }
 
-/**
- * Collect fields declared by a projection type and its discovered ancestors using `kindClosureOf`.
- * Missing ancestors contribute no fields. The subtype map omits the `projection` base, so fields
- * declared directly on that base are not included; including base fields requires adding its
- * definition to the map.
- */
-function effectiveShapeOf(def: WireSubtype, byName: ReadonlyMap<string, WireSubtype>): string[] {
-  const out = new Set<string>()
-  for (const f of def.fields ?? []) out.add(f.name)
-  for (const kind of kindClosureOf(def, byName)) {
-    for (const f of byName.get(kind)?.fields ?? []) out.add(f.name)
-  }
-  return [...out]
+/** The field names a projection owns: its engine-served EFFECTIVE fields, own and inherited. A divergent
+ *  field is one entry per origin on the wire and one owned name here. */
+function ownedFieldsOf(def: WireSubtype): string[] {
+  return [...new Set(def.effective_fields.map((f) => f.name))]
 }
 
 /** Assemble a meta block's body (`[{name, value}]`) into a plain record. */
@@ -193,12 +169,15 @@ function metaRecord(block: WireMetaBlock): Record<string, unknown> {
   return out
 }
 
-/** Every meta block on a subtype, keyed by bare meta-type name, each body assembled into a record.
- *  The generic carrier behind `ProjectionDescriptor.meta`; the typed folds (`handlesOf`, the runtime
- *  meta) stay separate because they INTERPRET their block, while this one does not. */
-function metaMap(def: WireSubtype): Record<string, Record<string, unknown>> {
+/** Every meta a subtype carries, own or inherited, keyed by bare meta-type name, each body assembled
+ *  into a record. A conflicting meta (several surviving blocks) is left out: the engine reports it and the
+ *  host picks no winner. The generic carrier behind `ProjectionDescriptor.meta`; the typed folds
+ *  (`handlesOf`, the runtime meta) stay separate because they INTERPRET their block. */
+export function metaMap(def: WireSubtype): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {}
-  for (const block of def.meta_blocks ?? []) out[refName(block.type_name)] = metaRecord(block)
+  for (const { meta_type, blocks } of def.effective_meta) {
+    if (blocks.length === 1) out[meta_type.name] = metaRecord(blocks[0]!)
+  }
   return out
 }
 
@@ -215,7 +194,7 @@ function refBareName(ref: unknown): string | undefined {
 /** The intents a projection subtype declares it handles: the bare names in its `handles-intent-meta`
  *  block's `handles` def-ref list. Empty when the subtype carries no such meta. */
 function handlesOf(def: WireSubtype): string[] {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === HANDLES_INTENT_META_TYPE)
+  const block = metaBlock(def, HANDLES_INTENT_META)
   if (!block) return []
   const value = metaRecord(block).handles
   if (!Array.isArray(value)) return []
@@ -226,7 +205,7 @@ function handlesOf(def: WireSubtype): string[] {
  *  `handles-intent-meta` block's `handlesTargeted` list. Empty when absent. Sibling of `handlesOf`;
  *  feeds the runtime's ambient-reachability fold so a targeted-only handler is not an ambient candidate. */
 function handlesTargetedOf(def: WireSubtype): string[] {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === HANDLES_INTENT_META_TYPE)
+  const block = metaBlock(def, HANDLES_INTENT_META)
   if (!block) return []
   const value = metaRecord(block).handlesTargeted
   if (!Array.isArray(value)) return []
@@ -236,7 +215,7 @@ function handlesTargetedOf(def: WireSubtype): string[] {
 /** The intents a projection subtype declares it FIRES: the bare names in its `fires-intent-meta`
  *  block's `fires` def-ref list. Empty when the subtype carries no such meta. Mirror of `handlesOf`. */
 function firesOf(def: WireSubtype): string[] {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === FIRES_INTENT_META_TYPE)
+  const block = metaBlock(def, FIRES_INTENT_META)
   if (!block) return []
   const value = metaRecord(block).fires
   if (!Array.isArray(value)) return []
@@ -247,7 +226,7 @@ function firesOf(def: WireSubtype): string[] {
  *  `edits-composition-config-meta` block's `edits` def-ref list. Empty when the subtype carries no such
  *  meta. Mirror of `firesOf`, one axis over — the list is bounded to `composition-config`, not `intent`. */
 function editsOf(def: WireSubtype): string[] {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === EDITS_META_TYPE)
+  const block = metaBlock(def, EDITS_COMPOSITION_CONFIG_META)
   if (!block) return []
   const value = metaRecord(block).edits
   if (!Array.isArray(value)) return []
@@ -269,17 +248,23 @@ export async function discoverProjections(reader: WireReader): Promise<Discovery
   if (!('ready' in result) || !result.ready || !result.result) return { projections: [], rejected: [] }
   const all = result.result.subtypes as WireSubtype[]
   // The def index spans ALL subtypes — including the abstract kind defs (pane / container / bar /
-  // status-projection) — so a concrete projection's kind closure resolves transitively by name.
+  // bar-item) — so a concrete projection's kind closure resolves transitively by name.
   const byName = defIndex(all)
 
   const found: DiscoveredProjection[] = []
   const rejected: RejectedProjection[] = []
   for (const def of all) {
-    // Match the meta block by its BARE name: the wire `type_name` is qualified
-    // (`projection-runtime-meta::au-host-sdk`), so a bare-string compare would miss every projection
-    // and nothing would be loadable. `refName` drops the `::repo` (names are workspace-unique).
-    const block = def.meta_blocks?.find((b) => refName(b.type_name) === RUNTIME_META_TYPE)
-    if (!block) continue // a subtype without runtime meta is not loadable code (incl. the abstract kinds)
+    // An abstract subtype is never mounted.
+    if (def.abstract) continue
+    // Its runtime meta is its OWN block, never an ancestor's: a type loads only code it declares itself.
+    const code = codeMetaBlock(def, PROJECTION_RUNTIME_META)
+    if (code.kind === 'absent') continue // declares no code and none is required: not a loadable projection
+    if (code.kind === 'not-own') {
+      // A concrete projection that cannot load is told, never silently missing.
+      rejected.push({ typeName: def.name, repo: def.repo, sourceFile: def.source.file, errors: [code.reason] })
+      continue
+    }
+    const block = code.block
     const check = checkProjectionMeta(metaRecord(block))
     if (!check.ok) {
       // NOT a silent `continue`. This subtype declares loadable code and failed the handshake,
@@ -295,7 +280,7 @@ export async function discoverProjections(reader: WireReader): Promise<Discovery
       contractVersion: check.meta.contractVersion,
       packageRoot: packageRootOf(def.source.file),
       kinds: kindClosureOf(def, byName),
-      ownedFields: effectiveShapeOf(def, byName),
+      ownedFields: ownedFieldsOf(def),
       handles: handlesOf(def),
       handlesTargeted: handlesTargetedOf(def),
       fires: firesOf(def),

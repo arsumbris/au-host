@@ -1,6 +1,7 @@
+import {UNSAVED_COMPOSITION} from '@arsumbris/au-host-sdk'
 import {readFiles, readInstancesOf, readResolveTarget, type WireReader} from '@arsumbris/au-host-sdk/engine-reads'
 
-export type StartupChoice = {kind: 'pending'} | {kind: 'legacy'} | {kind: 'empty'} | {kind: 'composition'; path: string} | {kind: 'error'; message: string}
+export type StartupChoice = {kind: 'pending'} | {kind: 'legacy'} | {kind: 'empty'} | {kind: 'unsaved'} | {kind: 'composition'; path: string} | {kind: 'error'; message: string}
 
 /** Only the entry's startup file controls launch; settings in consumed sources do not. */
 export async function readWorkspaceStartup(reader: WireReader, entry: string): Promise<StartupChoice> {
@@ -24,8 +25,14 @@ export async function readWorkspaceStartup(reader: WireReader, entry: string): P
   return {kind: 'composition', path: resolved.result.path}
 }
 
-export function selectStartupPath(paths: string[], recent: string[], startup: StartupChoice): StartupChoice {
+/**
+ * What opens on launch. The most recently open composition wins: the unsaved one when it was last open and
+ * its draft survives (`unsavedDraft`), else the most recent composition still on disk. Only then does the
+ * entry's startup file decide.
+ */
+export function selectStartupPath(paths: string[], recent: string[], startup: StartupChoice, unsavedDraft = false): StartupChoice {
   if (startup.kind === 'pending') return startup
+  if (recent[0] === UNSAVED_COMPOSITION && unsavedDraft) return {kind: 'unsaved'}
   const remembered = recent.find(path => paths.includes(path))
   if (remembered) return {kind: 'composition', path: remembered}
   if (startup.kind === 'composition' && !paths.includes(startup.path)) return {kind: 'error', message: 'The initial reference does not identify an available composition. Choose a composition or repair workspace-startup.yaml.'}

@@ -1,0 +1,21 @@
+# notification-bar-item IS a `bar-item-projection`: a persistent bar BELL + an unread-count badge. A bar
+# discovers it as an item to add.
+# It `handles` ui-notification (the BROADCAST typed capability): the host fans each fired
+# notification out to every mounted surfacer, and the bell shows an unread indicator. It is an
+# INDEPENDENT surfacer, orthogonal to the host-owned toast FRAME (which the host owns directly, not
+# as a projection). The locator's `export: status` selects the bell mount fn.
+extends: bar-item-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Notifications
+  # `export: status` mounts the bell surface (the module's only export).
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    export: status
+    contractVersion: 8
+  # The intents this projection HANDLES (typed capability).
+  - type: handles-intent-meta::au-host-sdk
+    handles:
+      - "[[ui-notification::intent]]"

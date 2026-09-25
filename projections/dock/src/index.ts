@@ -1,11 +1,11 @@
 // Dock container: places bars along its edges and one child in its centre.
 // Top and bottom edges span the full width; left and right fit between them.
-// Each position is a child reference or container-slot. Position IDs remain
-// stable across content swaps; occupant IDs travel with children and key view state.
+// An edge position is a bare bar reference; the centre is a child reference or container-slot.
+// Position IDs remain stable across content swaps; occupant IDs travel with children and key view state.
 
-import type { ContainerPlacement, ContainerSlot, Occupant, MountHost, OpaqueConfig, Pane, PaneInstance, ProjectionModule, PublisherId } from '@arsumbris/au-host-sdk'
-import { defineProjection, reportHostDiagnostic } from '@arsumbris/au-host-sdk'
-import { DATA_ATTR, attachContainer, displacementRefused, makePoolEdit, makeSlotCodec, mintBlockId, mountChild, type ChildMount, type SlotState as CoreSlotState } from '@arsumbris/container-core'
+import type { ContainerPlacement, ContainerSlot, ContextMenuItem, Occupant, MountHost, OpaqueConfig, Pane, PaneInstance, ProjectionModule } from '@arsumbris/au-host-sdk'
+import { defineProjection, descriptorTitle, reportHostDiagnostic } from '@arsumbris/au-host-sdk'
+import { DATA_ATTR, attachContainer, closePane, makePoolEdit, watchOwnRecord, withCarry, makeSlotCodec, mintBlockId, mountChild, type ChildMount, type SlotCodec, type SlotState as CoreSlotState } from '@arsumbris/container-core'
 import type { Dock } from './generated'
 import { dockDropDialect, DOCK_KIND } from './drop-dialect'
 
@@ -15,6 +15,11 @@ const EDGES: Edge[] = ['top', 'bottom', 'left', 'right']
 /** The centre is a NAMED position, addressed by this literal — the fill region always exists as a
  *  place even when nothing occupies it, exactly as a sandwich region does. */
 const CENTER = 'center'
+/** The BAR kind an edge holds; "Add bar" builds a concrete subtype of it. */
+const BAR_KIND = 'bar-projection'
+const EDGE_LABEL: Record<Edge, string> = { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }
+/** The fields dock owns on its record; everything else is carried through its edits. */
+const OWNED_KEYS = ['type', 'top', 'bottom', 'left', 'right', 'center']
 
 // The host derives config ownership from the type graph and preserves unowned fields
 // at saveConfig. This projection emits only the fields it understands.
@@ -24,12 +29,21 @@ let idSeq = 0
 const genId = (): string => `dk-${Date.now().toString(36)}-${(idSeq++).toString(36)}`
 
 /**
- * THE UNION CODEC — reading and writing `<projection& | container-slot>` is the substrate's, not
- * dock's. Dock declares only what is genuinely its own: which slot type it writes, that it honours
- * no extras (it sizes its edges by CSS grid, so neither a size nor a collapse would be acted on),
- * and its own id prefix.
+ * THE UNION CODEC, one per position: reading and writing a position is the substrate's, and what each
+ * field admits is its type's. The edges are bare `bar-projection*[]` lists, so they read and write bare
+ * bars only; the centre is `<mountable* | container-slot>`, so it may carry a ruled slot. Dock honours
+ * no extras (it sizes its edges by CSS grid).
  */
-const slots = makeSlotCodec<Instance>({ slotType: 'container-slot', label: 'dock' })
+type Site = Edge | 'center'
+const codecs: Record<Site, SlotCodec<Instance, Record<never, never>>> = {
+  top: makeSlotCodec<Instance>({ site: { type: DOCK_KIND, field: 'top' }, label: 'dock' }),
+  bottom: makeSlotCodec<Instance>({ site: { type: DOCK_KIND, field: 'bottom' }, label: 'dock' }),
+  left: makeSlotCodec<Instance>({ site: { type: DOCK_KIND, field: 'left' }, label: 'dock' }),
+  right: makeSlotCodec<Instance>({ site: { type: DOCK_KIND, field: 'right' }, label: 'dock' }),
+  center: makeSlotCodec<Instance>({ site: { type: DOCK_KIND, field: CENTER }, label: 'dock' }),
+}
+/** The site-independent slot predicates (`survivesEmpty`, `toSeamSlot`) read only a slot's state. */
+const slots = codecs.center
 
 /** A position's occupant: its stable `^:` id + the projection instance it mounts. */
 type ChildState = Occupant<Instance>
@@ -45,34 +59,39 @@ interface DockModel { top: PosState[]; bottom: PosState[]; left: PosState[]; rig
 /** Does this POSITION survive its child being closed? Only when it still governs something. */
 const survivesEmpty = (slot: SlotState): boolean => slots.survivesEmpty(slot)
 
-function posFrom(value: unknown): PosState {
+function posFrom(site: Site, value: unknown): PosState {
   // The ENTRY id is dock's own: a POSITION needs a runtime address the codec knows nothing about,
   // because how a position is addressed is each container's business.
-  return { entryId: genId(), ...slots.read(value) }
+  return { entryId: genId(), ...codecs[site].read(value) }
 }
 
 /** Serialize one position back to its union value: absent, a bare child, or a slot record. */
-function posToConfig(pos: PosState): unknown {
-  return slots.write(pos)
+function posToConfig(site: Site, pos: PosState): unknown {
+  return codecs[site].write(pos)
 }
 
 function fromConfig(cfg: Dock | undefined): DockModel {
-  const edge = (v: unknown[] | undefined): PosState[] => (v ?? []).map(posFrom)
+  const edge = (e: Edge, v: unknown[] | undefined): PosState[] => (v ?? []).map((x) => posFrom(e, x))
   return {
-    top: edge(cfg?.top),
-    bottom: edge(cfg?.bottom),
-    left: edge(cfg?.left),
-    right: edge(cfg?.right),
-    center: posFrom(cfg?.center),
+    top: edge('top', cfg?.top),
+    bottom: edge('bottom', cfg?.bottom),
+    left: edge('left', cfg?.left),
+    right: edge('right', cfg?.right),
+    center: posFrom('center', cfg?.center),
   }
 }
 
-// `host.intent` (the intent/capability channel) is a contract capability. The payload is
-// OPAQUE to the host (it routes by `type`); a consumer casts it to its own intent vocab. The
-// dock's `reposition` intent carries the target `edge`.
-interface RepositionIntent {
-  type: string
-  edge?: Edge
+/**
+ * THE one serializer: every save, every structural proposal and the resync gate go through it, so one
+ * state has one record shape. Every edge is written, `[]` when empty: dock owns those fields, and an
+ * omitted one reads as ambiguous absence (`config-own-field-dropped`) rather than an explicit empty.
+ */
+function toConfig(mm: DockModel): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const e of EDGES) out[e] = mm[e].map((p) => posToConfig(e, p)).filter((v) => v !== undefined)
+  const center = posToConfig('center', mm.center)
+  if (center !== undefined) out[CENTER] = center
+  return out
 }
 
 const STYLE = `
@@ -93,6 +112,8 @@ const STYLE = `
    resize drift its total width). min-width/height:0 lets it shrink below content instead of growing the cell. */
 .au-dock-center > .au-dock-slot { display: grid; grid-template: 1fr / 1fr; width: 100%; height: 100%; }
 .au-dock-center > .au-dock-slot > * { min-width: 0; min-height: 0; }
+/* With no bars, the bottom row reserves one bar's height for the bar menu's ⋯, so the centre sits above it. */
+.au-dock-strip { grid-area: bottom; display: flex; align-items: center; justify-content: center; min-block-size: var(--au-status-h); border-block-start: 1px solid var(--au-line-2); }
 `
 
 function mount(container: HTMLElement, host: MountHost): () => void {
@@ -144,20 +165,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
 
   // Persist the dock's complete instance up the tree; the host stamps `type: dock`.
   function persist(): void {
-    const next: Record<string, unknown> = {}
-    for (const e of EDGES) {
-      // Always emit the edge — `[]` when empty, never omitted. The dock OWNS these fields, so dropping
-      // an emptied edge from the save trips `config-own-field-dropped` and records "empty" as ambiguous
-      // ABSENCE rather than an explicit empty. Repositioning the last bar OFF an edge must persist.
-      next[e] = model[e].map(posToConfig).filter((v) => v !== undefined)
-    }
-    const center = posToConfig(model.center)
-    if (center !== undefined) next[CENTER] = center
-    // The dock is `DEFAULT_COMPOSITION`'s ROOT, so its instance carries composition-level fields
-    // (`intent-defaults`, `initial-focus`), and an authored `locks` it no longer owns. `next` is
-    // rebuilt from the positions alone, so it MUST go through `preserveUnowned` or every save strips
-    // them and the next launch silently falls back to the unscoped focus-MRU walk.
-    host.saveConfig?.(next as OpaqueConfig)
+    host.saveConfig?.(toConfig(model) as OpaqueConfig)
   }
 
   const commit = (): void => {
@@ -230,7 +238,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       el.remove()
     }
     childMounts.clear()
-    root.querySelectorAll('.au-dock-top, .au-dock-bottom, .au-dock-left, .au-dock-right, .au-dock-center').forEach((n) => n.remove())
+    root.querySelectorAll('.au-dock-top, .au-dock-bottom, .au-dock-left, .au-dock-right, .au-dock-center, .au-dock-strip').forEach((n) => n.remove())
     const toMount: { slotEl: HTMLElement; edge: Edge | 'center'; index: number }[] = []
 
     for (const edge of EDGES) {
@@ -255,40 +263,10 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       toMount.push({ slotEl, edge: 'center', index: 0 })
     }
     root.appendChild(center)
+    if (EDGES.every((e) => model[e].length === 0)) root.appendChild(barStrip())
 
     // Tag/mount every occupied slot, now that the chrome is in its final shape.
     for (const { slotEl, edge, index } of toMount) mountInto(slotEl, edge, index)
-  }
-
-  // Handle a child bar's `reposition` request: move its position's child from its current edge to
-  // `edge`, persist, re-render. `from` is the firer's publisher; the host's publisher → `^:` bridge
-  // (`nodeIdOf`) plus dock's own `locate` map it to the edge/index — works whether dock mounts its
-  // children (legacy) or the PORTAL mounts them flat (dock then renders only anchors, no mount callback).
-  // CLAIM / DECLINE: `false` on every path that did nothing, so the responder-chain walk continues.
-
-  // Publish edge orientation as container-axis context on the slot.
-  // The bar derives its orientation without the dock writing the child's config.
-
-  function reposition(from: PublisherId, edge?: Edge): boolean {
-    if (!edge || !EDGES.includes(edge)) return false
-    const childId = host.children.nodeIdOf?.(from)
-    const cur = childId ? locate(childId) : undefined
-    // Not one of THIS dock's edge children (the centre is not repositioned; or already there) — not ours.
-    if (!cur || cur.edge === 'center' || cur.edge === edge) return false
-    const occupant = model[cur.edge][cur.index]?.child
-    if (!occupant) return false
-    // Repositioning moves a child and must respect the source slot's fixed rule.
-    // Report a refused move so it can be distinguished from an unrecognized bar.
-    if (displacementRefused(placement, occupant.id, 'move')) return true
-    const child = removeFrom(cur.edge, cur.index)
-    if (!child) return false
-    // THE SLOT DOES NOT TRAVEL. A list position is a place, so the child arrives in a FRESH bare
-    // position and picks up whatever rules the destination has — which, appended to an edge, is
-    // none. Carrying the source's `admits` / `fixed` along would make a rule follow a thing, which
-    // is containment-not-attachment inverted.
-    model = { ...model, [edge]: [...model[edge], { entryId: genId(), child, slot: {} }] }
-    commit()
-    return true // CLAIMED: the bar moved.
   }
 
   /**
@@ -330,7 +308,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   }
 
   // The pure re-point seam: each transform mirrors the mutating seam below but returns a
-  // NEW model without touching the live `model`; `makePoolEdit` serializes it via `toConfigPure` +
+  // NEW model without touching the live `model`; `makePoolEdit` serializes it via `toConfig` +
   // `withCarry` and the router batches src+tgt into one atomic commit. These operate on the PASSED
   // model, so they never read the outer `model` binding (the `positions`/`locate`/`removeFrom`
   // helpers above do, which is why they cannot be reused here).
@@ -357,21 +335,11 @@ function mount(container: HTMLElement, host: MountHost): () => void {
           : { ...mm, [edge]: mm[edge].filter((_, n) => n !== index) }
     return { model: next, child }
   }
-  const toConfigPure = (mm: DockModel): Record<string, unknown> => {
-    const out: Record<string, unknown> = {}
-    for (const e of EDGES) {
-      const list = mm[e].map(posToConfig).filter((v) => v !== undefined)
-      if (list.length) out[e] = list
-    }
-    const center = posToConfig(mm.center)
-    if (center !== undefined) out[CENTER] = center
-    return out
-  }
   const poolEdit = makePoolEdit<DockModel>({
     host,
     live: () => model,
-    ownedKeys: ['type', 'top', 'bottom', 'left', 'right', 'center'],
-    toConfig: toConfigPure,
+    ownedKeys: OWNED_KEYS,
+    toConfig,
     remove: (mm, localId) => {
       const hit = posesOf(mm).find((e) => e.pos.child?.id === localId)
       if (!hit || hit.edge === 'center') return null
@@ -382,6 +350,10 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       if (target.shape !== 'slot-rect') return null
       const to = locateIn(mm, target.slotId)
       if (!to || to.edge === 'center') return null
+      if (isBar((occ.instance as Instance).type) === false) {
+        refuse('place', `an edge holds bars; "${(occ.instance as Instance).type}" is not a bar`, { slotId: target.slotId })
+        return null
+      }
       const edge = to.edge
       const child: ChildState = { id: occ.id, instance: occ.instance as Instance }
       if (to.pos.child === undefined) {
@@ -443,6 +415,11 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       // anything destructive runs.
       const at = locate(slotId)
       if (!at) return
+      // An edge holds bars only (the type says so; this seam enforces it for a non-typed caller).
+      if (at.edge !== 'center' && isBar((instance as Instance).type) === false) {
+        refuse('setSlotContent', `an edge holds bars; "${(instance as Instance).type}" is not a bar`, { slotId })
+        return
+      }
       // Absent keeps the occupant's current id; present means the caller is naming it. `...at.pos`
       // carries the POSITION's own fields through untouched — replacing an occupant is not
       // replacing a position.
@@ -541,20 +518,142 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     ...(poolEdit ? { poolEdit } : {}),
   }
 
-  const attached = attachContainer(root, { placement, dialect: dockDropDialect })
+  // ── Bar management: dock owns its edge positions, so it adds, moves and removes its bars. ──
 
-  const disposeIntent = host.intent.handle('reposition', {
-    claim: () => true, // the dock is the sole handler of its own reposition (firer-relative); always claim.
-    commit: (intent, from) => {
-      reposition(from, (intent as RepositionIntent).edge)
-    },
-  })
+  const bare = (type: string): string => type.split('::')[0]!
+
+  /** Whether a projection type is a bar (its kind closure includes the bar kind). Unknown when the host
+   *  offers no descriptors, in which case the type graph is the only check. */
+  function isBar(type: string): boolean | undefined {
+    const d = host.describeProjections?.().find((x) => bare(x.type) === bare(type))
+    return d ? d.kinds.includes(BAR_KIND) : undefined
+  }
+
+  /** The concrete bar types installed, qualified by their owner, with a display label. */
+  function barTypes(): { type: string; label: string }[] {
+    const descriptors = host.describeProjections?.() ?? []
+    return host.listContributions(BAR_KIND).map((c) => {
+      const d = descriptors.find((x) => bare(x.type) === c.projection)
+      return { type: d ? `${c.projection}::${d.repo}` : c.projection, label: descriptorTitle(d) ?? c.projection }
+    })
+  }
+
+  /** Commit a next model as ONE structural proposal, with any staged mints riding the same batch. */
+  function proposeModel(next: DockModel, mints: ReadonlyArray<{ id: string; record: OpaqueConfig }> = []): void {
+    if (!poolEdit || !poolEdit.recordId()) {
+      model = next
+      commit()
+      return
+    }
+    poolEdit.propose([...mints, { id: poolEdit.recordId(), record: withCarry(host, toConfig(next), OWNED_KEYS) as OpaqueConfig }])
+  }
+
+  /** Add a new, empty bar to an edge, outermost. The bar kind is the sole installed one, else asked. */
+  async function addBar(edge: Edge): Promise<void> {
+    const types = barTypes()
+    const type =
+      types.length === 1
+        ? types[0]!.type
+        : ((await host.chooser?.choose({ title: 'Add which bar', options: types.map((t) => ({ id: t.type, label: t.label })) })) ?? null)
+    if (!type) return
+    const instance: Instance = { type }
+    if (poolEdit?.recordId()) {
+      const mint = poolEdit.createRecord(instance as PaneInstance)
+      proposeModel({ ...model, [edge]: [...model[edge], { entryId: genId(), child: { id: mint.rootId, instance }, slot: {} }] }, mint.edits)
+    } else {
+      proposeModel({ ...model, [edge]: [...model[edge], { entryId: genId(), child: { id: mintBlockId(), instance }, slot: {} }] })
+    }
+  }
+
+  /** Move a bar (by its `^:` id) to another edge, outermost, keeping its identity. Its orientation
+   *  follows from the edge context dock publishes on the new slot; dock never writes the bar's config. */
+  function moveToEdge(barId: string, edge: Edge): void {
+    const from = locateIn(model, barId)
+    if (!from || from.edge === 'center' || from.edge === edge) return
+    const r = removeFromPure(model, from.edge, from.index)
+    if (!r) return
+    proposeModel({ ...r.model, [edge]: [...r.model[edge], { entryId: genId(), child: r.child, slot: {} }] })
+  }
+
+  /** "Add bar ▸ edge", the rows dock offers wherever its bar menu opens. */
+  function addBarRows(): ContextMenuItem[] {
+    // Sole, then ask: with several bar kinds and no chooser to ask with, there is no way to pick one.
+    const count = barTypes().length
+    const reason = count === 0 ? 'no bar projection is installed'
+      : count > 1 && !host.chooser ? 'several bar kinds are installed and this host offers no chooser to pick one'
+        : undefined
+    return [{
+      id: 'dock.bar.add',
+      label: 'Add bar',
+      enabled: reason === undefined,
+      ...(reason === undefined ? {} : { reason }),
+      items: EDGES.map((e) => ({ id: `dock.bar.add.${e}`, label: EDGE_LABEL[e], enabled: true, run: () => void addBar(e) })),
+    }]
+  }
+
+  /** The rows for one placed bar: move it to another edge, or remove it. */
+  function barRows(barId: string): ContextMenuItem[] {
+    const at = locateIn(model, barId)
+    if (!at || at.edge === 'center') return []
+    const here = at.edge
+    return [
+      { section: 'Dock' },
+      {
+        id: 'dock.bar.move',
+        label: 'Move bar to',
+        enabled: true,
+        items: EDGES.filter((e) => e !== here).map((e) => ({ id: `dock.bar.move.${e}`, label: EDGE_LABEL[e], enabled: true, run: () => moveToEdge(barId, e) })),
+      },
+      // The guarded removal every container's close takes: the host reaps the bar record on commit.
+      { id: 'dock.bar.remove', label: 'Remove bar', enabled: true, destructive: true, run: () => void closePane(barId) },
+      { separator: true },
+      ...addBarRows(),
+    ]
+  }
+
+  /** The strip dock reserves when it holds no bars: one bar's height, a centred ⋯ opening the bar menu. */
+  function barStrip(): HTMLElement {
+    const strip = document.createElement('div')
+    strip.className = 'au-dock-strip'
+    const button = document.createElement('au-icon-button')
+    button.setAttribute('label', 'Dock bars')
+    button.setAttribute('size', 'sm')
+    const icon = document.createElement('au-icon')
+    icon.setAttribute('name', 'more-horizontal')
+    button.append(icon)
+    button.addEventListener('au-activate', () => {
+      host.contextMenu?.open(button.getBoundingClientRect(), [{ section: 'Dock' }, ...addBarRows()])
+    })
+    strip.append(button)
+    return strip
+  }
+
+  placement.paneActions = (paneId) => {
+    const rows = barRows(paneId)
+    return rows.length ? rows : null
+  }
+
+  const attached = attachContainer(root, { placement, dialect: dockDropDialect })
 
   render()
 
+  // Track dock's own pool record: a structural edit the host applied (dock's bar menu proposals, a
+  // `closePane`, a drop) re-seeds the model and re-renders. Gated in config space, since `fromConfig`
+  // mints fresh position ids.
+  const stopResync = watchOwnRecord<DockModel>({
+    host,
+    fromConfig: (raw) => fromConfig(raw as Dock),
+    toConfig,
+    current: () => model,
+    reseed: (next) => {
+      model = next
+      render()
+    },
+  })
+
   return () => {
+    stopResync()
     disposeStyles?.()
-    disposeIntent() // intent.handle always returns a disposer
     attached.detach()
     for (const { mount } of childMounts.values()) mount.unmount()
     childMounts.clear()

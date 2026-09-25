@@ -8,7 +8,7 @@ meta:
     title: Reader
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The content this viewer opens (content-routing axis), on its OWN meta — NOT on the code
   # locator above. opens-meta makes this reader ELIGIBLE to open markdown
   # (opens-meta is ELIGIBILITY, not the decision — md resolves through the ladder: a composition
@@ -81,3 +81,4 @@ meta:
     handles:
       - "[[open-intent::intent]]"
       - "[[ui-intent-highlight::intent]]"
+      - "[[swap-viewer-intent::intent]]"

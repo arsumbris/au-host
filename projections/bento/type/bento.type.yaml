@@ -24,7 +24,7 @@ meta:
   # the OWNING PACKAGE ROOT (where the type-def lives), so the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The intents bento HANDLES (typed capability). Discovered in the subtypes pass; the
   # runtime handlers bind at mount. handle() is gated by this declaration.
   - type: handles-intent-meta::au-host-sdk
@@ -35,6 +35,7 @@ meta:
       - "[[show-pane-intent::intent]]"
       - "[[split-right-intent::intent]]"
       - "[[split-down-intent::intent]]"
+      - "[[swap-pane-intent::intent]]"
   # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).
   # host.intent.fire is gated on this declaration (rung 3, warn+ratchet).
 

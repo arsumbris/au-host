@@ -19,7 +19,7 @@ function projection(typeName: string, kinds: string[]): DiscoveredProjection {
     typeName,
     repo: 'x',
     entry: './dist/index.js',
-    contractVersion: 7,
+    contractVersion: 8,
     packageRoot: `/x/${typeName}`,
     kinds,
     ownedFields: [],
@@ -55,7 +55,13 @@ function intentDef(
   if (opts.agent !== undefined) {
     meta.push({ type_name: 'intent-agent-meta::intent', body: [{ name: 'firable', value: opts.agent }] } as never)
   }
-  return { name, fields: opts.fields ?? [], meta_blocks: meta } as unknown as WireSubtype
+  // As the engine serves it: the effective view mirrors the own one, since these intents have no ancestors.
+  const effective_meta = meta.map((block) => {
+    const [metaName, owner] = block.type_name.split('::') as [string, string]
+    return { meta_type: { name: metaName, hash: 'h', type_owners: [owner] }, blocks: [block] }
+  })
+  const fields = opts.fields ?? []
+  return { name, repo: 'x', fields, effective_fields: fields, meta_blocks: meta, effective_meta } as unknown as WireSubtype
 }
 
 const install = (defs: WireSubtype[]): void => {
@@ -127,6 +133,16 @@ describe('the derived payload check overrides any declaration', () => {
     expect(v.allowed).toBe(false)
     expect(v.reason).toBe('privileged-payload')
     expect(v.message).toContain('pane')
+  })
+
+  it('refuses a projection-bearing field the intent INHERITS, not only one it declares', () => {
+    // The payload is the effective shape: a subtype that declares nothing still carries its base's fields.
+    const inherited = intentDef('open-pane-variant-intent', { agent: true, kind: 'routed' })
+    const pane = field('pane', 'projection::au-host-sdk&', { kind: 'inline-or-reference', name: 'projection::au-host-sdk' })
+    install([{ ...inherited, effective_fields: [{ ...pane, origin: { name: 'open-pane-intent', repo: 'x', hash: 'h' }, divergent: false }] } as WireSubtype])
+    const v = checkAgentIntent('open-pane-variant-intent')
+    expect(v.allowed).toBe(false)
+    expect(v.reason).toBe('privileged-payload')
   })
 
   it('refuses a bare `any` field — an uninterpreted blob can hold a config', () => {

@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest'
 
 import { fromSubstrate, replaceLeafOccupant, toSubstrate } from '../src/config-binding.ts'
 import type { Bento } from '../src/generated.ts'
+import { useBentoSchemas } from './schemas.ts'
+
+useBentoSchemas()
 
 const noRefs = async (): Promise<never> => {
   throw new Error('this fixture has no reference arms')

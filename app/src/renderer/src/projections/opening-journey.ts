@@ -1,5 +1,5 @@
 import type { ChooseOption } from './host-config'
-import { CHOOSER_BACK, type Choice, type ChooserStep } from '@arsumbris/au-component-catalog/chooser-presentation'
+import { CHOOSER_BACK, CHOOSER_SUPERSEDED, type Choice, type ChooserStep } from '@arsumbris/au-component-catalog/chooser-presentation'
 
 export interface OpeningPlan { destination: string; viewer?: string; pane?: string; kind?: string }
 export interface OpeningChoices {
@@ -19,8 +19,9 @@ export async function chooseOpeningPlan(
   let stage: Stage = 'destination'
   const history: Stage[] = []
   let plan: OpeningPlan = { destination: '' }
-  async function ask(title: string, options: ChooseOption[]): Promise<Choice> {
+  async function ask(title: string, options: ChooseOption[]): Promise<string | null | typeof CHOOSER_BACK> {
     const result = await choose({ title, options, back: history.length > 0 })
+    if (result === CHOOSER_SUPERSEDED) return null // a re-entrant chooser aborts the journey, like a cancel
     if (result === CHOOSER_BACK) { stage = history.pop() || 'destination'; return CHOOSER_BACK }
     if (result !== null) history.push(stage)
     return result

@@ -95,6 +95,9 @@ export interface BentoLayoutProps<PaneState> {
   /** Whether the governing slot is fixed. Fixed positions have a lock glyph, no
    * drag handle, and no close button; their occupant cannot be displaced. */
   fixedFor?: (paneId: PaneId) => boolean;
+  /** Whether the governing slot sets `hideHeader`: draw NO per-pane header at this position (a
+   *  self-chrome occupant owns its surface). Its actions stay reachable via `open-pane-actions-intent`. */
+  hideHeaderFor?: (paneId: PaneId) => boolean;
   /** Fires when the user double-clicks a pane header. `leafRect` is the leaf container's
    *  current bounding rect, so the host can size / position derived
    *  UI (e.g. a floating-overlay pop-out) relative to the source.
@@ -212,9 +215,11 @@ function LeafPane<PaneState>(
     onPaneHeaderDoubleClick,
     startDrag,
     fixedFor,
+    hideHeaderFor,
     contentIdOf,
   } = props;
   const fixed = fixedFor?.(leaf.id) === true;
+  const hideHeader = hideHeaderFor?.(leaf.id) === true;
   // The occupant's content id (== its `data-pane-id`), so the header offers its `center` region under
   // the SAME id the occupant resolves from the DOM. Undefined for an empty pane → no region offered.
   const contentPaneId = contentIdOf?.(leaf.state);
@@ -250,6 +255,9 @@ function LeafPane<PaneState>(
       {/* The pane frame owns rounded clipping, border, and focus ring. Its nested header
           supplies the masthead. The outer div remains the drop-router and focus anchor. */}
       <au-pane-frame flush nested={props.isContainerPane?.(leaf.id)} focused={isFocused}>
+        {/* `hideHeader` drops the masthead entirely — a self-chrome occupant owns its surface. The pane
+            still drops / focuses (the outer div) and its actions ride `open-pane-actions-intent`. */}
+        {!hideHeader && (
         <PaneHeader
           label={label}
           paneId={contentPaneId}
@@ -280,6 +288,7 @@ function LeafPane<PaneState>(
           }
           actions={actions}
         />
+        )}
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', ...(dragging ? framedContentStyle : null) }}>
           {renderUnit(leaf.id, leaf.state)}
         </div>

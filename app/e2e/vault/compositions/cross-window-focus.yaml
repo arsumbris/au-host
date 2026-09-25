@@ -3,6 +3,10 @@
 # The floated group wins through cross-window focus recency. Each group has two tabs
 # so selecting another tab produces an observable focus transition.
 type: composition::au-host-sdk
+# Opt out of the CHOOSE picker: this spec tests deterministic cross-window ambient routing, not the
+# picker, so `mru` restores the silent auto-pick of the focus/MRU head.
+intent-routing:
+  default-strategy: mru
 windows:
   - "[[^^w]]"
 viewer-defaults:

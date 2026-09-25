@@ -66,6 +66,11 @@ export class TerminalSessions {
   private drainingOwners: ProcessIdentity[] = []
   private closing = false
 
+  /** Live pty session count. A diagnostic readout (metrics sampler); not a control-flow input. */
+  get liveCount(): number {
+    return this.sessions.size
+  }
+
   /** App shutdown only: keep lifecycle services alive until owned children have exited. */
   async drain(): Promise<boolean> {
     if (!this.sessions.size && !this.drainingOwners.length) return true

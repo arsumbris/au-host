@@ -54,7 +54,7 @@ async function probeSchemaMismatch(entryPath: string): Promise<DaemonStatus['sch
  * hard-pinned — the user legitimately chooses where their `au` binary lives. Returns an error
  * message, or null if it checks out.
  */
-function validateBinary(binaryPath: string): string | null {
+export function validateBinary(binaryPath: string): string | null {
   if (!binaryPath || !binaryPath.trim()) {
     return 'au engine binary not found. Install au onto PATH, set `au:` in paths.yaml, or choose its location.'
   }

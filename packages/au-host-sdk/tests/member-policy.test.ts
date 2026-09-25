@@ -24,7 +24,7 @@ const ENTRY = member('entry', true, true)
 const EDIT = member('edit', true, true)
 const DISCOVER = member('discover', false, true)
 const DEP = member('dep', false, true)
-// The case with no dogfood fixture: yours to author, but resolved read-only from the package cache.
+// The case with no local fixture: yours to author, but resolved read-only from the package cache.
 const EDIT_CACHED = member('edit', true, false)
 
 describe('isAuthoringMember — the DISPLAY policy', () => {
@@ -66,7 +66,7 @@ describe('isWritableMember — the SAVE-TARGETING policy', () => {
 
 describe('the two policies', () => {
   it('coincide on every member whose location is local', () => {
-    // Why the distinction is invisible in the dogfood: with `local: true` everywhere, the stricter
+    // Why the distinction is invisible in an all-local workspace: with `local: true` everywhere, the stricter
     // policy is indistinguishable from the looser one. A GUI check cannot tell them apart there.
     for (const m of [ENTRY, EDIT, DISCOVER, DEP]) {
       expect(isWritableMember(m)).toBe(isAuthoringMember(m))

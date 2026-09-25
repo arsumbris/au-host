@@ -21,6 +21,7 @@ import * as path from 'node:path'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 import { hostConfigDir } from './device-paths'
+import { readLocalFile } from './local-file-read'
 import type { ToolPaths, ToolPathsInfo, ToolPathsPatch } from '../shared/daemon-api'
 
 /** The raw `paths.yaml` shape (kebab-case keys, all optional). */
@@ -212,18 +213,19 @@ export function resolveDaemonBinary(): string | undefined {
 /**
  * Merge a patch into paths.yaml and write it. Reads the current file (preserving
  * unknown keys), applies the patch (an empty string CLEARS a key, back to its
- * default), and writes. Comments are not preserved through a UI save; the raw
+ * default), and writes. A file that exists but cannot be read refuses the save. Comments are not preserved through a UI save; the raw
  * file (with template comments) is the alternative editing surface.
  */
 export function saveToolPaths(patch: ToolPathsPatch): void {
   const file = pathsFile()
-  let current: Record<string, unknown> = {}
-  try {
-    const parsed = parseYaml(fs.readFileSync(file, 'utf8'))
-    if (parsed && typeof parsed === 'object') current = parsed as Record<string, unknown>
-  } catch {
-    // No file, or unreadable — start fresh.
-  }
+  const read = readLocalFile(file, (text): Record<string, unknown> => {
+    const parsed: unknown = parseYaml(text) ?? {}
+    if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('it is not a YAML mapping')
+    return parsed as Record<string, unknown>
+  })
+  // The file is the user's own: one this process cannot read is never rewritten from nothing.
+  if (read.state === 'failed') throw new Error(`${file} could not be read (${read.cause}), so it was left untouched; fix or remove it, then save again`)
+  const current: Record<string, unknown> = read.state === 'found' ? read.value : {}
 
   const set = (key: string, val: string | string[] | undefined): void => {
     if (val === undefined) return

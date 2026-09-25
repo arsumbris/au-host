@@ -6,6 +6,7 @@
 import type { MountHost, PaneId, PublisherId } from '@arsumbris/au-host-sdk';
 import { isPlaceholderRecord } from '@arsumbris/au-host-sdk';
 import { closePane } from './registry.ts';
+import { mirrorLayoutContext } from './pane-portal.ts';
 
 export interface MountChildOptions {
   /** The child projection instance id — its mount identity. */
@@ -101,6 +102,9 @@ export function mountChild(host: MountHost, slot: HTMLElement, options: MountChi
   const mountSite = slot.ownerDocument.createElement('div');
   mountSite.style.height = '100%';
   slot.appendChild(mountSite);
+  // The child is handed `mountSite`, not `slot`, so it carries the slot's layout context (a dock edge, a
+  // bar axis) and follows it when a move re-anchors the slot.
+  const stopContext = mirrorLayoutContext(slot, mountSite);
   void host.children
     .mount(mountSite, arg)
     .then((h) => {
@@ -122,6 +126,7 @@ export function mountChild(host: MountHost, slot: HTMLElement, options: MountChi
       if (cancelled) return;
       cancelled = true;
       handle?.unmount();
+      stopContext();
       slot.removeAttribute('data-pane-id');
       mountSite.remove();
     },

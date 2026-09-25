@@ -2,6 +2,8 @@
 # fires open-intent nothing claims → the open-floor "Open in a new window" opens a FRESH editor (via
 # `openInWindow`, so it has NO clean-inverse origin). Moving that editor back onto the OCCUPIED center slot
 # must WRAP it with the file-tree there — never lose it (the data-loss the wrap-edit truncation caused).
+# The RIGHT slot admits only an editor, so it holds no placeholder that would claim the open ahead of the
+# open floor.
 type: composition::au-host-sdk
 windows:
   - "[[^^w]]"
@@ -18,6 +20,11 @@ projections:
     type: sandwich::sandwich
     left: "[[^^treeL]]"
     center: "[[^^treeC]]"
+    right:
+      ^: right-slot
+      type: sandwich-slot::sandwich
+      admits:
+        - "[[editor-pane::editor]]"
   - ^: treeL
     type: file-tree::file-tree
   - ^: treeC

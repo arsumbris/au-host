@@ -34,3 +34,10 @@ fields:
   #: def-ref (same-repo bare); if several nodes play it, the first by tree order seeds the
   #: focus channel.
   initial-focus?: type<projection>*
+  #: The CONSUME strategy for a >1-claimer AMBIENT routed dispatch (open / reveal / save-family):
+  #: `choose` (the default when absent) shows the spatial picker so the user picks, with the
+  #: focus/MRU head pre-highlighted for a one-keystroke Enter; `mru` restores the old silent
+  #: auto-pick of the focus/MRU head. Distinct from `defaults` above (per-intent TARGET rules) —
+  #: this selects HOW a resolved multiplicity is consumed, not WHICH nodes are candidates. Shaped
+  #: to grow to a per-intent map later; a single value now applies to every ambient intent.
+  default-strategy?: [choose, mru]

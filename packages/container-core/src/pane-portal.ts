@@ -128,6 +128,17 @@ function syncContextAttrs(hostEl: HTMLElement, anchor: HTMLElement | null): void
   }
 }
 
+/** Keep `target` carrying `source`'s layout-context attributes, now and on every change. The element a
+ *  projection is handed is often an inner mount site under the slot a container dressed (see
+ *  `mountChild`); mirroring keeps the convention's promise that a child reads its context off its own
+ *  `container`. Returns the disposer. */
+export function mirrorLayoutContext(source: HTMLElement, target: HTMLElement): () => void {
+  syncContextAttrs(target, source);
+  const observer = new MutationObserver(() => syncContextAttrs(target, source));
+  observer.observe(source, { attributes: true, attributeFilter: [...CONTAINER_CONTEXT_ATTRS] });
+  return () => observer.disconnect();
+}
+
 /** Register a pane's live host element (called by `PaneHost`). `onAnchored` is fired (idempotently) the
  *  first time the element lands in a real anchor — see DEFERRED MOUNT above. Idempotent per id. */
 export function registerPaneHost(reg: PortalRegistry, paneId: PaneId, el: HTMLElement, onAnchored?: () => void): void {

@@ -1,8 +1,8 @@
-// The `notifications` surfacer projection: the status-bar BELL (`notification-status`).
+// The `notifications` surfacer projection: the bar BELL (`notification-bar-item`).
 
 // It handles the `ui-notification` BROADCAST typed capability — the host fans every fired
 // notification out to every mounted surfacer (intent-channel.ts). The bell is an INDEPENDENT
-// surfacer: a persistent status-bar indicator + unread-count badge, orthogonal to the host-owned
+// surfacer: a persistent bar indicator + unread-count badge, orthogonal to the host-owned
 // toast frame. The unread count is surfacer-OWNED display
 // state derived from the observed broadcasts, never persisted. Plain DOM, no framework.
 

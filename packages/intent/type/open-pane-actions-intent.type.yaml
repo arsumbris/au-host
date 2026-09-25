@@ -1,0 +1,15 @@
+# Owned by the `intent` package.
+# OPEN the FOCUSED pane's actions menu — the same ⋯ menu a pane's header offers (swap / split / wrap /
+# float / "Layout rules…"). It is host CHROME, so the host is the sole handler; modelled as an intent
+# (routed + ambient) so it is a real, bindable, discoverable COMMAND like the palette toggle. Firing it
+# opens the menu for whichever pane is focused — the reach for a pane whose header is hidden (`hideHeader`),
+# where the ⋯ button is not on screen but its actions (including un-hiding via "Layout rules…") still matter.
+#: Open the focused pane's actions menu.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Open pane actions
+    category: View

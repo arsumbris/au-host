@@ -1,8 +1,10 @@
 # The E2E test vault's workspace manifest. `edit: [e2e-vault]` self-lists the containing repo (REQUIRED).
 # `discover: [host-bundle]` pulls the whole host UI projection closure (bento / tabs / editor / …) into
 # the graph so the fixtures mount — host-bundle members resolve on disk via the device registry.
+# `e2e-shared` is a fixture member (app/e2e/members) whose shipped content a spec reads as consumed.
 type: au.engine.workspace::au-engine
 edit:
   - e2e-vault
 discover:
   - host-bundle
+  - e2e-shared

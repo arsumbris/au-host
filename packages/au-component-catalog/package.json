@@ -16,7 +16,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo au-component-catalog --module component-contract=@arsumbris/component-contract --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../codegen --repo au-component-catalog --module component-contract=@arsumbris/component-contract --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts",
     "gen:react": "node --experimental-transform-types scripts/gen-react-jsx.ts --dir type --out src/react-jsx.ts && node --experimental-transform-types scripts/gen-react-wrappers.ts --dir type --out src/react.ts"
   },
   "dependencies": {

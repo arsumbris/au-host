@@ -1,0 +1,17 @@
+# PEEK-KEYGUARD fixture — a file-tree pane plus the ⌘S keymap, to prove a shown cmd-hover PEEK does not
+# suppress the palette/command keybind. The file-tree peek is the deterministic trigger (a DOM row, and
+# its own key handler ignores non-modifier keys, so the peek stays up while ⌘S is pressed — unlike the
+# force-graph peek, which self-dismisses on a shortcut). Regression guard: the preview surface
+# claims the `popover` band but must NOT block chords (keyguard: false).
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-keybind-fire.keymap]]"
+windows:
+  - "[[^^w]]"
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^tree]]"
+  - ^: tree
+    type: file-tree::file-tree

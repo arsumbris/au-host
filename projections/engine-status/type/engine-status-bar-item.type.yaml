@@ -1,0 +1,14 @@
+# engine-status-bar-item IS a `bar-item-projection`: a compact, read-only engine status indicator (vault + daemon
+# status + engine version) over the host's daemon capability. A bar discovers it as an item to add
+# (never auto-injected). A single surface — the default `mount` export. Mountable in any pane too (the
+# kind is design intent, not a site lock).
+extends: bar-item-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Status
+  # `entry` is relative to the owning package root; the built ESM is./dist/.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    contractVersion: 8

@@ -11,8 +11,11 @@ export const APP_ROOT = resolve(here, '..', '..')
 export const REPO_ROOT = resolve(APP_ROOT, '..')
 /** The built Electron main entry Playwright launches. */
 export const MAIN_ENTRY = resolve(APP_ROOT, 'out', 'main', 'index.js')
-/** The E2E test vault (a folder-repo) the app opens via AU_ENTRY. */
+/** The AUTHORED E2E test vault (a folder-repo). Tests never open it directly: each gets a copy in its own
+ *  git repository (support/vault.ts), opened via AU_ENTRY. */
 export const VAULT = resolve(APP_ROOT, 'e2e', 'vault')
+/** The generated scale test-fixture (a folder-repo); built by `pnpm --filter app gen:scale-vault`. */
+export const SCALE_VAULT = resolve(APP_ROOT, 'e2e', 'scale', 'vault')
 /** The `au` daemon binary (debug build in the sibling engine repo). */
 export const AU_BINARY = resolve(REPO_ROOT, '..', 'au-engine', 'target', 'debug', 'au')
 /** The event categories the harness turns on (the assertion spine). */

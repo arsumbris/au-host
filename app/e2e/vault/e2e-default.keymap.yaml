@@ -14,10 +14,7 @@ keybinds:
       - mods: [ mod ]
         key: w
     intent: "[[close-view-intent::intent]]"
-  - intent: "[[open-file-dialog-intent]]"
-    chord:
-      - mods:
-          - ctrl
-          - alt
-          - shift
-        key: digit9
+  - chord:
+      - mods: [ mod ]
+        key: e
+    intent: "[[swap-viewer-intent::intent]]"

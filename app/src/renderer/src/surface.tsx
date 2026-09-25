@@ -1,3 +1,10 @@
+import './dev-flag' // MUST be the VERY FIRST import — sets the DEV split-bridge flag (`__AU_DEV__`) before
+// ANY shared-dep's eager module-eval reads it. container-kit (below) transitively loads container-core,
+// whose `singletons.ts` binds its shared registry EAGERLY at eval: if the flag is unset then, the shell's
+// vite copy binds a MODULE-LOCAL registry (bridging=false) split from the served projections' window-global
+// one, so a container registered by the shell (the surface root placement) is invisible to a projection's
+// registry walk. That broke `dissolvePane`'s grandparent lookup at a floated window root (unwrap dead-ended
+// with no-parent-container). Keep this the first statement, as main.tsx does.
 import { reloadPaneRows } from '@arsumbris/container-kit'
 // The SURFACE renderer entry — the mount agent's boot (the new cross-window path).
 //
@@ -9,8 +16,6 @@ import { reloadPaneRows } from '@arsumbris/container-kit'
 // A thin `<au-*>` CHROME BAR sits above the content: the floated pane's title + a POP-BACK (dock) button
 // that reports a `dock` event up, so the authority re-parents this surface's content into the main window
 // and closes the OS window (see `surfaceChromeBar`).
-
-import './dev-flag' // MUST be first — sets the DEV split-bridge flag before container-core's eager init evals
 
 // The FOUNDATION typeface (@font-face for Geist), so the `--au-font-*` the tokens name actually load —
 // document-global, like the main window's boot.
@@ -26,6 +31,7 @@ import { subscribeTypes, type TypedSubscriber, type WireReader } from '@arsumbri
 import { installDiagnosticConditionBridge, subscribe as subscribeEvents, readSince as readEventsSince } from '@arsumbris/au-host-sdk'
 
 import { discoverProjections } from './projections/discovery'
+import { discoverSubstrateFacts, installSubstrateFacts } from './projections/substrate-facts'
 import { discoverMembers } from './projections/members'
 import { discoverComponentSets, discoverComponents } from './projections/component-discovery'
 import { registerComponentSets } from './projections/component-registry'
@@ -35,13 +41,15 @@ import { installKeybindGate } from './projections/keybind-gate'
 import { installEventReadBridge } from './projections/event-read-bridge'
 import { createEngineReadiness } from './projections/engine-readiness'
 import { MountAgent } from './projections/mount-agent'
+import { createFilesControl } from './projections/mount-host'
+import { loadTokenSheets } from './projections/token-sheets'
 import { paneIdOfActiveElement } from './projections/pane-focus'
 import { WindowRootShell } from './projections/window-root-shell'
 import { isMacRenderer } from './projections/platform'
 import { applyStoredTheme } from './projections/theme-store'
-import type { MountHost } from '@arsumbris/au-host-sdk'
-import { discoverGroupingContainers, discoverSpatialContainers, installGroupingProvider, installWrapTargets } from './projections/grouping-discovery'
-import type { SurfaceCommand, SurfaceInit } from '../../shared/daemon-api'
+import type { ContextMenuItem, MountHost } from '@arsumbris/au-host-sdk'
+import { discoverContainerCapabilities, installGroupingProvider, installWrapTargets } from './projections/grouping-discovery'
+import type { GroupingPolicy, SurfaceCommand, SurfaceInit } from '../../shared/daemon-api'
 
 // This surface runs its own event substrate (per-window scope), so bridge its diagnostics into its own
 // condition set, matching the main window. Once, at boot.
@@ -99,7 +107,11 @@ async function boot(init: SurfaceInit): Promise<void> {
 
   const reader: WireReader = { read: (request) => window.main.engine.read(init.entryPath, request) }
   try {
-    const [discovery, members] = await Promise.all([discoverProjections(reader), discoverMembers(reader)])
+    const [discovery, members, facts] = await Promise.all([discoverProjections(reader), discoverMembers(reader), discoverSubstrateFacts(reader)])
+    // The container substrate's TYPE FACTS, installed exactly as the main window installs them: without
+    // them a floated container cannot evaluate `admits`, recognize a slot subtype, or tell which slot
+    // type a position holds. Installed before anything mounts.
+    installSubstrateFacts(discovery.projections, facts)
 
     // Register the `<au-*>` component set into THIS window's custom-element registry, mirroring the main
     // window's ProjectionHost boot — otherwise a projection's `<au-icon>` / `<au-*>` chrome never upgrades
@@ -108,14 +120,24 @@ async function boot(init: SurfaceInit): Promise<void> {
     const reg = await registerComponentSets(componentSets, componentDefs, getActiveLook())
     for (const d of reg.diagnostics) console.warn(d)
 
+    // The file port for token-sheet loads (below) and the discovery refresh.
+    const files = createFilesControl(init.entryPath)
+
     // Populate THIS window's GROUPING registry from the type graph, mirroring ProjectionHost.
     // Container-core's grouping lookup is a per-renderer module singleton, so without this a floated
     // container's WRAP finds no grouping container (`groupingForNewGroup()` null → `no-grouping`) and the
     // mint over the wire is never reached. The composition-level `group-into` is authority-owned, so a
     // surface installs the discovered capabilities only.
-    const [groupingCaps, spatialCaps] = await Promise.all([discoverGroupingContainers(reader), discoverSpatialContainers(reader)])
-    installGroupingProvider(groupingCaps)
-    installWrapTargets(groupingCaps, spatialCaps)
+    // The composition's grouping policy (`group-into`, `group-new-panes`) is authority-owned: it arrives in the
+    // init and is re-pushed on change. Installed together with this window's own discovered capabilities, so
+    // a wrap here picks its container exactly as the main window would.
+    let caps = await discoverContainerCapabilities(reader)
+    let policy: GroupingPolicy = init.grouping ?? { groupNewPanes: false }
+    const installGrouping = (): void => {
+      installGroupingProvider(caps.grouping, policy.groupInto, policy.groupNewPanes)
+      installWrapTargets(caps, policy.groupInto)
+    }
+    installGrouping()
 
     // The content mount box — a flex:1 area in a flex-column root that fills the window, mirroring a
     // bento pane's content area so a projection that fills via flex:1 / height:100% resolves against a
@@ -137,11 +159,14 @@ async function boot(init: SurfaceInit): Promise<void> {
     root.appendChild(headerHost)
     const headerRoot = createRoot(headerHost)
     const renderHeader = (info: { host: MountHost; label: string; id: string } | null): void => {
-      // A subwindow root's only ⋯ action is "Move to other window" (dock subsumed — its picker
-      // includes the main window). A secondary window always has >=2 windows, so the row is always present.
+      // A subwindow root's ⋯ actions are "Wrap in a container" (the twin of the main window's `root.wrap`,
+      // proxied to the authority since a surface holds no pool) and "Move to other window" (dock subsumed —
+      // its picker includes the main window). A secondary window always has >=2 windows, so both rows are
+      // always present.
       const moveRow = info ? moveToWindowRow(info.host, info.id) : null
+      const wrapRow: ContextMenuItem = { id: 'root.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => void agent?.wrapRoot() }
       headerRoot.render(
-        info ? <WindowRootShell host={info.host} rootLabel={info.label} rootActions={() => [...(moveRow ? [moveRow] : []), ...reloadPaneRows(info.host, info.id)]} isMac={isMac} zoom={1} /> : null,
+        info ? <WindowRootShell host={info.host} rootLabel={info.label} rootActions={() => [wrapRow, ...(moveRow ? [moveRow] : []), ...reloadPaneRows(info.host, info.id)]} isMac={isMac} zoom={1} /> : null,
       )
     }
     renderHeader(null)
@@ -159,7 +184,24 @@ async function boot(init: SurfaceInit): Promise<void> {
       (event) => window.main.surface.sendEvent(event),
       contentEl,
       (info) => renderHeader(info),
+      (next) => {
+        policy = next
+        installGrouping()
+      },
     )
+
+    // TOKEN SHEETS — eager-load each projection's + component set's `customTokenEntry` declaration sheet at
+    // document level, the SAME path the main window runs. Without this a floated window has NONE of the
+    // `--au-<projection>-*` / `--au-<component>-*` tokens, so a projection that colors text / strokes lines via
+    // its own tokens (focal-tree's `--au-focal-tree-label` / `-edge`, radial-tree, force-graph) renders with
+    // unset fill + stroke — the reported "text color broken, lines don't draw" in a popped-out window (wired
+    // in the main window, silently absent on the surface). NON-BLOCKING (fire-and-forget), exactly
+    // as the main window loads it AFTER its render-gating state: tokens are progressive enhancement (CSS vars
+    // resolve live once adopted), so a slow / failed read never gates the surface's content mount.
+    void loadTokenSheets([...discovery.projections, ...componentSets], files)
+      .then((diags) => { for (const d of diags) console.warn(`[token-sheet] ${d.projection} (${d.path}): ${d.message}`) })
+      .catch((e) => console.error('Surface token-sheet load failed:', e))
+
     const subscriber: TypedSubscriber = { subscribe: (request, listener) => window.main.engine.subscribe(init.entryPath, request, listener) }
     const readiness = createEngineReadiness(init.entryPath)
     let disposed = false
@@ -169,13 +211,19 @@ async function boot(init: SurfaceInit): Promise<void> {
     const refresh = async (): Promise<void> => {
       const generation = ++refreshGeneration
       try {
-        const [next, grouping, spatial] = await Promise.all([
-          discoverProjections(reader), discoverGroupingContainers(reader), discoverSpatialContainers(reader),
+        const [next, nextCaps, sets, nextFacts] = await Promise.all([
+          discoverProjections(reader), discoverContainerCapabilities(reader), discoverComponentSets(reader), discoverSubstrateFacts(reader),
         ])
         if (!disposed && generation === refreshGeneration) {
-          installGroupingProvider(grouping)
-          installWrapTargets(grouping, spatial)
+          installSubstrateFacts(next.projections, nextFacts)
+          caps = nextCaps
+          installGrouping()
           agent?.updateDiscovery(next.projections)
+          // Reload token sheets so a newly-authored projection/set's `--au-*` tokens appear live in this
+          // floated window, matching the main window's per-discovery-pass reload. Non-blocking + idempotent.
+          void loadTokenSheets([...next.projections, ...sets], files)
+            .then((diags) => { for (const d of diags) console.warn(`[token-sheet] ${d.projection} (${d.path}): ${d.message}`) })
+            .catch((e) => console.error('Surface token-sheet reload failed:', e))
         }
       } catch (error) { console.error('Surface discovery failed:', error) }
     }

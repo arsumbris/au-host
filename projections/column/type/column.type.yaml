@@ -23,9 +23,10 @@ fields:
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The grouping-container kind declares this as a group target. The substrate calls
   # this module's buildGroup export; the column retains groups of any arity.
   - type: handles-intent-meta::au-host-sdk
     handles:
       - "[[reveal-pane-intent::intent]]"
+      - "[[swap-pane-intent::intent]]"

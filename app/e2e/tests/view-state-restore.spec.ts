@@ -8,20 +8,20 @@
 // it FAILS if the boot hydrate is missing (fresh cache → the editor mounts at scroll 0).
 //
 // Bespoke TWO-LAUNCH flow (the standard fixture is single-launch): launch → scroll+persist → close (flush)
-// → relaunch → assert restored. The view-state store is the real main-owned file (like the recents the
-// harness already seeds), scoped to THIS fixture's composition + node, so it never clobbers unrelated state.
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
-import { MAIN_ENTRY, VAULT, EVENT_CATEGORIES, AU_BINARY } from '../support/paths'
+// → relaunch → assert restored. Both launches share ONE relocated au-host dir (AU_HOST_DEVICE_DIR), so the
+// view-state persists between them while the user's real store is never touched.
+import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { test, expect } from '../fixtures/app'
+import { MAIN_ENTRY, EVENT_CATEGORIES, AU_BINARY } from '../support/paths'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seedComposition } from '../support/recents'
-import { stopDaemon } from '../support/daemon'
+import { seedComposition, shortTempDir } from '../support/recents'
 
-async function launch(profile: string, configure = false): Promise<{ app: ElectronApplication; page: Page }> {
+async function launch(vault: string, profile: string, hostDir: string, configure = false): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [MAIN_ENTRY, `--user-data-dir=${profile}`],
-    env: { ...process.env, AU_ENTRY: VAULT, AU_HOST_EVENTS: EVENT_CATEGORIES, AU_E2E_OFFSCREEN: '1' } as Record<string, string>,
+    env: { ...process.env, AU_HOST_DEVICE_DIR: hostDir, AU_ENTRY: vault, AU_HOST_EVENTS: EVENT_CATEGORIES, AU_E2E_OFFSCREEN: '1' } as Record<string, string>,
   })
   const page = await app.firstWindow()
   if (configure) {
@@ -37,13 +37,13 @@ async function launch(profile: string, configure = false): Promise<{ app: Electr
 const scrollTopOf = (page: Page): Promise<number> =>
   page.locator('.cm-scroller').first().evaluate((el) => el.scrollTop)
 
-test('main-window editor scroll survives an app restart (boot hydrate restores view-state)', async () => {
+test('main-window editor scroll survives an app restart (boot hydrate restores view-state)', async ({ vault }) => {
   const profile = mkdtempSync(join(tmpdir(), 'au-host-e2e-restore-'))
-  seedComposition('view-state-restore') // auto-mount the long-file editor composition at boot
-  stopDaemon() // a fresh daemon over the current vault; the second launch adopts the still-running one
+  const hostDir = shortTempDir('auh-')
+  seedComposition('view-state-restore', hostDir, vault) // auto-mount the long-file editor composition at boot
 
   // LAUNCH 1 — scroll the editor down, let it persist to the main-owned store, then close (flush-on-quit).
-  const l1 = await launch(profile, true)
+  const l1 = await launch(vault, profile, hostDir, true)
   await l1.page.locator('.cm-scroller').first().evaluate((el) => { el.scrollTop = 3000 }) // fires 'scroll' → persist
   await l1.page.waitForTimeout(800) // let the editor's scroll persist reach main (it debounces the disk flush)
   const saved = await scrollTopOf(l1.page)
@@ -51,7 +51,7 @@ test('main-window editor scroll survives an app restart (boot hydrate restores v
   await l1.app.close() // before-quit flushes the store to disk
 
   // LAUNCH 2 — a FRESH renderer (empty cache). Only the boot hydrate can restore the scroll.
-  const l2 = await launch(profile)
+  const l2 = await launch(vault, profile, hostDir)
   try {
     // The scroll restore runs a frame after the editor mounts (a rAF-guarded scrollTop set), so poll.
     await expect
@@ -60,5 +60,6 @@ test('main-window editor scroll survives an app restart (boot hydrate restores v
   } finally {
     await l2.app.close()
     rmSync(profile, { recursive: true, force: true })
+    rmSync(hostDir, { recursive: true, force: true })
   }
 })

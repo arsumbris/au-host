@@ -46,9 +46,11 @@
 .starter-create__intro h2 { font-size: var(--au-t-title); line-height: var(--au-lh-body); font-weight: var(--au-w-medium); letter-spacing: var(--au-ls-display); margin: 0; }
 .starter-create__intro p { color: var(--au-ink-3); line-height: var(--au-lh-body); margin: var(--au-space-2) 0 var(--au-space-5); }
 .starter-create__identity { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--au-space-4); }
-.starter-create__identity label, .starter-create__location, .starter-engine-path { display: grid; gap: var(--au-space-2); min-width: 0; color: var(--au-ink-2); }
-.starter-create__location > div { display: flex; gap: var(--au-space-2); }
-.starter-create__location button { flex: 0 0 var(--starter-control-height); padding: 0; border-color: var(--au-line-2); background: var(--au-color-bg); }
+.starter-create__identity label, .starter-create__location, .starter-engine-path, .starter-engine { display: grid; gap: var(--au-space-2); min-width: 0; color: var(--au-ink-2); }
+.starter-create__location > div, .starter-engine > div { display: flex; gap: var(--au-space-2); }
+.starter-create__location button, .starter-engine button { flex: 0 0 var(--starter-control-height); padding: 0; border-color: var(--au-line-2); background: var(--au-color-bg); }
+.starter-engine > label { display: flex; justify-content: space-between; gap: var(--au-space-2); }
+.starter-engine input { font-family: var(--au-font-mono); font-size: var(--au-t-2xs); }
 .starter-create__section { display: flex; align-items: baseline; justify-content: space-between; gap: var(--au-space-3); margin-top: var(--au-space-6); }
 .starter-create__section h3 { font-size: var(--au-t-xs); font-weight: var(--au-w-medium); margin: 0; }
 .starter-create__section > span { color: var(--au-ink-4); font-size: var(--au-t-2xs); }

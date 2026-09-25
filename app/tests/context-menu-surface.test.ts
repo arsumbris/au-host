@@ -4,7 +4,7 @@
 // traversal, and prevents disabled rows from executing. These tests cover behavior and DOM structure;
 // visual placement and browser focus behavior require native verification.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createContextMenuSurface } from '../src/renderer/src/projections/context-menu-surface.ts'
 import { createOverlaySite } from '../src/renderer/src/projections/overlay-site.ts'
@@ -269,6 +269,49 @@ describe('dismissal notification', () => {
     if (way === 'resize') window.dispatchEvent(new Event('resize'))
     await handle.closed
     expect(menus()).toHaveLength(0)
+  })
+})
+
+describe('placement is clamped inside the viewport', () => {
+  // happy-dom has no layout, so drive placement the way the refit test below does: stub the menu's measured
+  // size, fire the ResizeObserver refit, then assert the COMMITTED style. The flip alone keeps a menu
+  // on-screen only for a correct width AND an in-viewport anchor; the final clamp is the floor that holds when
+  // neither is true (a stale/early width, or an anchor past the edge). These cases fail without that clamp.
+  let resized: (() => void) | undefined
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(cb: () => void) { resized = cb }
+      observe(): void {}
+      disconnect(): void {}
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+  const stubSize = (menu: HTMLElement, w: number, h: number): void => {
+    Object.defineProperty(menu, 'offsetWidth', { configurable: true, value: w })
+    Object.defineProperty(menu, 'offsetHeight', { configurable: true, value: h })
+  }
+
+  it('pulls a menu whose anchor sits PAST the right edge fully back on-screen', () => {
+    const vw = window.innerWidth
+    // Anchor beyond the viewport: the flip lands the right edge AT the anchor, still off-screen — only the
+    // final clamp saves it. This is exactly the shape that rendered half off the right edge before the fix.
+    const handle = surface.open({ x: vw + 40, y: 30 }, [action('a')])
+    const menu = menus()[0]!
+    stubSize(menu, 240, 120)
+    resized?.()
+    expect(parseFloat(menu.style.left), 'left edge on-screen').toBeGreaterThanOrEqual(4)
+    expect(parseFloat(menu.style.left) + 240, 'right edge within the viewport').toBeLessThanOrEqual(vw - 4)
+    handle.close()
+  })
+
+  it('keeps a menu anchored at the right edge within the viewport', () => {
+    const vw = window.innerWidth
+    const handle = surface.open({ x: vw - 6, y: 30 }, [action('a')])
+    const menu = menus()[0]!
+    stubSize(menu, 260, 120)
+    resized?.()
+    expect(parseFloat(menu.style.left) + 260).toBeLessThanOrEqual(vw - 4)
+    handle.close()
   })
 })
 

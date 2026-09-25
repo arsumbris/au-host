@@ -1,0 +1,10 @@
+# Owned by the `selection` package.
+# A selection whose target is a FOLDER in the vault, e.g. a folder dragged in the file tree. `path` is
+# the folder's path, in the same address space as host.files and engine reads. Distinct from
+# `file-selection` so that nothing which opens files takes a folder for one: a pane that accepts file
+# content does not accept this, and a folder operation's drop target accepts only this.
+#: A folder in the vault, picked or dragged as a whole.
+extends: selection
+fields:
+  #: The folder's path, in the host.files / engine address space.
+  path: String

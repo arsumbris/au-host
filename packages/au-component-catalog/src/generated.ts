@@ -273,6 +273,7 @@ export interface AuCloseButton extends Omit<UiComponent, 'type'> {
  * Copy confirms success after the clipboard write resolves; unavailable or rejected writes expose a retry label.
  * <au-code-block> — a framed monospace code surface with a copy affordance. `code` renders a plain
  * <pre>; `language` shows a chip; `copy` (default true) shows the copy button. Slot composed rows instead of `code`.
+ * `lineStart` numbers the `code` lines in a gutter; `markLine` tints one of them.
  */
 export interface AuCodeBlock extends Omit<UiComponent, 'type'> {
   type: 'au-code-block'
@@ -286,6 +287,10 @@ export interface AuCodeBlock extends Omit<UiComponent, 'type'> {
   copy?: boolean
   /** Explicit text to copy. Defaults to `code`; required when slotting composed rows. */
   copyText?: string
+  /** Number the `code` lines from this line number, in an unselectable gutter. */
+  lineStart?: number
+  /** The line number (in `lineStart` numbering) to emphasize with the accent wash. */
+  markLine?: number
 }
 
 /**

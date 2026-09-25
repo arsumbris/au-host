@@ -1,0 +1,24 @@
+# A dock (editor centre, one bottom bar) as a column item, so it can be popped out into its own window
+# through the column's pane actions (dock-bars.spec: the bar menu in a floated window).
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^col]]"
+  - ^: col
+    type: column::column
+    items:
+      - "[[^^dock]]"
+  - ^: dock
+    type: dock::dock
+    center: "[[^^editor]]"
+    bottom: ["[[^^bar]]"]
+  - ^: editor
+    type: editor-pane::editor
+    file: sample.md
+  - ^: bar
+    type: bar::bar
+    end:
+      - type: engine-status-bar-item::engine-status

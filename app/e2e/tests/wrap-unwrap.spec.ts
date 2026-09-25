@@ -20,7 +20,7 @@ test('wrap a tab in a column then unwrap it, editor identity preserved', async (
   // ⋯ → Wrap → pick `column` in the host chooser.
   await page.getByRole('button', { name: 'Tab actions' }).first().click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'column', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Column( [a-z])?$/ }).click()
 
   // WRAPPED: a column now holds the editor, and the editor kept its `ed` id (re-pointed, not re-created).
   await expect(column(page).first()).toBeVisible()

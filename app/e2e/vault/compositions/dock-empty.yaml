@@ -1,0 +1,14 @@
+# A dock with an editor centre and NO bars: dock reserves the bottom strip with its bar menu (dock-bars.spec).
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^dock]]"
+  - ^: dock
+    type: dock::dock
+    center: "[[^^editor]]"
+  - ^: editor
+    type: editor-pane::editor
+    file: sample.md

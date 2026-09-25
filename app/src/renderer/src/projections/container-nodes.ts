@@ -31,9 +31,9 @@ function closureOf(name: string, byName: ReadonlyMap<string, WireSubtype>): Set<
  * Read `container-node` ancestor closures. Return an empty map while the graph is unavailable;
  * the slot codec then uses its exact-name fallback.
  */
-export async function readNodeClosures(reader: WireReader): Promise<NodeClosures> {
+export async function readNodeClosures(reader: WireReader): Promise<NodeClosures | null> {
   const res = await readSubtypes(reader, NODE_BASE)
-  if (!('ready' in res) || !res.ready || !res.result) return new Map()
+  if (!('ready' in res) || !res.ready || !res.result) return null // not ready: no answer, never an empty one
   const defs = res.result.subtypes as WireSubtype[]
   const byName = new Map(defs.map((d) => [refName(d.name), d]))
   const closures = new Map<string, ReadonlySet<string>>()

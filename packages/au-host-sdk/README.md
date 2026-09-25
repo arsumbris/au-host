@@ -86,21 +86,22 @@ Every mountable SURFACE is its own kind-typed subtype with its own locator.
   - `container-projection` — arranges child views by REFERENCE. Owns a layout dialect.
     - `grouping-container` — a tabbed / stacked group of children (the tabs container).
     - `spatial-container` — spatially placed children (bento's binary splits; a future canvas).
-  - `bar-projection` — a linear aggregator (a status bar, a toolbar). Carries `order` / `minSize` / `overflowEligible`.
-    - `status-projection` — a compact status role (`Ln, Col`; vault + daemon status).
+    - `frame-container` — one fill `center` framed by peripheral chrome its subtypes add (sandwich's sides, dock's edges).
+  - `bar-projection` — a strip on a frame edge (a dock edge) laying out bar items. Not a container.
+  - `bar-item-projection` — a widget a bar lays out (`Ln, Col`; engine status). Carries `order` / `minSize` / `overflowEligible`.
   - `placeholder-projection` — what an empty slot resolves to.
 
 Two rules make the set open and composable:
-- **the role IS the kind.** A bar aggregates a role by querying `readSubtypes(kind)` — a status bar
-  discovers every `status-projection` as a candidate. No hardcoded list.
-- **NO container is privileged.** bento is one `container-projection` among several (tabs, bar, dock,
+- **a set is a kind.** A bar offers every `bar-item-projection` subtype as an item to add, found by
+  querying the kind (`host.listContributions(kind)`). No hardcoded list.
+- **NO container is privileged.** bento is one `container-projection` among several (tabs, sandwich, dock,
   a future canvas). A container owns ONLY its own layout dialect; the generic machinery (tabs, drag,
   re-parenting, focus-recency) is shared substrate every container composes.
 
 A multi-surface component is N subtypes sharing ONE module via the locator `export`.
-- the editor ships `editor-pane` (a `pane-projection`) + `editor-status` (a `status-projection`).
+- the editor ships `editor-pane` (a `pane-projection`) + `editor-bar-item` (a `bar-item-projection`).
 - both `meta` blocks point at the same `entry`; `editor-pane` uses the default `mount` export,
-  `editor-status` names `export: status`.
+  `editor-bar-item` names `export: status`.
 
 
 ## The composition model
@@ -173,6 +174,12 @@ The surface, by subpath:
   - the container substrate contract: `ContainerPlacement` + `deriveContainerSchemas` (below).
   - the observability substrate: `event` / `condition` / `on` (below).
   - the projection-side host adapter: `createMountHost` (for a surface that drives a proxied host).
+  - type identity: `TypeKey` (`name::owner`, never a bare name) and the helpers below, re-exported from `/type-key`.
+- `@arsumbris/au-host-sdk/type-key`
+  - `TypeKey`, minted only by `typeKey(authoredRef, fileRepo)` or `keyOf(wireIdentity)`; `nameOf` / `ownerOf` / `authoredRef` for display and writing.
+  - the SDK's own kinds and metas as keys (`CONTAINER_PROJECTION`, `PROJECTION_RUNTIME_META`, ...).
+  - reading meta off the engine's effective view: `metaBlock` / `metaBlocks` look a DESCRIPTIVE meta up (own, else an ancestor's; several is a conflict and no winner is picked). `codeMetaBlock` reads a CODE-POINTING meta, which is only ever the type's own block: a type loads only code it declares itself.
+  - self-contained, no runtime dependency, so a vocabulary package can use it without the whole SDK.
 - `@arsumbris/au-host-sdk/generated`
   - the codegen'd type interfaces (`Projection`, `PaneProjection`, `Composition`, `Window`,
     `ProjectionRuntimeMeta`, ...), generated from the base type-defs in `type/`.
@@ -187,10 +194,11 @@ The surface, by subpath:
 
 The base **type-defs** live in `type/` as engine vocabulary (not TypeScript):
 - the `projection` base + its kind hierarchy (`pane-projection`, `container-projection`,
-  `grouping-container`, `spatial-container`, `bar-projection`, `status-projection`, `placeholder-projection`).
+  `grouping-container`, `spatial-container`, `frame-container`, `bar-projection`, `bar-item-projection`, `placeholder-projection`).
 - the arrangement types (`composition`, `window`, `mountable`, `composition-config`, `intent-routing`, ...).
-- the metas a view attaches (`projection-runtime-meta`, `projection-presentation-meta`, and the
-  intent metas `handles-intent-meta` / `fires-intent-meta` / `opens-meta`).
+- the metas a view attaches (`projection-runtime-meta`, `projection-presentation-meta`, the
+  intent metas `handles-intent-meta` / `fires-intent-meta` / `opens-meta`, and a container's
+  `arity-meta`: how many children it takes, `min` the dissolve floor and `max` the most one wrap puts in).
 
 These are mounted in the engine's served workspace, so the daemon validates each projection instance's
 config against its type-def, and codegen derives the TypeScript interfaces from them.
@@ -212,9 +220,12 @@ Every member below is a property of the `host` argument to `mount(container, hos
     `recent_commits`, and file `content`. The typed `Wire*` argument/result types come from `/engine-reads`.
 - **files** — read/write vault files.
   - `host.files.read(path)`, `.write(path, content, expectedHash?)`, `.exists(path)`, `.delete(path)`, `.rename(from, to)`.
+  - folders, optional: `.moveDir?(from, to)` (rewrites inbound path links), `.deleteDir?(path)`.
 - **workspace** — the workspace shape (read-only here).
   - `host.workspace.members` (the member repos). MUTATING membership is an app-owned capability
     (`workspaceEdit` on `HostApp`, see `@arsumbris/au-host-app`), deliberately not on the mount contract.
+  - `memberOfPath(members, path)` answers which member owns a path (deepest root, whole segments only).
+    Use it rather than a `startsWith(root)` of your own.
 - **styles** — the styling path for a view's CSS.
   - `host.styles.inject(css, root)` — a document-level `@scope`d sheet, CSP-exempt, returns a disposer.
   - a projection uses THIS, never a raw `<style>`. Thread the disposer on every unmount path.
@@ -222,6 +233,17 @@ Every member below is a property of the `host` argument to `mount(container, hos
   - `host.overlay?.claim({ level? })` → a layer `{ el, release() }` you draw into.
   - the host owns the stacking band + lifecycle; you own the content. Levels: `raised` `sticky`
     `dropdown` `overlay` `popover` `toast` `tooltip`. Never self-portal to `document.body`.
+  - the host surfaces over it (`host.popover?.open(anchor, fill, onDismiss?)`, `host.preview.show(…, fill)`)
+    take a `fill` that builds the content. A fill may return a teardown; the surface runs it once the
+    content is removed, on every path. Release what the fill acquired there (an injected sheet).
+  - `onDismiss` means the SURFACE closed it (Escape, outside click, blur, a newer popover). Your own
+    `handle.close()` never fires it, so reset your own state where you close.
+  - every overlay you open through your own `host` (a menu, popover, preview card, claimed layer, confirm,
+    chooser) is closed by the host when your view unmounts; a pending confirm / chooser resolves as a cancel.
+    Close one yourself only when your view needs it gone while it is still mounted.
+- **containerActions** — the enclosing container's rows for THIS view.
+  - `host.containerActions?.()` → the rows its container's pane-actions menu offers for this view (or null).
+  - a view that draws its own chrome (a bar has no pane header) appends them to its own right-click menu.
 - **terminal** — host-owned pty sessions, keyed per pane.
   - `host.terminal.attach(opts?)` → a `TerminalSession`. A remount detaches + reattaches; it never kills the pty.
 - **the view-state channels** — how views coordinate.
@@ -261,6 +283,10 @@ The generic machinery is SHARED SUBSTRATE, split two ways:
   - `deriveContainerSchemas` — derives WHICH fields of a container hold its children, from the type
     graph. A container never DECLARES this; the shape says so, so a third-party container is enumerated
     without cooperating.
+  - `effectiveFields` / `effectiveMeta` — a type's fields and meta as the engine's validator sees them,
+    folded over its closure (a field or `arity-meta` an ancestor declares belongs to every descendant).
+    Meta follows shadowing by descent: a declaration, or `meta: []`, hides every ancestor's declaration
+    of that meta type; two unrelated ancestors with different blocks come back flagged `conflict`.
 - the React paved-path IMPLEMENTATION, in a separate package (`container-kit`):
   - `TabGroup`, `PaneProjection`, the picker, focus-recency, the drag-and-drop protocol + drop router.
 
@@ -293,7 +319,7 @@ meta:
     title: My View
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7   # take this from the SDK source, never from a doc
+    contractVersion: 8   # take this from the SDK source, never from a doc
 ```
 
 **2. Declare the dependency** so the peer gate lets you CLAIM the base type.
@@ -362,8 +388,8 @@ instance is one pool record; its `type` names the view, its other fields are tha
 
 ### Build a container projection
 
-A container extends `container-projection` (or `grouping-container` / `spatial-container`) and owns a
-layout dialect. Its fields hold its children BY REFERENCE.
+A container extends `container-projection` (or `grouping-container` / `spatial-container` / `frame-container`,
+the three kinds a pane can be WRAPPED into) and owns a layout dialect. Its fields hold its children BY REFERENCE.
 
 ```yaml
 # type/my-stack.type.yaml — a vertical stack of children
@@ -373,12 +399,19 @@ fields:
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
 ```
 
 - mount children via `host.children.mount(slot, child)`; place / re-parent them via `host.children.pool`.
 - use `deriveContainerSchemas` + the `container-kit` paved path for tabs, drag, and focus-recency
   instead of re-implementing them.
+- a WRAP TARGET builds its own config for the panes wrapped into it, through a `buildGroup` export:
+  - a `grouping-container` or `spatial-container` MUST export it (`GroupingContainerModule`); one that
+    does not is reported and never offered as a wrap target.
+  - a `frame-container` MAY export it. Without one it gets `frameBuildGroup`: the one child fills
+    `center` and every peripheral stays empty.
+  - the wrap choice checks the kind's `arity-meta` before any build runs, so a build only ever sees a
+    child count its type admits.
 
 
 ### Build a multi-surface projection
@@ -391,16 +424,16 @@ extends: pane-projection::au-host-sdk
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
 ```
 ```yaml
-# type/editor-status.type.yaml — the same entry, a different export
-extends: status-projection::au-host-sdk
+# type/editor-bar-item.type.yaml — the same entry, a different export
+extends: bar-item-projection::au-host-sdk
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
     export: status
-    contractVersion: 7
+    contractVersion: 8
 ```
 ```ts
 // src/index.ts — one module, two surfaces

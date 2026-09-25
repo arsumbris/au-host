@@ -2,6 +2,10 @@
 # Float the bento, then open a file from main. The nested tabs is the only open handler;
 # it must receive the remote claim and commit and render the preview.
 type: composition::au-host-sdk
+# Opt out of the CHOOSE picker: this spec tests deterministic cross-window ambient routing, not the
+# picker, so `mru` restores the silent auto-pick of the focus/MRU head.
+intent-routing:
+  default-strategy: mru
 windows:
   - "[[^^w]]"
 viewer-defaults:

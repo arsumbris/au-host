@@ -15,4 +15,4 @@ fields: {}
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8

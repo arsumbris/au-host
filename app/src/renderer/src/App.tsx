@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DragOverlay } from '@arsumbris/container-kit'
 import { Launcher, Dissolve, useDissolveEnter } from '@arsumbris/au-host-launcher'
+import { event, on } from '@arsumbris/au-host-sdk'
 
 import { ProjectionHost } from './projections/ProjectionHost'
 import { loadConfig, saveConfig } from './config'
@@ -28,6 +29,10 @@ export function App(): React.JSX.Element {
 
   // The host paints (its boot curtain would lift) → NOW dissolve the launcher away.
   const onHostReady = (): void => {
+    // BOOT TRACE: the launcher advances ready→entering ONLY here. If a boot hang shows `curtain-eval`
+    // never reaching `curtainLifted:true` and this never logs, the stall is inside ProjectionHost (a gate
+    // never flipped); if this DOES log but the bar stays at 05, the dissolve itself stalled. `AU_HOST_EVENTS=boot`.
+    if (on('boot')) event('boot', 'host-ready', {})
     void dissolve.enter().then(() => setEntered(true))
   }
 

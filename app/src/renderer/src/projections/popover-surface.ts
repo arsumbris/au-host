@@ -2,7 +2,10 @@
 // focus-holding sibling of the preview peek and the rows-only context menu.
 //
 // The host owns the CHROME: claiming the overlay layer, anchoring to the trigger rect with viewport
-// edge-flip, and dismissal (Escape / outside pointerdown / window blur / window resize / handle.close()).
+// edge-flip, and closing. A DISMISSAL (Escape / outside pointerdown / window blur / window resize / a
+// superseding open) is the surface closing the popover out from under its owner, so it notifies the
+// owner's `onDismiss`. The owner's own `handle.close()` does not: the owner already knows. Either way
+// the fill's teardown runs once the panel is removed.
 // The caller supplies the CONTENT via a `fill`, the same frame-vs-content seam as `preview.show` and the
 // confirm modal. Unlike the context menu it holds arbitrary interactive controls (an input, a select);
 // unlike the preview it does NOT dismiss on pointer-move, so you can move the mouse to a field and type.
@@ -12,6 +15,7 @@
 // the panel. A per-window singleton, like the other host surfaces.
 
 import type { FillFn, OverlaySite, PopoverHandle, PopoverSurface } from '@arsumbris/au-host-sdk'
+import { runFill, type FillLifetime } from './fill-lifetime'
 
 /** Viewport gap kept when the panel is flipped or clamped at an edge. */
 const MARGIN = 8
@@ -32,6 +36,7 @@ export function createPopoverSurface(site: OverlaySite): PopoverSurface {
   let panel: HTMLElement | null = null
   let anchor: DOMRect | null = null
   let onDismiss: (() => void) | null = null
+  let content: FillLifetime | null = null
   let ro: ResizeObserver | null = null
   /** Bumped on every open, so a superseded handle goes inert. */
   let generation = 0
@@ -55,7 +60,8 @@ export function createPopoverSurface(site: OverlaySite): PopoverSurface {
     panel.style.top = `${top}px`
   }
 
-  function close(): void {
+  /** Close the live panel. `dismissed` says the surface closed it (notify the owner), not the owner. */
+  function close(dismissed: boolean): void {
     if (!panel) return
     ro?.disconnect()
     ro = null
@@ -66,16 +72,19 @@ export function createPopoverSurface(site: OverlaySite): PopoverSurface {
     anchor = null
     document.removeEventListener('pointerdown', onOutside, true)
     document.removeEventListener('keydown', onKey, true)
-    window.removeEventListener('blur', close)
-    window.removeEventListener('resize', close)
-    // Fire ONCE, and null it BEFORE calling so a re-entrant close from the callback is a no-op.
-    const cb = onDismiss
+    window.removeEventListener('blur', dismiss)
+    window.removeEventListener('resize', dismiss)
+    // Taken BEFORE calling so a re-entrant close from the callback is a no-op; fires at most once.
+    const cb = dismissed ? onDismiss : null
     onDismiss = null
+    const lifetime = content
+    content = null
     let finished = false
     const finish = (): void => {
       if (finished) return
       finished = true
       closing.remove()
+      lifetime?.end()
       if (finishExit === finish) finishExit = null
       cb?.()
     }
@@ -96,18 +105,21 @@ export function createPopoverSurface(site: OverlaySite): PopoverSurface {
     // A pointerdown on the ANCHOR (the trigger) is not an outside click: let the trigger's own click
     // handler toggle the popover, rather than closing it here a frame before that click reopens it.
     if (anchor && e.clientX >= anchor.left && e.clientX <= anchor.right && e.clientY >= anchor.top && e.clientY <= anchor.bottom) return
-    close()
+    dismiss()
   }
   function onKey(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       e.preventDefault()
-      close()
+      dismiss()
     }
+  }
+  function dismiss(): void {
+    close(true)
   }
 
   return {
     open(triggerRect, fill: FillFn, dismissCb): PopoverHandle {
-      close() // supersede any live popover
+      dismiss() // a newer popover supersedes the live one, out from under its owner
       finishExit?.()
       const mine = ++generation
       anchor = triggerRect
@@ -124,22 +136,23 @@ export function createPopoverSurface(site: OverlaySite): PopoverSurface {
         if (isCurrent()) place()
       })
       ro.observe(el)
-      void Promise.resolve(fill(el, isCurrent)).then(() => {
+      content = runFill(fill, el, isCurrent)
+      void content.settled.then(() => {
         if (isCurrent()) place()
       })
       place()
       // Keyboard is live immediately; the outside-pointerdown listener is deferred one tick so the
       // opening click does not dismiss the popover it just summoned (the context menu's asymmetry).
       document.addEventListener('keydown', onKey, true)
-      window.addEventListener('blur', close)
-      window.addEventListener('resize', close)
+      window.addEventListener('blur', dismiss)
+      window.addEventListener('resize', dismiss)
       setTimeout(() => {
         if (isCurrent()) document.addEventListener('pointerdown', onOutside, true)
       })
       return {
         close(): void {
           // INERT once superseded: a stale handle must not close the popover that replaced it.
-          if (generation === mine) close()
+          if (generation === mine) close(false)
         },
       }
     },

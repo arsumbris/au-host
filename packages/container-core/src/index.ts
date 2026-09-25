@@ -18,6 +18,7 @@ export * from './types.ts';
 export { computeRectZone, edgeBandPx, bandFracFor, CENTER_BAND, computeHorizontalInsertIndex, visualToLogicalIndex } from './zones.ts';
 // resolveTargetsAll collects and orders targets emitted by container dialects.
 export { resolveTargetsAll } from './hit-test.ts';
+export { setContentHostable, isContentHostable, type ContentHostable } from './content-hostable.ts';
 
 // The shared drag store (the vanilla instance) + its shape.
 export { dragStore } from './singletons.ts';
@@ -78,6 +79,7 @@ export {
   // The pane-header "wrap in a container" affordance: wrap a bare pane into a NEW SINGLE-CHILD group,
   // and its interactive picker wrapper (kind via `group-into` / sole target, else the chooser). See ./registry.ts.
   wrapPaneSolo,
+  wrapOutcomeReason,
   wrapPaneInteractive,
   // The inverse: UNWRAP the container enclosing a pane when it holds only that one child (the lone child
   // lifts into the grandparent slot, id preserved). Address-based sibling of `dissolveIfCollapsed`. See ./registry.ts.
@@ -107,16 +109,20 @@ export type { StructuralEdit, ReparentArgs, ReparentSource, ReparentOutcome, Rep
 // The substrate does not name containers or encode their configs. See grouping.ts.
 export { setGroupingProvider, groupingForKind, groupingForNewGroup, isGroupingKind, chooseGrouping, setGroupingChooser, groupingChooser, groupingOutcomeForNewGroup, groupNewPanesEnabled } from './grouping.ts';
 export type { GroupingCapability, GroupingProvider, GroupingChoiceOutcome, GroupingChoiceReason, GroupingChooser } from './grouping.ts';
-// The DECOUPLED wrap-target registry (grouping ∪ spatial), read by the WRAP action, never the drop path.
-export { setWrapTargets, wrapTargets, wrapTargetForKind, wrapTargetOutcome } from './grouping.ts';
-export type { WrapTarget } from './grouping.ts';
+// The DECOUPLED wrap-target registry (grouping ∪ spatial ∪ frame), read by every WRAP flow through the one
+// arity-aware `wrapChoice`, never by the drop path.
+export { setWrapTargets, wrapTargets, wrapTargetsFor, wrapTargetForKind, wrapBuildFor, wrapChoice, admitsChildren, WRAP_SECTIONS } from './grouping.ts';
+export type { WrapTarget, WrapOption, WrapBuild } from './grouping.ts';
 
 // SLOT-RULE ENFORCEMENT, once, for every container. A container answers `slotFor(id)`; the
 // substrate decides what `fixed` and `admits` MEAN and checks at five seams — never destroying
 // state it may not be allowed to write. The host installs the type-closure predicate `admits` is
-// checked with, the same producer/consumer split as the grouping lookup. See ./slots.ts.
+// checked with, and the derived container schemas a slot codec reads its field's slot type from.
+// See ./slots.ts.
 export {
   setSlotTypeProvider,
+  setContainerSchemas,
+  slotFieldOf,
   slotFor,
   slotAdmits,
   displacementRefused,
@@ -166,6 +172,8 @@ export type { LabelledSlot } from './projection-label.ts';
 // tick, so a mutation built on a captured model resurrects what an earlier commit removed. The
 // React binding is container-kit's `useContainerModel`. See ./model-cell.ts.
 export { createModelCell, assertDeterministicRead } from './model-cell.ts';
+export { watchOwnRecord, sameModel } from './record-resync.ts';
+export type { RecordResync } from './record-resync.ts';
 export type { ModelCell } from './model-cell.ts';
 
 // The FRAMEWORK-FREE container declaration. One registration path for React and vanilla alike, so

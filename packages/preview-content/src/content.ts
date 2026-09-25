@@ -3,7 +3,6 @@
 // editor + the type-list + future consumers (backlinks rows, an inline references preview, a canvas).
 // - previewLink / previewType: the rich PREVIEW (a file's frontmatter + context + body), engine-
 //   syntax-highlighted (`highlight.ts`) with line numbers on the context.
-// - compact: the lightweight token info (type / field / wikilink), the cross-member type read.
 // Engine-driven, but DOM-only output — the surface stays pure chrome.
 
 
@@ -22,7 +21,9 @@ import {
 import { sameType } from '@arsumbris/type-query'
 
 import { renderHighlighted, semanticRanges, syntaxRanges } from './highlight'
-import { makeByteToChar, shapeLabel } from './semantic'
+import { makeByteToChar } from './semantic'
+// The `WireShape` prose gloss is SDK-owned.
+import { describeShape } from '@arsumbris/au-engine-sdk/reads'
 
 /** A caller-supplied content builder for the host preview surface: populate `card`; `isCurrent`
  *  goes false once the show is superseded/hidden (so an async fill can bail). */
@@ -122,7 +123,6 @@ export interface HoverContent {
    *  `basename · claim`. A row click calls `onOpen`; a row carries `data-preview-path` so cmd+hover
    *  nests a preview of the instance file. */
   previewInstances(type: string, opts?: { onOpen?: (path: string) => void }): FillFn
-  compact(token: WireSemanticToken): FillFn
 }
 
 export function makeHoverContent(engine: WireReader): HoverContent {
@@ -334,6 +334,7 @@ export function makeHoverContent(engine: WireReader): HoverContent {
             d.textContent = text
             body.appendChild(d)
           }
+          if (f.shape_ast) sub(describeShape(f.shape_ast)) // plain-English gloss of the shape (e.g. `assumption*` → a reference to a file whose type is assumption)
           if (f.doc) sub(f.doc, 'au-pcard-doc')
           sub(`declared on ${f.origin.name}${f.required ? ' · required' : ' · optional'}`)
           card.appendChild(body)
@@ -341,81 +342,6 @@ export function makeHoverContent(engine: WireReader): HoverContent {
         }
         card.replaceChildren()
         muted(card, `no declaration for field '${field}'`, 'au-pcard-error')
-      }
-    },
-
-    compact(token) {
-      return (card, isCurrent) => {
-        const h = el('au-pcard-header')
-        card.appendChild(h)
-        const body = el('au-pcard-section')
-        const addSub = (text: string, cls = 'au-pcard-sub'): void => {
-          const d = el(cls)
-          d.textContent = text
-          body.appendChild(d)
-        }
-        switch (token.kind) {
-          // a type-CLAIM (instance / parent claim) and a type-REF (a type name in a type-def's
-          // shape / sealed branch) both name a type-def — same enriched hover.
-          case 'type-claim':
-          case 'type-ref': {
-            const kw = document.createTextNode('type ')
-            const nm = el('au-pcard-name')
-            nm.textContent = token.name
-            h.append(kw, nm)
-            card.appendChild(body)
-            // The token name may be `name::repo`; the `type` read takes the authored form verbatim.
-            void readType(engine, token.name).then((o) => {
-              if (!isCurrent()) return
-              // The engine emits a `type-claim` token even for a name that does NOT resolve, so this branch is reachable and must SAY something. Bailing
-              // silently left a bare `type <name>` header — indistinguishable from a resolved type
-              // with no parents, docs, or fields, which is the worst possible reading.
-              if (!('ready' in o) || !o.ready) return // daemon not ready: absence of an answer, not an answer
-              if (!o.result) {
-                addSub('does not resolve to a type-def', 'au-pcard-sub au-pcard-error-text')
-                // The overwhelmingly common cause: a PEER's type named bare. Crossing into another
-                // repo's types needs the `::repo` qualifier AND that repo declared as a dep.
-                if (!token.name.includes('::')) {
-                  addSub("if it belongs to another repo, qualify it as 'name::repo' and declare that repo as a dep")
-                }
-                return
-              }
-              const t = o.result
-              if (t.parents.length) nm.textContent = `${t.name} : ${t.parents.join(', ')}`
-              if (t.doc) addSub(t.doc, 'au-pcard-doc')
-              if (t.fields.length) addSub(`fields: ${t.fields.map((f) => f.name).join(', ')}`)
-            })
-            break
-          }
-          case 'field-value':
-            h.textContent = `${token.field}: ${shapeLabel(token.value_type)}`
-            break
-          case 'wikilink-resolved':
-            h.textContent = `→ ${token.resolved}`
-            break
-          case 'wikilink-broken':
-            h.textContent = `broken link: ${token.target}`
-            break
-          case 'typed-block':
-            h.textContent = `typed block (${token.field})`
-            break
-          case 'block-id':
-            h.textContent = `block id ^${token.id}`
-            break
-          case 'anchor':
-            h.textContent = `heading: ${token.text}`
-            break
-          // type-def-file kinds.
-          case 'field-shape':
-            h.textContent = `${token.field}: ${token.value_type ? shapeLabel(token.value_type) : '?'}`
-            break
-          case 'shape-builtin':
-            h.textContent = `builtin ${token.name}`
-            break
-          case 'enum-member':
-            h.textContent = `enum value: ${token.value}`
-            break
-        }
       }
     },
   }

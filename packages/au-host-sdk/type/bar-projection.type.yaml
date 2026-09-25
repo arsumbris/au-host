@@ -1,15 +1,9 @@
-# Owned by au-host-sdk. A compact item that sits in a linear bar. Carries the
-# placement HINTS a bar reads when arranging + overflowing its items (instance-level,
-# so a placed item carries them; per-placement overrides are free). Its own subtypes
-# are ROLES (status-projection, …) a bar aggregates via `readSubtypes`. A `projection` subtype.
+# Owned by au-host-sdk. The BAR kind: a strip on a frame edge (a dock edge) that lays out bar items
+# along its main axis. `bar` (the bar package) is the first-party concrete subtype; a third-party bar
+# fits a dock edge by extending this kind. A bar is NOT a container-projection: it holds its items as
+# its own config and mounts them itself. Its orientation is a consequence of the edge it sits on.
 
 # Abstract: a projection kind. Only concrete bar subtypes are instantiated.
 abstract: true
 extends: projection
-fields:
-  # default ordering hint among items (first-come-first-served when unset).
-  order?: Number
-  # min size hint along the bar's main axis; a bar may clamp to it.
-  minSize?: Number
-  # whether the bar may bunch this item into its "+N more" overflow (default: eligible).
-  overflowEligible?: Boolean
+fields: {}

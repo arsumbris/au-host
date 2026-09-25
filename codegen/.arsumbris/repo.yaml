@@ -1,0 +1,18 @@
+# The codegen workspace repo (au.engine.repo) — a THIN, committed resolution context for `gen:types`.
+#
+# Its only job: be a daemon entry whose graph mounts the full first-party + agent TYPE VOCABULARY, so
+# every package's `gen:types` can resolve its type-defs' references (extends / cross-repo / def-refs)
+# against one complete graph. It holds NO content and authors NO instances.
+#
+# WHY a dedicated repo: codegen is a shipped build step, so its resolution context ships with it
+# instead of depending on a developer's local workspace.
+#
+# `deps` is EMPTY on purpose: this repo claims no peer vocabulary of its own (no compositions, no
+# agent-profiles), so nothing folds into its closure-hash. The vocabulary is MOUNTED via
+# `workspace.yaml discover:`, not depended on — codegen only READS the graph.
+#
+# Point the daemon at THIS DIRECTORY.
+type: au.engine.repo::au-engine
+name: codegen
+description: a thin, shipped resolution workspace for `gen:types` — mounts the full
+  first-party and agent type vocabulary so every package can generate against one graph

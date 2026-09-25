@@ -428,25 +428,26 @@ function FocalTreeView({ host }: { host: MountHost }): ReactElement {
     [host],
   )
 
-  // Announce a re-root to peers, SYNCHRONOUSLY at the decision (not on animation arrival): publish the
-  // focal selection + fire an open-intent. Synchronous is load-bearing — it keeps the fire INSIDE the
-  // causal pass when this re-root is itself a FOLLOW (handling a peer's open), so the dispatch cycle
-  // guard skips the delivery back to the origin while still propagating the chain onward. It also lets
-  // peers sync instantly instead of after the 450ms animation. No follow/drive gate: the switchboard
-  // (wires) is the control surface now.
+  // Announce a re-root to peers, SYNCHRONOUSLY at the decision (not on animation arrival). ALWAYS publish
+  // the focal selection — peers follow it to sync, so the selection broadcast IS the propagation, instantly
+  // instead of after the 450ms animation. Fire the ambient open-intent ONLY for a USER-initiated re-root: a
+  // FOLLOW targets a file already shown (that is WHY its selection was published), so re-firing open is a
+  // redundant echo — and an ambient open now surfaces the CHOOSE picker, so a passive follow (the active
+  // pane shifting on a tab close, a peer's selection) must never fire one. The synchronous user fire keeps
+  // the open inside the causal pass so the dispatch cycle guard skips delivery back to us.
   const announceReRoot = useCallback(
-    (targetId: string): void => {
+    (targetId: string, fromFollow = false): void => {
       host.selection.publish(fileSelection(targetId))
-      host.intent.fire(openIntent(fileSelection(targetId)))
+      if (!fromFollow) host.intent.fire(openIntent(fileSelection(targetId)))
     },
     [host],
   )
 
   // Re-seed to a new root file (a genuine jump OUTSIDE the loaded neighborhood): re-fetch.
   const reseed = useCallback(
-    (seed: string): void => {
+    (seed: string, fromFollow = false): void => {
       if (seed === rootRef.current) return
-      announceReRoot(seed) // a re-seed is a re-root too — notify peers synchronously (see animateTo).
+      announceReRoot(seed, fromFollow) // a re-seed is a re-root too — notify peers synchronously (see animateTo).
       rootRef.current = seed
       setRoot(seed)
       host.viewStore.set(seed, 'root')
@@ -457,13 +458,13 @@ function FocalTreeView({ host }: { host: MountHost }): ReactElement {
   // Animate the focus to `targetId` along the tree path (the continuous re-root). The peer notification
   // fires at the DECISION (here), not on arrival — see `announceReRoot`.
   const animateTo = useCallback(
-    (targetId: string): void => {
+    (targetId: string, fromFollow = false): void => {
       const t = treeRef.current
       const f = focusRef.current
       if (!t || !f) return
       const path = pathBetween(t, focusNodeId(f), targetId)
       if (path.length < 2) return
-      announceReRoot(targetId)
+      announceReRoot(targetId, fromFollow)
       logReRoot(t, focusNodeId(f), targetId, path)
       const token = ++animTokenRef.current
       const steps = path.length - 1
@@ -492,12 +493,12 @@ function FocalTreeView({ host }: { host: MountHost }): ReactElement {
   // A target file: NAVIGATE to it if it is in the loaded neighborhood (stable in-tree move, the
   // previous focus keeps its relative side), else RE-SEED (a genuine jump outside the neighborhood).
   const navigateOrReseed = useCallback(
-    (path: string): void => {
+    (path: string, fromFollow = false): void => {
       const t = treeRef.current
       const f = focusRef.current
       if (t && f && focusNodeId(f) === path) return // already focused here
-      if (t && findPath(t, path)) animateTo(path)
-      else reseed(path)
+      if (t && findPath(t, path)) animateTo(path, fromFollow)
+      else reseed(path, fromFollow)
     },
     [animateTo, reseed],
   )
@@ -529,7 +530,7 @@ function FocalTreeView({ host }: { host: MountHost }): ReactElement {
     return host.selection.follow((value) => {
       if (!value || typeof value !== 'object') return
       const sel = value as Selection
-      if (isFileSelection(sel)) navigateRef.current(sel.path)
+      if (isFileSelection(sel)) navigateRef.current(sel.path, true) // a FOLLOW: sync our view, never fire a placement open
     })
   }, [host])
   useEffect(() => {
@@ -548,7 +549,7 @@ function FocalTreeView({ host }: { host: MountHost }): ReactElement {
         if (!isOpenIntent(intent)) return
         const target = intent.target
         if (!(target && typeof target === 'object' && isFileSelection(target as Selection))) return
-        navigateOrReseed((target as Selection & { path: string }).path)
+        navigateOrReseed((target as Selection & { path: string }).path, true) // handling a peer's open: sync, never re-fire
       },
     })
   }, [host, navigateOrReseed])
@@ -897,7 +898,8 @@ function Scene({
       setPanelLayer(null)
       restoreFocus()
     })
-    return () => { mounted = false; handle.close() }
+    // An owner close (the trigger toggled `panel` off, or unmount) fires no dismiss, so the layer resets here.
+    return () => { mounted = false; handle.close(); setPanelLayer(null) }
   }, [panel, host])
 
   useEffect(() => {

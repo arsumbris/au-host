@@ -17,15 +17,15 @@
 
 import { readSubtypes } from '@arsumbris/au-engine-sdk/reads'
 import type { WireMetaBlock, WireReader, WireSubtype } from '@arsumbris/au-engine-sdk/reads'
-import { refName } from '@arsumbris/type-query'
+import { codeMetaBlock, keyOf, metaBlock } from '@arsumbris/au-host-sdk'
 
 import { packageRootOf } from '../shared/package-root'
 import type { DiscoveredAdapter } from '../shared/daemon-api'
 
 /** The abstract base every adapter subtype extends (au-mcp-sdk). */
 const BASE_TYPE = 'mcp.adapter'
-const RUNTIME_META = 'adapter-runtime-meta'
-const PRESENTATION_META = 'adapter-presentation-meta'
+const RUNTIME_META = keyOf({ name: 'adapter-runtime-meta', repo: 'au-mcp-sdk' })
+const PRESENTATION_META = keyOf({ name: 'adapter-presentation-meta', repo: 'au-mcp-sdk' })
 
 function fieldValue(block: WireMetaBlock, name: string): unknown {
   return block.body.find((f) => f.name === name)?.value
@@ -33,10 +33,16 @@ function fieldValue(block: WireMetaBlock, name: string): unknown {
 
 /** Parse one gated subtype into a `DiscoveredAdapter`, or null if a required meta value is malformed. */
 function toAdapter(def: WireSubtype): DiscoveredAdapter | null {
-  // Match by BARE name — the served `type_name` is qualified.
-  const runtime = def.meta_blocks?.find((b) => refName(b.type_name) === RUNTIME_META)
-  const presentation = def.meta_blocks?.find((b) => refName(b.type_name) === PRESENTATION_META)
-  if (!runtime || !presentation) return null // the unmet-meta gate should have excluded these already
+  // The runtime meta points at code, so it is the adapter's OWN block, resolved against its own package.
+  // The presentation is descriptive, so it may be looked up from an ancestor.
+  const code = codeMetaBlock(def, RUNTIME_META)
+  const presentation = metaBlock(def, PRESENTATION_META)
+  if (code.kind !== 'own') {
+    if (code.kind === 'not-own') console.warn(`[adapters] ${def.name} is not launchable: ${code.reason}`)
+    return null
+  }
+  if (!presentation) return null // the unmet-meta gate should have excluded this already
+  const runtime = code.block
 
   const launchEntry = fieldValue(runtime, 'launchEntry')
   const skillsEntry = fieldValue(runtime, 'skillsEntry')
@@ -78,6 +84,7 @@ export async function listAdapters(reader: WireReader): Promise<DiscoveredAdapte
   if (!('ready' in result) || !result.ready || !result.result) return []
   const out: DiscoveredAdapter[] = []
   for (const def of result.result.subtypes as WireSubtype[]) {
+    if (def.abstract) continue // an abstract adapter is never launched
     if (def.unmet_required_meta.length > 0) continue // unlaunchable/unpresentable — never a broken choice
     const adapter = toAdapter(def)
     if (adapter) out.push(adapter)

@@ -1,7 +1,7 @@
 // The composition pool — normalize, resolve, validate. Pure data → data.
 //
 // The type corpus mirrors the shapes the daemon reports (the same forms slot-schema.test.ts dumped
-// from a live dogfood daemon), so the walk is driven by the REAL derivation, not a hand-tuned one.
+// from a live daemon), so the walk is driven by the REAL derivation, not a hand-tuned one.
 // Two containers exercise both position shapes: bento (a single `root` that admits a structural
 // `bento-node.branch`, whose `children` list holds the projections) and tabs (a direct list of
 // child positions). file-tree / editor-pane are leaf projections — not containers — so they hold no
@@ -28,6 +28,8 @@ import {
   resolvePoolToTree,
   serializePoolToComposition,
   validatePool,
+  readSlotRules,
+  setSlotRules,
   type CompositionPool,
   type LogicalParentInput,
   type PoolRecord,
@@ -35,7 +37,7 @@ import {
 
 // --------------------------------------------------------------- the corpus
 
-const union = (slot: string, ...nodes: string[]): SlotTypeView['fields'][number]['shape_ast'] => ({
+const union = (slot: string, ...nodes: string[]): SlotTypeView['effective_fields'][number]['shape_ast'] => ({
   kind: 'union',
   branches: [
     { kind: 'inline-or-reference', name: 'projection::au-host-sdk' },
@@ -43,31 +45,31 @@ const union = (slot: string, ...nodes: string[]): SlotTypeView['fields'][number]
     ...nodes.map((n) => ({ kind: 'inline-or-reference' as const, name: n })),
   ],
 })
-const list = (inner: SlotTypeView['fields'][number]['shape_ast']): SlotTypeView['fields'][number]['shape_ast'] => ({
+const list = (inner: SlotTypeView['effective_fields'][number]['shape_ast']): SlotTypeView['effective_fields'][number]['shape_ast'] => ({
   kind: 'list',
   min: 0,
   inner: inner!,
 })
 
 const NODES: SlotTypeView[] = [
-  { name: 'container-slot::au-host-sdk', parents: ['container-node'], fields: [
+  { name: 'container-slot::au-host-sdk', parents: ['container-node'], effective_fields: [
     { name: 'child', shape_ast: { kind: 'inline-or-reference', name: 'projection' } },
     { name: 'fixed', shape_ast: { kind: 'primitive', name: 'Boolean' } },
   ] },
-  { name: 'bento-slot::bento', parents: ['container-slot::au-host-sdk'], fields: [] },
-  { name: 'bento-node::bento', parents: ['container-node::au-host-sdk'], fields: [] },
-  { name: 'bento-node.branch::bento', parents: ['bento-node'], fields: [
+  { name: 'bento-slot::bento', parents: ['container-slot::au-host-sdk'], effective_fields: [] },
+  { name: 'bento-node::bento', parents: ['container-node::au-host-sdk'], effective_fields: [] },
+  { name: 'bento-node.branch::bento', parents: ['bento-node'], effective_fields: [
     { name: 'direction', shape_ast: { kind: 'enum', members: ['row', 'column'] } },
     { name: 'ratio', shape_ast: { kind: 'primitive', name: 'Number' } },
     { name: 'children', shape_ast: list(union('bento-slot', 'bento-node.branch')) },
   ] },
 ]
 const CONTAINERS: SlotTypeView[] = [
-  { name: 'bento::bento', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'bento::bento', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'root', shape_ast: union('bento-slot', 'bento-node.branch') },
     { name: 'detached', shape_ast: list({ kind: 'inline-or-reference', name: 'projection::au-host-sdk' }) },
   ] },
-  { name: 'tabs::tabs', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'tabs::tabs', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'tabs', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'activeTabIndex', shape_ast: { kind: 'primitive', name: 'Number' } },
   ] },
@@ -75,7 +77,7 @@ const CONTAINERS: SlotTypeView[] = [
 // `window` is a sealed `mountable` branch holding one `content` child — enumerated so a window's content
 // is walked (reachability, resolve). A window is NOT a container-projection; it is passed as `windowDefs`.
 const WINDOWS: SlotTypeView[] = [
-  { name: 'window::au-host-sdk', parents: ['mountable'], fields: [
+  { name: 'window::au-host-sdk', parents: ['mountable'], effective_fields: [
     { name: 'content', shape_ast: { kind: 'inline-or-reference', name: 'mountable' } },
     { name: 'primary', shape_ast: { kind: 'primitive', name: 'Boolean' } },
   ] },
@@ -215,6 +217,26 @@ describe('normalizeToPool — flatten an inline composition', () => {
 // --------------------------------------------------------------- 1.2 resolution walk
 
 describe('resolvePoolToTree — re-inline the pool for mount', () => {
+  it('reads a slot SUBTYPE at a field declaring its base as a wrapper, and resolves its child', () => {
+    // `tabs` declares `container-slot`; `bento-slot` is-a `container-slot`, so the engine validates it
+    // there. Matching only the declared name misread it as a projection and left `child` unresolved.
+    const poolForm: Record<string, unknown> = {
+      type: 'composition',
+      windows: ['[[^^win]]'],
+      projections: [
+        { '^': 'win', type: 'window', primary: true, content: '[[^^grp]]' },
+        { '^': 'grp', type: 'tabs', tabs: [{ type: 'bento-slot::bento', fixed: true, child: '[[^^ed]]' }] },
+        { '^': 'ed', type: 'editor-pane', file: 'notes/x.md' },
+      ],
+    }
+    expect(schemas.containers.get('tabs')!.fields[0]!.admittedSlotTypes).toContain('bento-slot')
+    const pool = normalizeToPool(poolForm, schemas, minter())
+    expect(reachableRecordIds(pool, schemas).has('ed')).toBe(true)
+    const tree = resolvePoolToTree(pool, schemas) as any
+    expect(tree.tabs[0].type).toBe('bento-slot::bento')
+    expect(tree.tabs[0].child).toEqual({ '^': 'ed', type: 'editor-pane', file: 'notes/x.md' })
+  })
+
   it('resolves references back into the nested inline tree', () => {
     const pool = normalizeToPool(inlineComposition(), schemas, minter())
     const tree = resolvePoolToTree(pool, schemas) as any
@@ -767,5 +789,88 @@ describe('serializePoolToComposition drops transient records and their inbound r
     expect(projections.map((r) => r['^'])).toEqual(['root', 'keep', 'prev'])
     // ...and the ref stays intact — so there is never a dropped record with a dangling `[[^^prev]]`.
     expect(projections.find((r) => r['^'] === 'root')!.tabs).toEqual(['[[^^keep]]', '[[^^prev]]'])
+  })
+})
+
+// ------------------------------------------------- readSlotRules / setSlotRules (the config-overlay seam)
+
+describe('setSlotRules — materialize / collapse a position rule on a RAW record', () => {
+  it('materializes a bare tabs child into an inline slot wrapper, leaving siblings untouched', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: ['[[^^a]]', '[[^^b]]'] }
+    const next = setSlotRules(rec, 'a', { fixed: true }, schemas) as Record<string, unknown>
+    expect(next).not.toBe(rec) // a new object
+    expect((next['tabs'] as unknown[])[0]).toEqual({ type: 'container-slot', fixed: true, child: '[[^^a]]' })
+    expect((next['tabs'] as unknown[])[1]).toBe('[[^^b]]') // sibling untouched, same ref
+    expect(rec.tabs).toEqual(['[[^^a]]', '[[^^b]]']) // input not mutated
+  })
+
+  it('collapses a wrapper back to a bare ref when its last rule clears', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: [{ type: 'container-slot', fixed: true, child: '[[^^a]]' }, '[[^^b]]'] }
+    const next = setSlotRules(rec, 'a', {}, schemas) as Record<string, unknown>
+    expect((next['tabs'] as unknown[])[0]).toBe('[[^^a]]') // back to bare
+  })
+
+  it('preserves the position id and an unknown (carried) extra, and re-stamps nothing on update', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: [{ type: 'container-slot::au-host-sdk', '^': 'pos1', fixed: true, size: 200, child: '[[^^a]]' }] }
+    // The caller merges the form's edit onto the current rules; `size` (a carried extra) rides along.
+    const next = setSlotRules(rec, 'a', { fixed: false, admits: ['editor-pane'], size: 200 }, schemas) as Record<string, unknown>
+    const slot = (next['tabs'] as Record<string, unknown>[])[0]
+    expect(slot['type']).toBe('container-slot::au-host-sdk') // existing type preserved verbatim
+    expect(slot['^']).toBe('pos1') // position id preserved
+    expect(slot['admits']).toEqual(['editor-pane'])
+    expect(slot['size']).toBe(200) // carried extra survives
+    expect('fixed' in slot).toBe(false) // fixed: false is not meaningful → dropped
+    expect(slot['child']).toBe('[[^^a]]')
+  })
+
+  it('descends a structural node to reach a bento leaf position', () => {
+    const rec = { '^': 'grid', type: 'bento', root: { type: 'bento-node.branch', direction: 'row', ratio: 0.3, children: ['[[^^tree]]', '[[^^ed]]'] } }
+    const next = setSlotRules(rec, 'ed', { fixed: true }, schemas) as Record<string, unknown>
+    const branch = next['root'] as Record<string, unknown>
+    expect((branch['children'] as unknown[])[0]).toBe('[[^^tree]]') // sibling untouched
+    expect((branch['children'] as unknown[])[1]).toEqual({ type: 'bento-slot', fixed: true, child: '[[^^ed]]' })
+    expect(branch['direction']).toBe('row') // branch structure intact
+  })
+
+  it('returns the same object when the child is not a child of the record', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: ['[[^^a]]'] }
+    expect(setSlotRules(rec, 'nope', { fixed: true }, schemas)).toBe(rec)
+  })
+
+  it('stamps the QUALIFIED slot type on a fresh wrapper when the slot subtype names its owner', () => {
+    // A `repo`-bearing SlotTypeView → the field's slotTypesQualified is `sofa-slot::sofa`, the `type:` a
+    // composition that does not own the slot type must claim. The bases are present so closures reach the
+    // roots (isSlot / isNode / isMountable), as they always are in a real workspace.
+    const nodes: SlotTypeView[] = [
+      { name: 'container-node', parents: [], effective_fields: [] },
+      { name: 'container-slot::au-host-sdk', parents: ['container-node'], effective_fields: [{ name: 'child', shape_ast: { kind: 'inline-or-reference', name: 'mountable' } }, { name: 'fixed', shape_ast: { kind: 'primitive', name: 'Boolean' } }] },
+      { name: 'sofa-slot', repo: 'sofa', parents: ['container-slot::au-host-sdk'], effective_fields: [] },
+    ]
+    const mountables: SlotTypeView[] = [
+      { name: 'mountable', parents: [], effective_fields: [] },
+      { name: 'projection', parents: ['mountable'], effective_fields: [] },
+    ]
+    const containers: SlotTypeView[] = [{ name: 'sofa', repo: 'sofa', parents: ['container-projection::au-host-sdk'], effective_fields: [{ name: 'seats', shape_ast: list(union('sofa-slot')) }] }]
+    const s = deriveContainerSchemas(containers, nodes, mountables, [])
+    const rec = { '^': 'c', type: 'sofa', seats: ['[[^^x]]'] }
+    const next = setSlotRules(rec, 'x', { fixed: true }, s) as Record<string, unknown>
+    expect((next['seats'] as unknown[])[0]).toEqual({ type: 'sofa-slot::sofa', fixed: true, child: '[[^^x]]' })
+  })
+})
+
+describe('readSlotRules — the form seed', () => {
+  it('reads the current rules off a wrapper, minus the structural keys', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: [{ type: 'container-slot', '^': 'pos1', fixed: true, size: 200, child: '[[^^a]]' }] }
+    expect(readSlotRules(rec, 'a', schemas)).toEqual({ found: true, rules: { fixed: true, size: 200 }, slotType: 'container-slot' })
+  })
+
+  it('reports a found-but-unruled bare child as empty rules', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: ['[[^^a]]'] }
+    expect(readSlotRules(rec, 'a', schemas)).toEqual({ found: true, rules: {}, slotType: 'container-slot' })
+  })
+
+  it('reports found: false for a child not in the record', () => {
+    const rec = { '^': 'grp', type: 'tabs', activeTabIndex: 0, tabs: ['[[^^a]]'] }
+    expect(readSlotRules(rec, 'nope', schemas)).toEqual({ found: false, rules: {} })
   })
 })

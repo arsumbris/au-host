@@ -1,0 +1,16 @@
+# Owned by au-host-sdk. The BAR ITEM kind: a compact widget a bar lays out (the engine status, the
+# editor's Ln/Col, the notification bell). A bar offers every discovered subtype of this kind as an
+# item to add, so a third-party widget joins every bar by extending it. Carries the placement HINTS a
+# bar reads when arranging and overflowing its items; they are instance fields, so a placed item
+# carries its own.
+
+# Abstract: a projection kind. Only concrete item subtypes are instantiated.
+abstract: true
+extends: projection
+fields:
+  #: Ordering hint within a bar region (first-come-first-served when unset).
+  order?: Number
+  #: Minimum size along the bar's main axis; a bar may clamp to it.
+  minSize?: Number
+  #: Whether the bar may bunch this item into its "+N more" overflow. Absent = eligible; `false` pins it visible.
+  overflowEligible?: Boolean

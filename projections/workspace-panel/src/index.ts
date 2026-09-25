@@ -5,7 +5,7 @@ import { parseRepoConfiguration } from './repository-config'
 // Plain DOM, no framework — matches the other list projections. the type-def IS
 // the projection; this view is configless (it reads the live workspace, nothing to persist).
 
-import { defineProjection, isAuthoringMember, type MountHost, type ProjectionModule } from '@arsumbris/au-host-sdk'
+import { defineProjection, isAuthoringMember, memberOfPath, type MountHost, type ProjectionModule } from '@arsumbris/au-host-sdk'
 import type { HostApp } from '@arsumbris/au-host-app'
 import { readDiagnostics, readInstancesOf, readMembers, type WireDiagnostic, type WireMember, subscribeDiagnostics, subscribeTypes } from '@arsumbris/au-host-sdk/engine-reads'
 
@@ -644,11 +644,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
 
   // The member a diagnostic belongs to: the member whose root is the longest matching prefix of its file.
   function memberOfFile(file: string): string | null {
-    let best: Member | null = null
-    for (const m of latestMembers) {
-      if ((file === m.root || file.startsWith(m.root + '/')) && (!best || m.root.length > best.root.length)) best = m
-    }
-    return best?.repo ?? null
+    return memberOfPath(latestMembers, file)?.repo ?? null
   }
 
   function renderDependencies(): void {
@@ -687,7 +683,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         const implicit = implicitMembers.has(m.repo)
         const configurationError = configurationErrors.get(m.repo)
         const needsAttention = Boolean(configurationError) || gaps.size > 0 || unmounted.size > 0 || otherHints.length > 0 || implicit
-        return { repo: m.repo, root: m.root, peers, gaps: [...gaps], unmounted, otherHints, implicit, needsAttention, configurationError }
+        return { repo: m.repo, root: m.root, editable: m.editable, peers, gaps: [...gaps], unmounted, otherHints, implicit, needsAttention, configurationError }
       })
       .filter((r) => r.peers.length > 0 || r.needsAttention)
       .sort((a, b) => (b.needsAttention ? 1 : 0) - (a.needsAttention ? 1 : 0) || a.repo.localeCompare(b.repo))
@@ -752,20 +748,21 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       }
       for (const g of r.gaps) {
         // A gap is an ACTION → declares the peer AND locates it (both, so a fix doesn't just trade
-        // undeclared-peer for peer-unmounted). Static (no wsEdit) → a danger chip.
-        if (wsEdit) {
+        // undeclared-peer for peer-unmounted). The engine authors editable members only, so a consumed
+        // member's gap (and a static panel's) is a danger chip naming where the fix belongs.
+        if (wsEdit && r.editable) {
           const chip = auBtn('Declare and locate ' + g, { variant: 'outline', size: 'sm' })
           chip.title = `declare + locate '${g}' as a peer of ${r.repo}`
           chip.addEventListener('au-activate', () => void fixPeer(r.root, r.repo, g, chip, { declare: true, locate: true }))
           peers.appendChild(chip)
         } else {
-          peers.appendChild(auChip('+ ' + g, 'danger', 'referenced but NOT declared as a peer (undeclared-peer)'))
+          peers.appendChild(auChip('+ ' + g, 'danger', r.editable ? 'referenced but NOT declared as a peer (undeclared-peer)' : `referenced but NOT declared as a peer (undeclared-peer). ${r.repo} is not editable in this workspace, so declare it in that repository itself`))
         }
       }
       if (peers.childElementCount > 0) block.appendChild(peers)
 
       // Bulk "fix all N" when a member has several gaps (declare + locate each).
-      if (wsEdit && r.gaps.length > 1) {
+      if (wsEdit && r.editable && r.gaps.length > 1) {
         const all = auBtn(`fix all ${r.gaps.length} peers`, { variant: 'outline', size: 'sm' })
         all.title = `declare + locate all ${r.gaps.length} undeclared peers of ${r.repo} at once`
         all.className = 'au-wsp-declareall'
@@ -810,7 +807,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   async function fixOne(root: string, repo: string, peer: string, opts: { declare: boolean; locate: boolean }): Promise<{ ok: boolean; error?: string }> {
     if (!wsEdit) return { ok: false, error: 'no write capability' }
     if (opts.declare) {
-      const res = await wsEdit.declarePeer(root, repo, peer)
+      const res = await wsEdit.declarePeer(root, peer)
       if (!res.ok) return res
     }
     if (opts.locate) {

@@ -1,20 +1,20 @@
-// Bar container: lays out child projections in start, centre, and end regions.
-// Discovers contribution candidates for its role and persists accepted choices.
-// Only the end region supports overflow: lower-priority eligible items move into
-// a shared preview popover. Pinning an item makes it first visible. Start and
-// centre regions do not provide an overflow popover.
+// Bar: a strip on a frame edge laying out bar items in start, centre, and end regions.
+// Each item is an INLINE `bar-item-projection` record (a concrete item type plus its fields); the bar
+// mounts it itself. The bar offers every discovered item subtype not yet placed as an item to add.
+// Only the end region supports overflow: lower-priority eligible items move into a shared preview
+// popover. Pinning an item makes it first visible. Start and centre regions do not provide an overflow
+// popover.
 
-import { defineProjection, type ProjectionModule, type ContextMenuItem, type MenuHandle, type MountHost, type ChildHandle, type OpaqueConfig } from '@arsumbris/au-host-sdk'
+import { defineProjection, descriptorTitle, type ProjectionModule, type ContextMenuItem, type MountHost, type ChildHandle, type OpaqueConfig } from '@arsumbris/au-host-sdk'
 import type { Bar } from './generated'
 
-type Instance = { type: string } & Record<string, unknown>
-/** One placed bar item: bar's OWN `bar-item` type. `view` is the widget (a projection instance the
- *  runtime treats opaquely); `overflowEligible: false` pins it visible. The widget lives in `view`, not
- *  at the top level, so the slot walker skips a bar by type — see `bar-item.type.yaml`. */
-type BarItem = { view: Instance; overflowEligible?: boolean }
-/** Scalars come from the generated `Bar` config. The three regions use `BarItem[]`
- * because the runtime treats widgets as opaque `{ type }` records. The owned field
- * set is checked against the generated shape so schema changes fail at compile time. */
+/** The item KIND the bar lays out; every discovered subtype of it is an item the bar can add. */
+const ITEM_KIND = 'bar-item-projection'
+
+/** One placed item: an inline record claiming a concrete `bar-item-projection` subtype. Its placement
+ *  hints are its own fields; everything else is the widget's config, opaque to the bar. */
+type BarItem = { type: string; order?: number; minSize?: number; overflowEligible?: boolean } & Record<string, unknown>
+/** The three regions hold `BarItem`s: the runtime treats a widget's config as opaque beyond its hints. */
 interface BarConfig extends Omit<Bar, 'type' | 'start' | 'center' | 'end'> {
   start?: BarItem[]
   center?: BarItem[]
@@ -22,36 +22,35 @@ interface BarConfig extends Omit<Bar, 'type' | 'start' | 'center' | 'end'> {
 }
 type Region = 'start' | 'center' | 'end'
 const REGIONS: Region[] = ['start', 'center', 'end']
-// The host derives config ownership from the type graph and preserves unowned fields
-// at saveConfig. This projection emits only the fields it understands.
-interface ChromeContribution {
-  /** The candidate projection's TYPE NAME — what the bar mounts on accept. It IS a subtype of
-   *  the bar's role KIND (the role is the kind; discovery returns kind members). */
-  projection: string
-  /** The role KIND this targets (matches the bar's resolved `role`). */
-  role: string
-  /** Default ordering hint within the role (first-come-first-served when unset). */
-  order?: number
+/** An item type the bar can add: its bare type name and its display label. */
+interface ItemCandidate {
+  type: string
+  label: string
 }
 interface PreviewSurfaceLike {
   show(key: string, rect: DOMRect, fill: (card: HTMLElement, isCurrent: () => boolean) => void): void
   hide(): void
   isShowing(key: string): boolean
 }
-// A `reposition` intent the bar FIRES (firer-relative) for its parent dock to handle — "move me to
-// edge X". The dock declares the capability; the host routes by ancestry. The capability is read through the local host shape.
-type Edge = 'top' | 'bottom' | 'left' | 'right'
-const EDGES: Edge[] = ['top', 'bottom', 'left', 'right']
-type HostX = MountHost & {
-  listContributions?: (role: string) => ChromeContribution[]
-  subscribeContributions?: (listener: () => void) => () => void
-  preview?: PreviewSurfaceLike
-  intent?: { fire(intent: { type: string; edge?: Edge }): void }
-}
+type HostX = MountHost & { preview?: PreviewSurfaceLike }
+
+const bareType = (type: string): string => type.split('::')[0]!
+
+/** Counts mounted bars, so each bar's overflow popover has its own key on the shared preview surface. */
+let mountedBars = 0
 
 const STYLE = `
-.au-bar-frame { display:flex; box-sizing:border-box; padding:var(--au-space-2); min-width:0; min-height:0; width:100%; height:100%; }
-.au-bar-frame > au-pane-frame { flex:1; min-width:0; min-height:0; }
+/* A bar is window CHROME, not a pane card: it sits flush with its frame edge, square, on the window's own
+   ground, with one hairline rule on the side facing the content. The docked <au-toolbar> look (transparent,
+   --au-line-2 rule, --au-status-h height), oriented by the edge the bar sits on. */
+.au-bar-frame { display:flex; box-sizing:border-box; min-width:0; min-height:0; width:100%; height:100%; min-block-size:var(--au-status-h); padding-inline:var(--au-space-2); }
+.au-bar-frame.vertical { min-block-size:0; min-inline-size:var(--au-status-h); padding-inline:0; padding-block:var(--au-space-2); }
+/* The rule faces the content. So does a small pad: bar items' glyphs render high in their line boxes, so
+   box-centred text reads shifted inward; the inward pad moves it back to the optical centre. */
+.au-bar-frame[data-edge='bottom'] { border-block-start:1px solid var(--au-line-2); padding-block-start:var(--au-space-0-5); }
+.au-bar-frame[data-edge='top'] { border-block-end:1px solid var(--au-line-2); padding-block-end:var(--au-space-0-5); }
+.au-bar-frame[data-edge='left'] { border-inline-end:1px solid var(--au-line-2); padding-inline-end:var(--au-space-0-5); }
+.au-bar-frame[data-edge='right'] { border-inline-start:1px solid var(--au-line-2); padding-inline-start:var(--au-space-0-5); }
 
 .au-bar { display: flex; align-items: center; gap: var(--au-space-1-5); height: 100%; width: 100%; box-sizing: border-box; overflow: hidden; background: transparent; }
 .au-bar.vertical { flex-direction: column; align-items: stretch; width: 100%; height: 100%; }
@@ -90,55 +89,43 @@ const STYLE = `
 `
 
 /**
- * The contributions targeting the bar's role whose projection is NOT already an accepted child
- * in any region — the AVAILABLE-TO-ADD set. Deduped by projection, ordered by `order` (then
- * first-come). Pure, so it is unit-testable without a DOM.
+ * The candidate item types NOT already placed in any region: the add-able set, deduped, in label
+ * order. Placed items and candidates both carry owner-qualified types
+ * (`engine-status-bar-item::engine-status`), and both sides compare on the bare name. Pure, so it is
+ * unit-testable without a DOM.
  */
-export function availableContributions(
-  config: Pick<BarConfig, 'start' | 'center' | 'end'>,
-  candidates: ChromeContribution[],
-): ChromeContribution[] {
-  const accepted = new Set<string>()
-  // Strip `::repo`: a placed member's `c.type` is a qualified config claim (`status-bar::au-host-sdk`),
-  // but `cand.projection` is the BARE discovered typeName — dedup on bare, else a placed contribution is
-  // wrongly re-offered as available-to-add.
-  for (const r of REGIONS) for (const c of config[r] ?? []) if (c?.view?.type) accepted.add(c.view.type.split('::')[0])
+export function availableItems(config: Pick<BarConfig, 'start' | 'center' | 'end'>, candidates: ItemCandidate[]): ItemCandidate[] {
+  const placed = new Set<string>()
+  for (const r of REGIONS) for (const item of config[r] ?? []) if (item?.type) placed.add(bareType(item.type))
   const seen = new Set<string>()
-  const out: ChromeContribution[] = []
-  for (const cand of candidates) {
-    if (accepted.has(cand.projection) || seen.has(cand.projection)) continue
-    seen.add(cand.projection)
-    out.push(cand)
+  const out: ItemCandidate[] = []
+  for (const c of candidates) {
+    const key = bareType(c.type)
+    if (placed.has(key) || seen.has(key)) continue
+    seen.add(key)
+    out.push(c)
   }
-  out.sort((a, b) => (a.order ?? Number.POSITIVE_INFINITY) - (b.order ?? Number.POSITIVE_INFINITY))
-  return out
+  return out.sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** Where a newly added item goes in a region: before the first item with a larger `order` hint, else
+ *  at the end. An item without a hint is placed last. */
+export function insertionIndex(items: readonly BarItem[], order: number | undefined): number {
+  if (order === undefined) return items.length
+  const at = items.findIndex((item) => item.order !== undefined && item.order > order)
+  return at === -1 ? items.length : at
 }
 
 /**
  * The `end`-region item indices eligible to overflow, in BUNCHING order (lowest priority first =
- * last in list order). Policy: bunch by DEFAULT; an item is pinned-visible (never bunches) ONLY if
- * its matching contribution declares `overflowEligible: false`. So a cramped bar collapses its
- * trailing items naturally, and a contribution opts a critical item OUT explicitly. Pure /
+ * last in list order). An item bunches by default; `overflowEligible: false` pins it visible. So a
+ * cramped bar collapses its trailing items naturally, and an item opts OUT explicitly. Pure /
  * unit-testable; the DOM measurement loop hides these in order until the bar fits.
  */
 export function overflowOrder(end: BarItem[]): number[] {
-  // `overflowEligible` is bar's own `bar-item` field (the item's placement policy, off the widget) —
-  // `overflowEligible: false` pins an item visible (never bunches).
   const order: number[] = []
-  for (let i = end.length - 1; i >= 0; i--) if (end[i]?.view?.type && end[i].overflowEligible !== false) order.push(i)
+  for (let i = end.length - 1; i >= 0; i--) if (end[i]?.type && end[i].overflowEligible !== false) order.push(i)
   return order
-}
-
-/** Resolve the bar's `role` def-ref (a wikilink `[[status-projection]]`) to the role KIND type name
- *  the contributions query keys on. Strips the wikilink brackets + any `|display` / `#anchor`.
- *  Undefined when no role is set (a pure explicit-config bar). */
-function roleName(ref: unknown): string | undefined {
-  if (typeof ref !== 'string') return undefined
-  // Strip the `[[ ]]`, any `|display` / `#anchor`, AND the `::repo` qualifier — a
-  // role def-ref can be qualified (`[[status-projection::au-host-sdk]]`), but the contributions query keys
-  // on the BARE kind name (`d.kinds` carry bare names). Without the `::repo` strip a bar aggregates nothing.
-  const name = ref.replace(/^\[\[|\]\]$/g, '').split(/[|#]/)[0].split('::')[0].trim()
-  return name || undefined
 }
 
 function mount(container: HTMLElement, host: MountHost): () => void {
@@ -146,35 +133,39 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // normalize the region arrays so we can mutate + round-trip them.
   for (const r of REGIONS) config[r] = [...(config[r] ?? [])]
 
-  const hostx = host as HostX
-  const listContributions = hostx.listContributions
-  const subscribeContributions = hostx.subscribeContributions
-  const preview = hostx.preview
-  // The role this bar aggregates: config.role is a def-ref wikilink; resolve to the role KIND name
-  // (e.g. `status-projection`) that `listContributions` keys on. Undefined = no aggregation.
-  const role = roleName(config.role)
+  const preview = (host as HostX).preview
+  // The candidate item types, read LIVE (an item type discovered after mount shows up), labelled by
+  // their presentation title. `type` is the owner-qualified `name::repo` an added item record claims, the
+  // same form dock writes for a bar, so the record validates from the composition's own repo.
+  const itemCandidates = (): ItemCandidate[] => {
+    const descriptors = host.describeProjections?.() ?? []
+    return host.listContributions(ITEM_KIND).map((c) => {
+      const d = descriptors.find((x) => bareType(x.type) === c.projection)
+      return { type: d ? `${c.projection}::${d.repo}` : c.projection, label: descriptorTitle(d) ?? c.projection }
+    })
+  }
+  const labelOf = (type: string): string => itemCandidates().find((c) => bareType(c.type) === bareType(type))?.label ?? bareType(type)
   // CONTAINER AXIS CONTEXT: the bar's OWN edge, if a dock mounted it on one (set on the bar's container
-  // slot, relayed onto the portal host by the coordinator). A DOCKED bar's orientation is a CONSEQUENCE
-  // of its edge, never its own config: left/right are vertical, top/bottom horizontal. Derived on READ
-  // from the edge — so the dock never writes `orientation` into this instance. Falls back to the
-  // AUTHORED `orientation` off a dock edge (the only case where the author's value is meaningful).
-
-
-  // REACTIVE: the edge can CHANGE while the bar is mounted — a reposition moves it to another edge, and
-  // the portal is never re-mounted, only re-anchored (the coordinator relays the new `data-au-edge` onto
-  // the container). So the bar OBSERVES its container's edge and re-derives, rather than reading it once
-  // at mount. `let`, not `const`, for exactly that.
+  // slot, relayed onto the portal host by the coordinator). Its orientation is a CONSEQUENCE of the
+  // edge: left/right are vertical, top/bottom horizontal; off an edge it is horizontal.
+  // REACTIVE: dock can move the bar to another edge, and the portal is never re-mounted, only
+  // re-anchored (the coordinator relays the new `data-au-edge` onto the container). So the bar OBSERVES
+  // its container's edge and re-derives, rather than reading it once at mount.
   let myEdge = container.dataset.auEdge
-  const deriveOrientation = (): 'horizontal' | 'vertical' | undefined =>
-    myEdge ? (myEdge === 'left' || myEdge === 'right' ? 'vertical' : 'horizontal') : config.orientation
+  const deriveOrientation = (): 'horizontal' | 'vertical' =>
+    myEdge === 'left' || myEdge === 'right' ? 'vertical' : 'horizontal'
   let orientation = deriveOrientation()
   let reverseMain = orientation === 'vertical' && myEdge === 'left'
 
   const root = document.createElement('div')
+  const strip = document.createElement('div')
   // On the LEFT edge the content reads bottom-to-top (flipped 180° so its bottom points inward), so the
   // main axis is REVERSED — start at the bottom, end at the top (the mirror of the right edge).
   const applyRootChrome = (): void => {
     root.className = 'au-bar' + (orientation === 'vertical' ? ' vertical' : '') + (reverseMain ? ' reverse-main' : '')
+    strip.className = 'au-bar-frame' + (orientation === 'vertical' ? ' vertical' : '')
+    if (myEdge) strip.dataset.edge = myEdge
+    else delete strip.dataset.edge
   }
   applyRootChrome()
 
@@ -192,15 +183,12 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // The overflow popover PORTALS to the host preview card (outside this subtree), so it copies the scope
   // marker onto its menu (see `openOverflowPopover`) — preserving scoped styles across the portal.
   const disposeStyles = host.styles?.inject(STYLE, container)
-  const frame = document.createElement('au-pane-frame')
-  frame.setAttribute('flush', '')
-  const inset = document.createElement('div')
-  inset.className = 'au-bar-frame'
-  frame.append(root)
-  inset.append(frame)
-  container.appendChild(inset)
+  strip.append(root)
+  container.appendChild(strip)
 
   let alive = true
+  // The shared preview surface is keyed; this bar's overflow popover gets its own key.
+  const overflowKey = `bar-overflow:${++mountedBars}`
   // A render generation: a re-render (accept/pin) increments it, so a child mount or a measure
   // callback that fires for a STALE generation no-ops instead of touching the live DOM.
   let gen = 0
@@ -216,23 +204,19 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // Persist the bar's complete instance up the tree; the host stamps `type: bar` centrally.
   function persist(): void {
     const next: BarConfig = {}
-    if (config.orientation) next.orientation = config.orientation
-    if (config.role) next.role = config.role
     // Always emit each owned region — `[]` when empty, never omitted. Removing the last item from a
     // region (via the context menu) empties it; omitting the key then drops an OWNED field and trips
     // `config-own-field-dropped`, recording the removal as ambiguous absence. (Same class as dock.)
     for (const r of REGIONS) next[r] = config[r] ?? []
-    // Re-emit the composition-authored locks verbatim. OWNED (base-declared, so in our effective
-    // shape), and `next` is rebuilt from five keys, so without this they are dropped.
-    // `next` is rebuilt from the bar's own keys, so anything else the instance carried
-    // (`intent-defaults` / `initial-focus` were this bar a root) would be destroyed by a member
-    // edit. Re-emit what the bar does not own.
+    // The bar emits only the regions it owns; the host derives ownership from the type graph and
+    // carries every field the bar does not own.
     host.saveConfig?.(next as OpaqueConfig)
   }
 
-  // Accept a candidate: append its instance to a region (default `end`), persist, re-render.
-  function accept(projection: string, region: Region = 'end'): void {
-    config[region]!.push({ view: { type: projection } })
+  // Add an item of a candidate type to a region (default `end`), placed by its order hint, persist, re-render.
+  function addItem(type: string, region: Region = 'end'): void {
+    const item: BarItem = { type }
+    config[region]!.splice(insertionIndex(config[region]!, item.order), 0, item)
     persist()
     render()
   }
@@ -265,12 +249,6 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // Build menu rows locally and map them to host.contextMenu items at one seam.
   // The host owns placement, dismissal, and menu chrome.
   type MenuRow = { label: string; onClick?: () => void; head?: boolean; disabled?: boolean; sep?: boolean; id?: string }
-  // Retain the handle so disposal closes only this projection's menu.
-  let menu: MenuHandle | null = null
-  function closeMenu(): void {
-    menu?.close()
-    menu = null
-  }
 
   /** One bar row as a contract item. `head` is a section, `sep` a separator, the rest an action. */
   function toItem(row: MenuRow, i: number): ContextMenuItem {
@@ -292,27 +270,19 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   function openMenu(x: number, y: number, rows: MenuRow[]): void {
     // Dismiss our OWN overflow popover only — the preview surface is a shared singleton, so an
     // unconditional hide() would tear down another consumer's card.
-    if (preview?.isShowing('bar-overflow:' + (role ?? ''))) preview.hide()
-    menu = host.contextMenu?.open({ x, y }, rows.map(toItem)) ?? null
+    if (preview?.isShowing(overflowKey)) preview.hide()
+    // The enclosing container's rows for this bar (a dock's move / remove / add), after the bar's own.
+    const containerRows = host.containerActions?.() ?? []
+    const items = [...rows.map(toItem), ...(containerRows.length ? [{ separator: true } as const, ...containerRows] : [])]
+    host.contextMenu?.open({ x, y }, items)
   }
 
-  // Candidate rows shared by both menus: the surfaced available-to-add contributions, each adding
-  // to the given region. Empty (disabled) row when none.
+  // Candidate rows shared by both menus: the add-able item types, each adding to the given region.
+  // A disabled row when none.
   function candidateRows(region: Region): MenuRow[] {
-    const available = role && listContributions ? availableContributions(config, listContributions(role)) : []
-    if (!available.length) return [{ label: 'No contributions to add', disabled: true }]
-    return available.map((c) => ({ label: `+ ${c.projection}`, onClick: () => accept(c.projection, region) }))
-  }
-
-  // "Move bar to edge" rows — fire a firer-relative `reposition` intent the parent dock handles.
-  // Present only when an intent channel exists (i.e. the bar is inside something that can route it).
-  function moveBarRows(): MenuRow[] {
-    if (!hostx.intent) return []
-    return [
-      { label: '', sep: true },
-      { label: 'Move bar to edge', head: true },
-      ...EDGES.map((edge) => ({ label: `▸ ${edge}`, onClick: () => hostx.intent!.fire({ type: 'reposition', edge }) })),
-    ]
+    const available = availableItems(config, itemCandidates())
+    if (!available.length) return [{ label: 'No items to add', disabled: true }]
+    return available.map((c) => ({ label: `+ ${c.label}`, onClick: () => addItem(c.type, region) }))
   }
 
   // Right-click ON a member: remove / move-region / reorder + add candidates (into this region).
@@ -320,7 +290,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     const list = config[region]!
     const item = list[index]
     if (!item) return openBarMenu(x, y)
-    const rows: MenuRow[] = [{ label: item.view.type, head: true }]
+    const rows: MenuRow[] = [{ label: labelOf(item.type), head: true }]
     rows.push({ label: 'Remove', onClick: () => removeMember(region, index) })
     for (const target of REGIONS) {
       if (target !== region) rows.push({ label: `Move to ${target}`, onClick: () => moveMemberToRegion(region, index, target) })
@@ -328,15 +298,12 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     rows.push({ label: '◂ Move earlier', onClick: () => reorderMember(region, index, -1), disabled: index === 0 })
     rows.push({ label: 'Move later ▸', onClick: () => reorderMember(region, index, 1), disabled: index === list.length - 1 })
     rows.push({ label: '', sep: true }, { label: 'Add', head: true }, ...candidateRows(region))
-    rows.push(...moveBarRows())
     openMenu(x, y, rows)
   }
 
-  // Right-click on the BAR background: add candidates (into end) + move the bar to a dock edge.
+  // Right-click on the BAR background: add items (into end).
   function openBarMenu(x: number, y: number): void {
-    const rows: MenuRow[] = [{ label: role ? `${role.split('.').pop()} bar` : 'bar', head: true }, ...candidateRows('end')]
-    rows.push(...moveBarRows())
-    openMenu(x, y, rows)
+    openMenu(x, y, [{ label: 'Bar', head: true }, { label: 'Add item', head: true }, ...candidateRows('end')])
   }
 
   // PIN an overflowed item: move it to the FRONT of `end` (highest priority = first-visible),
@@ -352,15 +319,17 @@ function mount(container: HTMLElement, host: MountHost): () => void {
 
   function mountChild(myGen: number, region: Region, index: number, slot: HTMLElement): Promise<void> {
     const child = config[region]![index]
-    if (!child?.view?.type) return Promise.resolve()
+    if (!child?.type) return Promise.resolve()
     // Which SURFACE the widget mounts is intrinsic to its TYPE (the locator's `export`), resolved by
-    // the host — the bar names the widget type off `bar-item.view` and mounts that.
+    // the host — the bar names the item's type and mounts that, with the item record as its config.
     return host.children
       .mount(slot, {
-        id: child.view.type,
-        config: child.view as OpaqueConfig,
+        id: child.type,
+        config: child as OpaqueConfig,
         onChildConfigChange: (next: OpaqueConfig) => {
-          config[region]![index] = { ...config[region]![index], view: next as Instance }
+          // The widget writes its own fields; the placement hints are the bar's to keep.
+          const { order, minSize, overflowEligible } = config[region]![index]!
+          config[region]![index] = { ...(next as BarItem), ...(order !== undefined && { order }), ...(minSize !== undefined && { minSize }), ...(overflowEligible !== undefined && { overflowEligible }) }
           persist()
         },
       })
@@ -407,7 +376,9 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         // CONTAINER AXIS CONTEXT: tell the mounted content which axis this bar lays out along, so
         // it can adapt (rotate-to-align in a vertical bar, or fit either way). The slot IS the
         // child's `container`, so content reads `container.dataset.auAxis`.
-        slot.dataset.auAxis = orientation === 'vertical' ? 'vertical' : 'horizontal'
+        slot.dataset.auAxis = orientation
+        // The item's `minSize` hint clamps it along the bar's main axis.
+        if (item.minSize !== undefined) slot.style[orientation === 'vertical' ? 'minHeight' : 'minWidth'] = `${item.minSize}px`
         // propagate the bar's own edge (if any) so content picks a rotation direction (bottom-inward).
         if (myEdge) slot.dataset.auEdge = myEdge
         // Right-click a member → its context menu (remove / move-region / reorder / add). Stop
@@ -430,7 +401,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     // right-click anywhere) opens the bar menu to populate it.
     const memberCount = REGIONS.reduce((n, r) => n + (config[r]?.length ?? 0), 0)
     if (memberCount === 0) {
-      const available = role && listContributions ? availableContributions(config, listContributions(role)) : []
+      const available = availableItems(config, itemCandidates())
       const hint = document.createElement('div')
       hint.className = 'au-bar-hint'
       hint.textContent = '⋯'
@@ -496,10 +467,9 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // not a bespoke widget) listing the overflowed items; clicking one PINS it (first-visible).
   function openOverflowPopover(btn: HTMLButtonElement): void {
     if (!preview) return
-    const key = `bar-overflow:${role ?? ''}`
-    if (preview.isShowing(key)) { preview.hide(); return } // toggle
+    if (preview.isShowing(overflowKey)) { preview.hide(); return } // toggle
     const snapshot = [...overflowed]
-    preview.show(key, btn.getBoundingClientRect(), (card) => {
+    preview.show(overflowKey, btn.getBoundingClientRect(), (card) => {
       const menu = document.createElement('div')
       menu.className = 'au-bar-ov-menu'
       // Scoped rules match the menu beneath a dedicated scope ancestor.
@@ -512,12 +482,12 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         row.type = 'button'
         row.className = 'au-bar-ov-item'
         const name = document.createElement('span')
-        name.textContent = ov.item.view.type
+        name.textContent = labelOf(ov.item.type)
         const pin = document.createElement('span')
         pin.className = 'au-bar-ov-pin'
         pin.textContent = 'pin'
         row.append(name, pin)
-        row.title = `Pin ${ov.item.view.type} to front (first-visible)`
+        row.title = `Pin ${labelOf(ov.item.type)} to front (first-visible)`
         row.addEventListener('click', () => { preview.hide(); pinToFront(ov.index) })
         menu.appendChild(row)
       }
@@ -552,17 +522,15 @@ function mount(container: HTMLElement, host: MountHost): () => void {
 
   render()
 
-  // React to the edge CHANGING under a mounted bar: a reposition re-anchors the portal host and the
-  // coordinator relays the new `data-au-edge` onto the container, but the bar is never re-mounted. So
-  // observe the attribute the portal writes and re-orient. `container` is the STABLE portal host, so
-  // this one observer survives every re-anchor.
+  // React to the edge CHANGING under a mounted bar: a move to another edge re-anchors the portal host,
+  // the coordinator relays the new `data-au-edge` onto it, and the mount site mirrors it onto this
+  // `container`; the bar is never re-mounted. So observe the attribute and re-orient.
   const edgeObserver = new MutationObserver(syncOrientation)
   edgeObserver.observe(container, { attributes: true, attributeFilter: ['data-au-edge'] })
 
-  // Re-render when discovery changes, so a contribution discovered AFTER this bar mounted shows up
-  // in its add-menu / hint count (listContributions is live, not a mount-time snapshot). Only a
-  // role-aggregating bar cares; a pure explicit-config bar has nothing to re-query.
-  const offContrib = role ? subscribeContributions?.(() => { if (alive) render() }) : undefined
+  // Re-render when discovery changes, so an item type discovered AFTER this bar mounted shows up in
+  // its add-menu / hint count (the candidate query is live, not a mount-time snapshot).
+  const offContrib = host.subscribeContributions(() => { if (alive) render() })
 
   return () => {
     alive = false
@@ -570,10 +538,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     themeObserver.disconnect()
     if (measureFrame) cancelAnimationFrame(measureFrame)
     edgeObserver.disconnect()
-    offContrib?.()
-    closeMenu()
-    // Only dismiss the shared preview surface if OUR overflow popover is the one showing.
-    if (preview?.isShowing('bar-overflow:' + (role ?? ''))) preview.hide()
+    offContrib()
     for (const h of handles) h.unmount()
     disposeStyles?.()
     container.replaceChildren()

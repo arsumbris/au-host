@@ -13,14 +13,14 @@ test('wrapping a tabs group in bento preserves the tabs and its editor', async (
   // Step 1 — wrap the center editor in tabs.
   await page.getByRole('button', { name: 'Pane actions' }).first().click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'tabs', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Tabs( [a-z])?$/ }).click()
   await expect(page.locator('[data-container-kind="tabs"]').first()).toBeVisible()
   await expect(page.locator('.cm-content').first()).toContainText('Sample content')
 
   // Step 2 — wrap that tabs group in bento. The tabs + its editor must survive.
   await page.getByRole('button', { name: 'Pane actions' }).first().click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'bento', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Bento( [a-z])?$/ }).click()
   await expect(page.locator('[data-container-kind="bento"]').first()).toBeVisible()
   await expect(page.locator('[data-container-kind="tabs"]').first()).toBeVisible() // tabs must NOT vanish
   await expect(page.locator('.cm-content').first()).toContainText('Sample content') // editor must survive

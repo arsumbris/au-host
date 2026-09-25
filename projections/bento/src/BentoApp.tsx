@@ -23,7 +23,7 @@ import {
 } from './layout'
 
 // Shared cross-container drag protocol.
-import { bareTypeName, createChild, dissolvePane, EmptySlot, floatPaneRow, groupingOutcomeForNewGroup, groupNewPanesEnabled, moveToWindowRow, PaneProjection, paneActionsMenu, projectionLabel, projectionTitleLookup, ROOT_SLOT, resolveViewer, useContainerDialect, useContainerModel, useContainerPlacement, useMergedRef, usePaneSwap, viewerPickOptions, withCarry, wrapPaneInteractive } from '@arsumbris/container-kit'
+import { bareTypeName, createChild, dissolvePane, EmptySlot, floatPaneRow, groupingOutcomeForNewGroup, groupNewPanesEnabled, moveToWindowRow, PaneProjection, paneActionsMenu, projectionLabel, projectionTitleLookup, ROOT_SLOT, resolveViewer, slotRulesRow, useContainerDialect, useContainerModel, useContainerPlacement, useMergedRef, usePaneSwap, useRevealPaneHeaders, useSwapPaneIntent, viewerPickOptions, withCarry, wrapPaneInteractive } from '@arsumbris/container-kit'
 import '@arsumbris/au-component-catalog/react' // JSX types for the <au-*> action glyphs
 import { reportHostDiagnostic, event, on } from '@arsumbris/au-host-sdk'
 import { bentoDropDialect } from './layout/bento/drop-dialect'
@@ -189,6 +189,19 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
       return tree ? findLeaf(tree, id)?.state.slot?.fixed === true : false
     },
     [live],
+  )
+  // The slot's `hideHeader` rule: bento draws NO per-pane header at this position (a self-chrome occupant
+  // owns its surface). Presentational, so bento reads it and renders — the substrate never touches chrome.
+  // A header-hidden pane's actions stay reachable through `open-pane-actions-intent` (the focused-pane menu),
+  // and the `toggle-pane-headers-intent` reveal flag force-shows the header temporarily (`revealHeaders`).
+  const revealHeaders = useRevealPaneHeaders()
+  const paneHideHeader = useCallback(
+    (id: PaneId) => {
+      if (revealHeaders) return false
+      const tree = live()
+      return tree ? findLeaf(tree, id)?.state.slot?.hideHeader === true : false
+    },
+    [live, revealHeaders],
   )
   // Which pane fired + focus recency, so an open-intent opens in the most-recently-focused editor
   // pane, never the firing file-tree. The firer/focused PUBLISHER maps to a pane through the host's
@@ -598,11 +611,15 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
             // same `propose` batch as the wrap/inject edit — a refused proposal leaves no orphan.
             createRecord: (record) => host.children.pool!.stageRecord(record as OpaqueConfig) as StagedMint,
             createGroup: (groupInstance) => host.children.pool!.stageGroup(groupInstance as OpaqueConfig) as StagedMint,
-            // THE ASK: propose the batch to the host (falls back to applyStructural when the host lacks the proposal capability).
-            propose: (edits) => (host.children.pool!.propose ?? host.children.pool!.applyStructural)(edits as ReadonlyArray<{ id: string; record: OpaqueConfig }>),
+            // THE ASK: propose the batch to the host — the substrate's sole write channel.
+            propose: (edits) => host.children.pool!.propose(edits as ReadonlyArray<{ id: string; record: OpaqueConfig }>),
           } satisfies NonNullable<ContainerPlacement['poolEdit']>,
         }
       : {}),
+    // The focused-pane MENU: the same rows the `⋯` header button opens, so `open-pane-actions-intent`
+    // can summon them for a pane whose header is hidden. `paneActionRows` (defined below, near
+    // `renderUnitActions`) is referenced lazily — this arrow only runs at menu-open, after render.
+    paneActions: (id) => paneActionRows(id),
   }
   // The callback ref registers bento's placement with the drop router when the
   // layout root mounts (which is AFTER the initial `!root` loading view). bento
@@ -631,6 +648,8 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
   // pane in renderUnitActions. Keyed by the leaf POSITION id, which bento's `findPane` / `slotFor` /
   // `setSlotContent` all resolve.
   const swapPane = usePaneSwap(host)
+  // Keyboard swap (swap-pane-intent): swap the focused leaf's content, via the same picker the ⋯ row opens.
+  useSwapPaneIntent(host, swapPane, (id) => { const t = live(); return !!t && getAllLeaves(t).some((l) => l.state.child?.id === id) })
 
   if (!root) {
     return (
@@ -645,7 +664,12 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
   const placeholderTypes = new Set(descriptors.filter(p => p.kinds.includes('placeholder-projection')).map(p => bareTypeName(p.type)))
   const containerTypes = new Set(descriptors.filter((p) => p.kinds.includes('container-projection')).map((p) => bareTypeName(p.type)))
   const labelOf = (paneId: PaneId): string => {
-    const child = findLeaf(root, paneId)?.state.child
+    const leaf = findLeaf(root, paneId)
+    // The SLOT's `label` names the POSITION and wins (it survives an occupant swap — "Sidebar" stays
+    // "Sidebar"). Absent, fall back to the occupant's live title / type name.
+    const slotLabel = leaf?.state.slot?.label
+    if (typeof slotLabel === 'string' && slotLabel.trim()) return slotLabel
+    const child = leaf?.state.child
     const publisher = child && host.children.publisherOf?.(child.id)
     const title = publisher && paneTitles.get(publisher)
     const bare = bareTypeName(child?.instance?.type)
@@ -662,7 +686,7 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
       return <EmptySlot host={host} slotId={paneId} />
     }
     // Swap picker: same slot, replace the occupant's projection (document carried).
-    if (swapPane.isSwapping(paneId)) return swapPane.swapPicker(paneId, state.child.instance)
+    if (swapPane.isSwapping(state.child.id)) return swapPane.swapPicker(state.child.id, state.child.instance)
     return (
       <PaneProjection
         // Key on type + the open FILE (if any): when an open-intent replaces this
@@ -695,37 +719,44 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
     void wrapPaneInteractive(contentId, { choose })
   }
 
-  const renderUnitActions = (paneId: PaneId): ReactNode => {
-    // The occupant's own id (its `data-pane-id`) is what the wrap/unwrap seams address, not the leaf
+  // The full pane-actions ROW LIST for one pane, built ONCE and shared by the `⋯` header button
+  // (`renderUnitActions`) and the placement's `paneActions` (the focused-pane menu). `id` may be a leaf
+  // POSITION id (the header button) or an OCCUPANT id (the focused-pane command) — resolve either.
+  const paneActionRows = (id: PaneId): ContextMenuItem[] => {
+    const leaf = root ? getAllLeaves(root).find((l) => l.id === id || l.state.child?.id === id) : undefined
+    const paneId = leaf?.id ?? id
+    // The occupant's own id (its `data-pane-id`) is what the wrap/unwrap/slot seams address, not the leaf
     // POSITION id the other bento ops use. Undefined for an empty leaf → no wrap/unwrap offered.
-    const contentId = root ? getAllLeaves(root).find((l) => l.id === paneId)?.state.child?.id : undefined
+    const contentId = leaf?.state.child?.id
     // UNWRAP dissolves bento when it holds ONE leaf, lifting the pane into bento's grandparent slot.
     const singleLeaf = root ? getAllLeaves(root).length === 1 : false
     const fixed = paneFixed(paneId)
-    // The occupant-level actions collapse behind ONE `⋯` overflow menu (the shared `paneActionsMenu`),
-    // so a pane header carries one affordance instead of a crowded glyph row. Split / detach stay
-    // bento-local rows; swap / wrap / unwrap are the generic ones. The grip (drag) stays inline.
+    // Split / detach stay bento-local rows; swap / wrap / unwrap / float / layout-rules are the generic ones.
     const rows: ContextMenuItem[] = []
-    if (!fixed) rows.push({ id: 'pane.swap', label: 'Swap pane', icon: 'swap', enabled: true, run: () => swapPane.toggle(paneId) })
+    if (contentId && !fixed) rows.push({ id: 'pane.swap', label: 'Swap pane', icon: 'swap', enabled: true, run: () => swapPane.toggle(contentId) })
     rows.push({ id: 'pane.split-right', label: 'Split right', icon: 'split-right', enabled: true, run: () => splitEmpty('right', paneId) })
     rows.push({ id: 'pane.split-down', label: 'Split down', icon: 'split-down', enabled: true, run: () => splitEmpty('bottom', paneId) })
     if (contentId && !fixed)
       rows.push({ id: 'pane.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => wrapInContainer(contentId) })
     if (contentId && singleLeaf && !fixed)
       rows.push({ id: 'pane.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(contentId) })
-    // Float ("Open in a new window") is the GENERIC host op, shared across every container (not bento's).
-    // Keyed by the OCCUPANT's id (its `data-pane-id`), the same id the wrap/unwrap seams take.
     if (contentId && !fixed) {
       const floatRow = floatPaneRow(host, contentId)
       if (floatRow) rows.push(floatRow)
     }
-    // Append "Move to other window" LAZILY (its gate turns true when another window opens — not a change to
-    // THIS bento's config, so the menu is re-built at open, not cached at render). See paneActionsMenu.
-    return paneActionsMenu(host, () => {
-      const moveRow = contentId && !fixed ? moveToWindowRow(host, contentId) : null
-      return [...rows, ...(moveRow ? [moveRow] : []), ...(contentId ? reloadPaneRows(host, contentId) : [])]
-    })
+    const moveRow = contentId && !fixed ? moveToWindowRow(host, contentId) : null
+    // "Layout rules…" is offered even on a FIXED pane — that is how you UN-fix it.
+    return [
+      ...rows,
+      ...(moveRow ? [moveRow] : []),
+      ...(contentId ? [slotRulesRow(contentId)] : []),
+      ...(contentId ? reloadPaneRows(host, contentId) : []),
+    ]
   }
+
+  // The occupant-level actions collapse behind ONE `⋯` overflow menu. Built LAZILY at open (its gates —
+  // e.g. `moveToWindowRow`'s another-window check — reflect state outside bento's own config). See paneActionsMenu.
+  const renderUnitActions = (paneId: PaneId): ReactNode => paneActionsMenu(host, () => paneActionRows(paneId))
 
   return (
     <>
@@ -750,6 +781,7 @@ export function BentoApp({ host }: { host: MountHost }): ReactNode {
             canClosePane={(id) => root.type !== 'leaf' || (!!typeOf(id) && !placeholderTypes.has(bareTypeName(typeOf(id))))}
             onClosePane={(paneId) => { removeAt(paneId) }}
             fixedFor={paneFixed}
+            hideHeaderFor={paneHideHeader}
           />
           {/* The DragOverlay is HOST-mounted now (once per window), reading the
               window-shared container-core store — so cross-BUNDLE drag (bento ↔

@@ -1,0 +1,12 @@
+# INSTANCE-LENS-QUALIFIED fixture — a bare editor opening `compositions/bare-editor.yaml`, for the instance-count lens above its `type:` claim.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed]]"
+    ^: w
+  - ^: ed
+    type: editor-pane::editor
+    file: compositions/bare-editor.yaml

@@ -19,6 +19,7 @@ import type { Selection } from '@arsumbris/selection'
 
 // The intent base is host-sdk-owned; the guards below narrow it to this package's commands.
 import type { Intent } from '@arsumbris/au-host-sdk/generated'
+import type { TypeKey } from '@arsumbris/au-host-sdk/type-key'
 
 import type {
   OpenIntent,
@@ -212,3 +213,9 @@ export function showPaneIntent(paneType: string): ShowPaneIntent & typeof SHOW_P
 export function revealPaneIntent(paneId: string): RevealPaneIntent & typeof REVEAL_PANE_INTENT_ROUTING {
   return { type: 'reveal-pane-intent', paneId, ...REVEAL_PANE_INTENT_ROUTING }
 }
+
+// The meta types this package owns, as TypeKeys. Written as their literal keys (`name::intent`), so this
+// package takes no runtime dependency on the SDK.
+export const EDITS_COMPOSITION_CONFIG_META = 'edits-composition-config-meta::intent' as TypeKey
+export const INTENT_AGENT_META = 'intent-agent-meta::intent' as TypeKey
+export const NOTIFICATION_CONTENT_META = 'notification-content-meta::intent' as TypeKey

@@ -82,14 +82,17 @@ export interface WorkspaceControl {
   addMember(wsRoot: string, member: { name: string; memberPath: string; role?: WorkspaceMemberListRole; description?: string }): Promise<{ ok: boolean; error?: string }>
   removeMember(wsRoot: string, name: string): Promise<{ ok: boolean; error?: string }>
   /** Move a member between the entry's `edit:` and `discover:` lists (change its role). Refuses the entry
-   *  repo (pinned to `edit:`); a `dep`/`entry` is not workspace.yaml-listed and cannot be moved. */
+   *  repo (pinned to `edit:`) and a member already in the target role; a `dep` is not
+   *  workspace.yaml-listed and cannot be moved. */
   setMemberRole(wsRoot: string, name: string, role: WorkspaceMemberListRole): Promise<{ ok: boolean; error?: string }>
   /** Enable / disable a declared member via the entry `workspace.yaml`'s `disabled:` overlay — it stays
-   *  declared (role kept) but mounts nothing while disabled. Add to disable, remove to re-enable. */
+   *  declared (role kept) but mounts nothing while disabled. Refuses the entry repo, an undeclared name,
+   *  a duplicate disable, and re-enabling a name that is not disabled. */
   setMemberDisabled(wsRoot: string, name: string, disabled: boolean): Promise<{ ok: boolean; error?: string }>
-  /** Declare `peerName` as a cross-repo dependency of the member at `memberRoot` (edits/creates its
-   *  `.arsumbris/repo.yaml` `deps:`), making the repo self-describing. Clears an `undeclared-peer`. */
-  declarePeer(memberRoot: string, memberName: string, peerName: string, remote?: string): Promise<{ ok: boolean; error?: string }>
+  /** Declare `peerName` as a cross-repo dependency of the member at `memberRoot` (its
+   *  `.arsumbris/repo.yaml` `deps:`). Clears an `undeclared-peer`. Only an editable member (the entry or
+   *  an `edit:` member) can be authored, and a peer already declared is refused. */
+  declarePeer(memberRoot: string, peerName: string, remote?: string): Promise<{ ok: boolean; error?: string }>
   /** Give a registry-less member a `repo.yaml` identity. Idempotent. */
   scaffoldRegistry(memberRoot: string, memberName: string): Promise<{ ok: boolean; error?: string }>
   /** Native directory picker for a member's repo folder; null on cancel. */

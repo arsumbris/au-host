@@ -11,6 +11,7 @@
 import type { ContainerKind } from '@arsumbris/au-host-sdk';
 import { grouping, wrapTargets as wrapTargetsHolder } from './singletons.ts';
 import { resolveDecision } from './resolve.ts';
+import { projectionLabel } from './projection-label.ts';
 
 /** What a container declared about holding N children as one node. */
 export interface GroupingCapability {
@@ -23,9 +24,23 @@ export interface GroupingCapability {
   build: (children: { id: string; instance: unknown }[]) => unknown
   /**
    * Below this many children the group dissolves to its lone child. Undefined = it never does.
-   * The container's own invariant, not a rule the router applies to everyone.
+   * Declared on the container's type-def (`arity-meta.min`), resolved by the host from the type graph.
    */
   minChildren?: number
+  /**
+   * The most children one wrap may put into it. Undefined = unbounded. Declared on the type-def
+   * (`arity-meta.max`); every `frame-container` inherits `max: 1`.
+   */
+  maxChildren?: number
+  /** The container's display name, from its type-def's presentation title. Absent: the picker derives
+   *  one from the type name. Carried with the capability so every wrap picker, in every window, reads the
+   *  same label without being handed a labeller. */
+  label?: string
+}
+
+/** Does this container take `n` children in one wrap? `(min ?? 1) <= n <= (max ?? unbounded)`. */
+export function admitsChildren(cap: Pick<GroupingCapability, 'minChildren' | 'maxChildren'>, n: number): boolean {
+  return (cap.minChildren ?? 1) <= n && n <= (cap.maxChildren ?? Number.POSITIVE_INFINITY)
 }
 
 /** The host's handle on the declared grouping capabilities. */
@@ -138,31 +153,40 @@ export interface GroupingChoiceOutcome {
 
 // The grouping provider (above) is the DROP's stack-group set: `groupingForKind` / `isGroupingKind` decide
 // whether a center-drop ADDS a child, and it is the drop's new-group default. The WRAP action offers a
-// WIDER set — grouping ∪ spatial containers (tabs, column, bento, canvas) — WITHOUT changing that drop
-// behaviour: a spatial container is a wrap target but NOT a grouping kind, so `isGroupingKind('bento')`
-// stays false and center-drop-onto-bento still wraps. So the wrap targets live in their OWN registry, read
-// by `wrapPane` / the floor's `pickWrapKind`, never by the drop path. Family-tagged so the picker sections
-// Stack (grouping) from Arrange (spatial).
+// WIDER set — grouping ∪ spatial ∪ frame containers (tabs, column; bento; sandwich, dock) — WITHOUT changing
+// that drop behaviour: only a grouping container is a stack-group, so center-drop-onto-bento still wraps.
+// So the wrap targets live in their OWN registry, read by every wrap flow through `wrapChoice`, never by the
+// drop path.
+//
+// Every wrap flow passes a child COUNT. A target is a candidate only when it ADMITS that count
+// (`admitsChildren`), so a frame (`max: 1`) is offered for a solo wrap and never for a two-child one.
 
+/** Which picker section a wrap-target family renders under, in picker order. */
+export const WRAP_SECTIONS = { grouping: 'Stack', spatial: 'Arrange', frame: 'Frame' } as const;
 
 /** A container a pane can be WRAPPED into: a grouping capability plus its FAMILY (which picker section). */
 export interface WrapTarget extends GroupingCapability {
-  /** `grouping` = a flat STACK group (tabs, column); `spatial` = a SPATIAL layout (bento, canvas). Drives
-   *  the wrap picker's Stack / Arrange sectioning. */
-  family: 'grouping' | 'spatial';
+  /** `grouping` = a flat STACK group (tabs, column); `spatial` = a SPATIAL layout (bento); `frame` = a fill
+   *  `center` plus peripheral chrome (sandwich, dock). Drives the Stack / Arrange / Frame sectioning. */
+  family: keyof typeof WRAP_SECTIONS;
 }
 
-/** Install the wrap-target registry: the family-tagged UNION, plus the composition's `group-into` so the
- *  outcome respects it. `null`/empty clears it (teardown). Idempotent; re-call on a type-graph or
- *  composition change, like the grouping provider. */
+/** Install the wrap-target registry: the family-tagged UNION, plus the composition's `group-into`, which
+ *  `wrapChoice` honours when it names a target admitting the wrap's child count. Empty clears it
+ *  (teardown). Idempotent; re-call on a type-graph or composition change, like the grouping provider. */
 export function setWrapTargets(targets: WrapTarget[], groupInto?: string): void {
   wrapTargetsHolder.targets = targets;
-  wrapTargetsHolder.outcome = targets.length > 0 ? chooseGrouping(targets, groupInto) : null;
+  wrapTargetsHolder.groupInto = groupInto;
 }
 
-/** Every wrap target (grouping ∪ spatial), family-tagged. Empty when none is installed. */
+/** Every wrap target (grouping ∪ spatial ∪ frame), family-tagged. Empty when none is installed. */
 export function wrapTargets(): WrapTarget[] {
   return wrapTargetsHolder.targets;
+}
+
+/** The wrap targets that admit `n` children. */
+export function wrapTargetsFor(n: number): WrapTarget[] {
+  return wrapTargetsHolder.targets.filter((t) => admitsChildren(t, n));
 }
 
 /** The wrap target for a container kind (bare name or `::`-qualified), or null. Reads the UNION — so it
@@ -174,11 +198,52 @@ export function wrapTargetForKind(kind: ContainerKind | string | undefined): Wra
   return wrapTargetsHolder.targets.find((t) => bare(t.typeName) === b) ?? null;
 }
 
-/** The wrap-target new-group OUTCOME (chosen + reason + available), over the UNION and respecting
- *  `group-into`. The floor reads `reason` to use the composition's choice silently (`requested` / `only`)
- *  or open the family-sectioned picker (`defaulted`). Null when nothing is installed. */
-export function wrapTargetOutcome(): GroupingChoiceOutcome | null {
-  return wrapTargetsHolder.outcome;
+/**
+ * What a wrap of `n` children builds with: the requested kind, else the new-group default. The ONE
+ * resolution every wrap path (substrate and authority) takes, so each refusal names its own cause:
+ * nothing to build with (`no-grouping`) is not the same as a kind that cannot hold `n` (`arity-refused`,
+ * a frame asked to hold two).
+ */
+export type WrapBuild =
+  | { cap: GroupingCapability }
+  | { refused: 'no-grouping' }
+  | { refused: 'arity-refused'; typeName: string; n: number };
+
+export function wrapBuildFor(requestedKind: string | undefined, n: number): WrapBuild {
+  const cap = (requestedKind ? wrapTargetForKind(requestedKind) : null) ?? groupingForNewGroup();
+  if (!cap) return { refused: 'no-grouping' };
+  if (!admitsChildren(cap, n)) return { refused: 'arity-refused', typeName: cap.typeName, n };
+  return { cap };
+}
+
+/** One family-sectioned picker option. */
+export interface WrapOption { id: string; label: string; section: string }
+
+/**
+ * THE wrap choice for a wrap of `n` children — the ONE place every wrap flow resolves its container.
+ *
+ * Candidates are the targets admitting `n`. `use` is set when no ask is needed: the composition's
+ * `group-into` names a candidate, or there is exactly one. A `group-into` naming a container that does NOT
+ * admit `n` is inapplicable to this wrap, not an error: the choice proceeds as if it were unset. `options`
+ * is always the full family-sectioned candidate list (Stack, then Arrange, then Frame), for a caller that
+ * asks or shows alternatives. No candidate: `options` is empty and `use` undefined.
+ */
+export function wrapChoice(n: number): { use?: string; options: WrapOption[] } {
+  const candidates = wrapTargetsFor(n);
+  if (candidates.length === 0) return { options: [] };
+  const bare = (t: string): string => t.split('::')[0] ?? t;
+  const requested = wrapTargetsHolder.groupInto;
+  const applicable = requested !== undefined && wrapTargetsHolder.targets.some((t) => bare(t.typeName) === bare(requested))
+    && !candidates.some((t) => bare(t.typeName) === bare(requested))
+    ? undefined
+    : requested;
+  const outcome = chooseGrouping(candidates, applicable);
+  const order = Object.keys(WRAP_SECTIONS) as Array<WrapTarget['family']>;
+  const options = [...candidates]
+    .sort((a, b) => order.indexOf(a.family) - order.indexOf(b.family))
+    .map((t) => ({ id: t.typeName, label: t.label ?? projectionLabel(t.typeName), section: WRAP_SECTIONS[t.family] }));
+  const silent = (outcome.reason === 'requested' || outcome.reason === 'only') && outcome.chosen;
+  return { ...(silent ? { use: outcome.chosen!.typeName } : {}), options };
 }
 
 export function chooseGrouping(

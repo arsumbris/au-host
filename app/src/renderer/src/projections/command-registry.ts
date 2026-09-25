@@ -11,10 +11,9 @@
 
 import { readSubtypes, type WireField, type WireReader, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
 import { refName } from '@arsumbris/type-query'
+import { COMMAND_META, INTENT_ROUTING_META, metaBlock, type TypeKey } from '@arsumbris/au-host-sdk'
 
 const INTENT_BASE = 'intent'
-const COMMAND_META = 'command-meta'
-const ROUTING_META = 'intent-routing-meta'
 
 export interface CommandDescriptor {
   /** The bare intent type name — what `host.intent.fire({ type })` fires and a handler keys on. */
@@ -36,9 +35,9 @@ export interface CommandDescriptor {
   dispatch?: string
 }
 
-/** Fold one meta block's body into a plain record (mirrors discovery.ts's `metaRecord`). */
-function metaFields(def: WireSubtype, metaName: string): Record<string, unknown> | undefined {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === metaName)
+/** Fold one meta block's body, own or inherited, into a plain record (mirrors discovery.ts's `metaRecord`). */
+function metaFields(def: WireSubtype, meta: TypeKey): Record<string, unknown> | undefined {
+  const block = metaBlock(def, meta)
   if (!block) return undefined
   const out: Record<string, unknown> = {}
   for (const field of block.body) out[field.name] = field.value
@@ -58,7 +57,7 @@ export interface CommandSets {
 }
 
 function descriptorOf(def: WireSubtype, cmd: Record<string, unknown> | undefined): CommandDescriptor {
-  const routing = metaFields(def, ROUTING_META) ?? {}
+  const routing = metaFields(def, INTENT_ROUTING_META) ?? {}
   return {
     id: refName(def.name),
     qualifiedId: def.name.includes('::') ? def.name : `${refName(def.name)}::${def.repo}`,
@@ -68,9 +67,8 @@ function descriptorOf(def: WireSubtype, cmd: Record<string, unknown> | undefined
     category: str(cmd?.category),
     // The palette's shortcut display is a reverse-lookup over the active keymaps (runtime.shortcutForIntent),
     // not a per-command meta — so it reflects what is ACTUALLY bound.
-    // OWN payload fields are the params. Intent ancestors carry no fields today, so own fields ARE the
-    // effective params; an intent that ever inherits fields would need effective-shape gathering here.
-    params: def.fields ?? [],
+    // The payload's EFFECTIVE fields are the params, own and inherited.
+    params: def.effective_fields,
     kind: str(routing.kind) ?? 'routed',
     dispatch: str(routing.dispatch),
   }

@@ -15,6 +15,9 @@
 // This file owns the container placement contract.
 
 import type { ContainerSlot } from './generated'
+// Type-only: the context-menu vocabulary lives in index.ts. A type import is erased at build (tsc + the
+// esbuild-served bundle both strip it), so this forms no runtime cycle despite index.ts re-exporting this file.
+import type { ContextMenuItem } from './index.ts'
 
 /** A stable per-pane id. Preserved across re-parenting (it keys the host-owned
  *  terminal session + the view-state auto-store, so a moved pane reattaches). */
@@ -284,6 +287,22 @@ export interface ContainerPlacement {
 
    */
   poolEdit?: PoolEditSeam
+
+  /**
+   * The pane-actions MENU rows for one pane — the SAME rows the container's `⋯` header button opens.
+   *
+   * A container builds its own action vocabulary (swap / split / wrap / float / layout-rules), and it
+   * builds them in RENDER, closing over its live model. Exposing them here lets the HOST open that menu
+   * for a pane whose header is not on screen — the `open-pane-actions-intent` command summons the focused
+   * pane's menu, which is the escape hatch for a `hideHeader` position (no header → no `⋯`, but the
+   * command still reaches every action). Keyed by the occupant's `^:` id (the same id the header button
+   * uses), so a rule-bearing slot resolves the same way.
+   *
+   * OPTIONAL and ADDITIVE, like `slotFor` / `poolEdit`: `MOUNT_CONTRACT_VERSION` does NOT bump. A
+   * container that does not implement it simply offers no focused-pane menu (the command no-ops for its
+   * panes), never an error. Returns null for a pane it does not hold or one with no actions.
+   */
+  paneActions?(paneId: PaneId): readonly ContextMenuItem[] | null
 }
 
 /**

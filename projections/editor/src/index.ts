@@ -8,6 +8,8 @@ import { auHighlightStyle, auEditorTheme } from '@arsumbris/code-syntax/view'
 
 import { languageForPath } from '@arsumbris/code-syntax'
 import { viewerSwitchSets, runViewerSwitch } from '@arsumbris/container-core'
+import { acceptCompletion } from '@codemirror/autocomplete'
+import { insertTab, indentLess } from '@codemirror/commands'
 import { foldEffect, foldedRanges, syntaxHighlighting, syntaxTree, unfoldEffect } from '@codemirror/language'
 import { Annotation, Compartment, EditorSelection, type EditorState, type Text, Prec, RangeSet, RangeValue, StateEffect, StateField, Transaction } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, keymap, WidgetType } from '@codemirror/view'
@@ -16,8 +18,9 @@ import type { SyntaxNode } from '@lezer/common'
 import { readSource, writeSource, preserveSourceText, loadSourceLayout, sourceByteToChar } from './source-text'
 import { basicSetup } from 'codemirror'
 
-import { defineProjection, type MountHost, type PreviewSurface, event, on } from '@arsumbris/au-host-sdk'
-import { readDiagnostics, readReferencesIn, readInstancesOf, readResolveAnchor, readResolveBlockId, readResolveTarget, readSemanticTokens, readType, readTypes, type WireDiagnostic, type WireDiagnosticSeverity, type WireSemanticToken, subscribeChanges, subscribeDiagnostics } from '@arsumbris/au-host-sdk/engine-reads'
+import { defineProjection, memberOfPath, type MountHost, type PreviewSurface, event, on } from '@arsumbris/au-host-sdk'
+import { readDiagnostics, readReferencesIn, readResolveAnchor, readResolveBlockId, readResolveTarget, readSemanticTokens, readType, readTypes, type WireDiagnostic, type WireDiagnosticSeverity, type WireSemanticToken, subscribeChanges, subscribeDiagnostics } from '@arsumbris/au-host-sdk/engine-reads'
+import { fileInstanceCount, invalidateInstanceCounts, type CountIdentity } from './instance-count-cache'
 import { highlightIntent, openIntent, promoteIntent } from '@arsumbris/intent'
 import { fileSelection, openContent } from '@arsumbris/selection'
 import type { TextRange } from '@arsumbris/range'
@@ -35,7 +38,7 @@ import { findReplace } from './find-replace'
 import { minimap } from './minimap'
 import { performRename, type RenameContext, type RenameTarget } from './rename'
 import { auCompletion } from './lib/completion'
-import { yamlFieldContext, resolveYamlField, type YamlFieldContext } from './lib/yaml-field'
+import { yamlFieldContext, resolveYamlField, typeDefFieldAt, typeDefClaim, type YamlFieldContext } from './lib/yaml-field'
 import { prepareRead } from './lib/prepare-read'
 import { selectionPresentation } from './lib/selection-presentation'
 import documentControlsCss from '@arsumbris/style/document-controls.css?inline'
@@ -133,7 +136,7 @@ const STYLE = `
 .au-editor-options > summary:focus-visible { outline: 1px solid var(--au-control-focus, var(--au-focus-outer)); outline-offset: -1px; }
 .au-editor-options > summary::-webkit-details-marker { display: none; }
 .au-editor-options > summary:hover, .au-editor-options[open] > summary { color: var(--au-ink-1); background: var(--au-chrome-hover); }
-.au-editor-options-panel { position: absolute; top: calc(var(--document-action-height) + var(--document-action-top) * 2); right: var(--document-action-end); z-index: var(--au-z-overlay); width: min(360px, calc(100% - var(--au-space-3) * 2)); max-height: calc(100% - var(--document-action-height) - var(--document-action-top) * 2 - var(--au-space-3)); }
+.au-editor-options-panel { position: absolute; top: calc(var(--document-action-height) + var(--document-action-top) * 2); right: var(--document-action-end); z-index: var(--au-z-overlay); width: min(360px, calc(100% - var(--au-space-3) * 2)); max-height: calc(var(--document-view-size, 100%) - var(--document-action-height) - var(--document-action-top) * 2 - var(--au-space-3)); }
 .au-editor-options-panel::part(body) { overflow: hidden; }
 .au-editor-options-scroll { min-height: 0; }
 .au-editor-options-content { display: flex; flex-wrap: wrap; gap: var(--au-space-2); }
@@ -296,6 +299,11 @@ class InlineReferencesWidget extends WidgetType {
   toDOM(): HTMLElement {
     const el = document.createElement('div')
     el.className = 'au-inline-references'
+    // NOT part of the editable document — a caret must never enter it, and the browser's contentEditable
+    // must never merge an adjacent line into it. Without this, typing on a widget-dense file desyncs CM's
+    // DOM observer (it reads the widget's DOM as a doc change), which maps a position past the doc and
+    // throws in a StateField update, aborting the keystroke — the "typed char vanishes" bug.
+    el.contentEditable = 'false'
     el.textContent = `⮌ ${this.label}`
     el.dataset.refsFile = this.file
     if (this.blockId) el.dataset.refsBlock = this.blockId
@@ -308,6 +316,11 @@ class InlineReferencesWidget extends WidgetType {
   }
   ignoreEvent(): boolean {
     return false
+  }
+  // The widget's DOM is host-owned chrome, never document text — the DOM observer must ignore any mutation
+  // inside it, so a browser touch on the widget never becomes a spurious (out-of-range) document change.
+  ignoreMutation(): boolean {
+    return true
   }
 }
 const setInlineReferences = StateEffect.define<DecorationSet>()
@@ -325,31 +338,35 @@ const inlineReferencesField = StateField.define<DecorationSet>({
 // an instance file, and above a type-def's own name (its file head). Count = `instances_of(type)`
 // — a DIFFERENT read than `backlinks(file)`, so a separate widget + field. A line may
 // carry several claims (`type: [person, quality]`), so the widget renders one clickable SEGMENT
-// per type; click / cmd+hover a segment → a find-all-INSTANCES peek in the host preview overlay.
+// per type; click / cmd+hover a segment → a find-all-INSTANCES peek in the host preview overlay. A
+// segment shows the claim as written and peeks its qualified `name::repo`, the identity it counts.
 class InstancesLensWidget extends WidgetType {
   constructor(
-    readonly segments: ReadonlyArray<{ type: string; count: number }>,
-    readonly onActivate: (rect: DOMRect, type: string) => void,
+    readonly segments: ReadonlyArray<{ label: string; query: string; count: number }>,
+    readonly onActivate: (rect: DOMRect, query: string) => void,
   ) {
     super()
   }
   eq(other: InstancesLensWidget): boolean {
     return (
       other.segments.length === this.segments.length &&
-      this.segments.every((s, i) => s.type === other.segments[i].type && s.count === other.segments[i].count)
+      this.segments.every((s, i) => s.label === other.segments[i].label && s.query === other.segments[i].query && s.count === other.segments[i].count)
     )
   }
   toDOM(): HTMLElement {
     const el = document.createElement('div')
     el.className = 'au-inline-references au-inline-references-inst'
+    // Non-editable, for the same reason as InlineReferencesWidget: a block widget the caret can enter, or
+    // that the browser's contentEditable can edit, desyncs CM's DOM observer and crashes the next keystroke.
+    el.contentEditable = 'false'
     this.segments.forEach((s, i) => {
       if (i > 0) el.append(' · ')
       const seg = document.createElement('span')
-      seg.textContent = `⊙ ${s.count} ${s.type}`
-      seg.dataset.instType = s.type // cmd+hover detection + the activate target
+      seg.textContent = `⊙ ${s.count} ${s.label}`
+      seg.dataset.instType = s.query // cmd+hover detection + the activate target
       seg.addEventListener('mousedown', (e) => {
         e.preventDefault() // keep editor selection/focus
-        this.onActivate(seg.getBoundingClientRect(), s.type)
+        this.onActivate(seg.getBoundingClientRect(), s.query)
       })
       el.append(seg)
     })
@@ -357,6 +374,11 @@ class InstancesLensWidget extends WidgetType {
   }
   ignoreEvent(): boolean {
     return false
+  }
+  // The widget's DOM is host-owned chrome, never document text — the DOM observer ignores any mutation
+  // inside it, so a browser touch never becomes a spurious (out-of-range) document change.
+  ignoreMutation(): boolean {
+    return true
   }
 }
 const setInstancesLens = StateEffect.define<DecorationSet>()
@@ -370,14 +392,26 @@ const instancesLensField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 })
 
-/** The engine semantic token whose span contains `pos` (the first, if several), or null. */
+// A CONTAINER token ENCLOSES navigable leaves: a `field-shape` over its `type-ref` / `shape-builtin`
+// leaves, a `field-value` or `typed-block` over its inner value runs. At a position inside a leaf, the
+// container and the leaf both match, and a jump / hover wants the LEAF.
+const CONTAINER_TOKEN_KINDS = new Set<WireSemanticToken['kind']>(['field-shape', 'field-value', 'typed-block'])
+
+/** The MOST-SPECIFIC engine token whose span contains `pos`: a non-container leaf over its enclosing
+ *  container, then the smallest span. `null` when no token covers `pos`. Scanning all overlapping tokens
+ *  (not stopping at the first) is what keeps an enclosing `field-shape` from masking the `type-ref` a
+ *  jump needs — the container is emitted first, so first-match returned it and go-to-def gave up. */
 function tokenAt(state: EditorState, pos: number): { token: WireSemanticToken; from: number; to: number } | null {
-  let hit: { token: WireSemanticToken; from: number; to: number } | null = null
+  let best: { token: WireSemanticToken; from: number; to: number } | null = null
   state.field(tokenDataField).between(pos, pos, (from, to, value) => {
-    hit = { token: value.token, from, to }
-    return false // stop at the first
+    const cand = { token: value.token, from, to }
+    if (!best) { best = cand; return }
+    const bestIsContainer = CONTAINER_TOKEN_KINDS.has(best.token.kind)
+    const candIsContainer = CONTAINER_TOKEN_KINDS.has(cand.token.kind)
+    if (bestIsContainer !== candIsContainer) { if (!candIsContainer) best = cand; return }
+    if (to - from < best.to - best.from) best = cand
   })
-  return hit
+  return best
 }
 
 /** What a Mod-click / Mod-hover acts on at `pos`: a `[[wikilink]]`, a URL, a type-name, or a field. */
@@ -619,7 +653,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   options.addEventListener('keydown', event => {
     if (event.key === 'Escape') { options.open = false; optionsLabel.focus(); event.stopPropagation() }
   })
-  bar.append(location, saveButton, viewButton)
+  bar.append(location, saveButton, viewButton, options)
 
   const status = document.createElement('div')
   status.className = 'au-editor-status'
@@ -889,28 +923,41 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // come from the retained `type-claim` tokens; the type-def's own type comes from the filename
   // (`X.type.yaml` → `X`), since a type-def's `type-claim` token is its PARENT, not its own name.
   // Refreshed alongside the tokens (open + the engine `changes` rebuild). CM maps the lens through edits.
+  // Each refresh supersedes the previous one, so an older refresh finishing late never paints stale counts.
+  let lensRefresh = 0
   async function refreshInstancesLens(): Promise<void> {
     if (!currentPath) return
+    const refresh = ++lensRefresh
     const path = currentPath
     const isTypeDef = path.endsWith('.type.yaml')
-    // line-start pos → the set of types claimed on that line (a `type: [a, b]` line claims several).
-    // Collected from a GIVEN state so we can recompute positions after the await (the user may have
-    // edited during the reads — counts key by type, but line offsets must come from the live doc).
-    const collect = (state: EditorState): Map<number, Set<string>> => {
-      const byLine = new Map<number, Set<string>>()
+    // One lens segment: the name as written, the identity it counts, and the `name::repo` query its
+    // peek lists, so the count and the peek always name the same type.
+    interface LensEntry { label: string; identity: CountIdentity; query: string }
+    // line-start pos → the entries claimed on that line (a `type: [a, b]` line claims several), keyed by
+    // identity so a repeated claim counts once. Collected from a GIVEN state so positions can be
+    // recomputed after the await (the user may have edited during the read).
+    const entryId = (e: LensEntry): string => ('hash' in e.identity ? `${e.identity.name}\0${e.identity.hash}` : e.query)
+    const collect = (state: EditorState): Map<number, Map<string, LensEntry>> => {
+      const byLine = new Map<number, Map<string, LensEntry>>()
+      const add = (lineFrom: number, e: LensEntry): void => {
+        const line = byLine.get(lineFrom) ?? new Map<string, LensEntry>()
+        line.set(entryId(e), e)
+        byLine.set(lineFrom, line)
+      }
       if (isTypeDef) {
         // The type this file DEFINES: the basename minus `.type.yaml` (the dotted filename IS the type
-        // name). A `.yamls` BUNDLE is skipped (multiple defs, no single head type — a current limitation).
+        // name), owned by the repo the file lives in. A `.yamls` BUNDLE is skipped (multiple defs, no
+        // single head type).
         const base = path.slice(path.lastIndexOf('/') + 1).replace(/\.type\.yaml$/, '')
-        if (base) byLine.set(0, new Set([base]))
+        const owner = memberOfPath(host.workspace.members, path, host.entry.path)?.name
+        if (base && owner) add(0, { label: base, identity: { name: base, owner }, query: `${base}::${owner}` })
       } else {
-        // Instance file: every `type-claim` token is a claimed type → lens above its line.
+        // Instance file: every `type-claim` token the engine resolved is a lens above its line. An
+        // unresolved claim (unknown type, unmounted peer) has no identity to count, so it gets none.
         state.field(tokenDataField).between(0, state.doc.length, (from, _to, v) => {
-          if (v.token.kind !== 'type-claim') return
-          const lineFrom = state.doc.lineAt(from).from
-          const set = byLine.get(lineFrom) ?? new Set<string>()
-          set.add(v.token.name)
-          byLine.set(lineFrom, set)
+          if (v.token.kind !== 'type-claim' || !v.token.resolved) return
+          const { name, repo, hash } = v.token.resolved
+          add(state.doc.lineAt(from).from, { label: v.token.name, identity: { name, hash }, query: `${name}::${repo}` })
         })
       }
       return byLine
@@ -920,31 +967,28 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       view.dispatch({ effects: setInstancesLens.of(Decoration.none) })
       return
     }
-    // Count instances per DISTINCT type (one read each, deduped across lines).
-    const distinct = [...new Set([...before.values()].flatMap((s) => [...s]))]
-    // file-origin only — the inline widget counts instance FILES (schema-12 behaviour); schema 13's default
-    // would also count nested + meta matches.
-    const outcomes = await Promise.all(distinct.map((t) => readInstancesOf(host.engine, t, { origins: ['file'] })))
-    if (!alive || currentPath !== path) return // a newer open superseded this
+    // Reads a cached file-origin count (warm hits are free), so the lens costs nothing on the open path;
+    // the count refreshes on the `changes` rebuild. An unknown count (engine not ready) leaves the
+    // segment out rather than showing 0.
+    const distinct = new Map<string, LensEntry>()
+    for (const line of before.values()) for (const [id, e] of line) distinct.set(id, e)
+    const ids = [...distinct.keys()]
+    const outcomes = await Promise.all(ids.map((id) => fileInstanceCount(host.engine, distinct.get(id)!.identity)))
+    if (!alive || currentPath !== path || refresh !== lensRefresh) return // a newer open or refresh superseded this
     // Recompute line positions from the CURRENT state (pre-await offsets may be stale).
-    const typesByLine = collect(view.state)
-    if (typesByLine.size === 0) {
+    const entriesByLine = collect(view.state)
+    if (entriesByLine.size === 0) {
       view.dispatch({ effects: setInstancesLens.of(Decoration.none) })
       return
     }
-    const countOf = new Map<string, number>()
-    distinct.forEach((t, i) => {
-      const o = outcomes[i]
-      // schema-6 `instances_of` returns MATCH RECORDS, so a bare-type query can repeat an instance
-      // under several identity hashes. The lens shows an instance COUNT, so count distinct paths.
-      if ('ready' in o && o.ready && o.result) countOf.set(t, new Set(o.result.map((r) => r.path)).size)
-    })
-    const decos = [...typesByLine.entries()]
+    const countOf = new Map<string, number | undefined>()
+    ids.forEach((id, i) => countOf.set(id, outcomes[i]))
+    const decos = [...entriesByLine.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([lineFrom, types]) => {
-        const segments = [...types]
-          .map((type) => ({ type, count: countOf.get(type) }))
-          .filter((s): s is { type: string; count: number } => s.count != null)
+      .map(([lineFrom, entries]) => {
+        const segments = [...entries]
+          .map(([id, e]) => ({ label: e.label, query: e.query, count: countOf.get(id) }))
+          .filter((s): s is { label: string; query: string; count: number } => s.count != null)
         return { lineFrom, segments }
       })
       .filter((e) => e.segments.length > 0)
@@ -1041,6 +1085,14 @@ function mount(container: HTMLElement, host: MountHost): () => void {
         // F2 renames the symbol under the cursor — a file (via the engine `rename` saga) for a
         // wikilink target, or an in-file identifier / field key / block-id otherwise. See doRename.
         { key: 'F2', run: doRename },
+        // Tab inserts at the CURSOR (a real editor's Tab): `insertTab` inserts a tab where the caret is
+        // when nothing is selected, and block-INDENTS when a selection spans lines; Shift-Tab dedents.
+        // CM leaves Tab unbound by default so it escapes the editor; we bind it so Tab edits instead of
+        // blurring to the next focusable pane. A keyboard user escapes focus with Esc then Tab (CM convention).
+        // When the completion popup is open, Tab accepts the highlighted candidate first —
+        // acceptCompletion returns false with no active completion, so Tab then falls through to insertTab.
+        { key: 'Tab', run: acceptCompletion },
+        { key: 'Tab', run: insertTab, shift: indentLess },
       ]),
       // Go-to-definition: Mod-click a `[[wikilink]]` to follow it. Resolve the target via the
       // engine, then fire an `open-intent` so it opens as a transient editor (see goToDefinition).
@@ -1243,6 +1295,19 @@ function mount(container: HTMLElement, host: MountHost): () => void {
       if (fields.length === 1) await content.previewField(ct.field, [`${fields[0]!.origin.name}::${fields[0]!.origin.repo}`])(card, isCurrent)
       else card.textContent = fields.length ? `Multiple declarations for ${ct.field}; Command-click to choose.` : `No declaration for ${ct.field}.`
     } }
+    // A type-def's OWN `fields:` key → the same field card (shape + describeShape + `#:` doc), resolved
+    // against the type-def itself. `clickTargetAt` bails on a type-def field (it has no `type:` claim to
+    // resolve against), so this is handled here, from the file's own identity.
+    if (currentPath && /\.type\.ya?ml$/.test(currentPath)) {
+      const tdPath = currentPath // const capture: narrowed to string, and the staleness base for the async fill
+      const tdf = typeDefFieldAt(view.state.doc.toString(), pos)
+      if (tdf) return { key: `pv:tdfield:${tdPath}:${tdf.field}`, from: tdf.from, to: tdf.to, fill: async (card, isCurrent) => {
+        const doc = view.state.doc
+        const claim = await typeDefClaim(host.engine, tdPath)
+        if (!isCurrent() || currentPath !== tdPath || view.state.doc !== doc || !claim) return
+        await content.previewField(tdf.field, [claim])(card, isCurrent)
+      } }
+    }
     return null
   }
   function manageHover(x: number, y: number): void {
@@ -1884,7 +1949,8 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     unsubscribeChanges?.()
     unsubscribeChanges = subscribeChanges(host.engine, (event) => {
       if (!alive || event.kind !== 'change') return
-      void fetchSemanticTokens()
+      invalidateInstanceCounts(host.engine) // a rebuild can add/remove instances → recount on the lens refresh
+      void fetchSemanticTokens() // its tail refreshes the instances lens off the re-warmed cache
       void refreshBacklinks() // a reference added/removed elsewhere changes our counts
       void reloadOnExternalChange(event.scopeHint) // reload content on an external write
     })
@@ -1913,6 +1979,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   // On the daemon-reachable edge: re-fetch tokens and revive a closed changes feed.
   const offReady = host.engineReady?.subscribe((ready) => {
     if (ready && alive) {
+      invalidateInstanceCounts(host.engine) // the graph may have moved while the daemon was unreachable
       void fetchSemanticTokens()
       void refreshBacklinks()
       void refreshDiagnostics()
@@ -2035,6 +2102,15 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     claim: () => !!currentPath,
     commit: () => void save(),
   })
+  // Switch to another VIEWER of this file by keyboard (the ⌘E command / swap-viewer-intent): the SAME
+  // viewer-switch the toolbar button drives, generic over the declared file-viewers (not a fixed
+  // editor/reader pair). Claim only when this pane shows a file with another file-viewer available, so a
+  // bare editor declines and the routed-ambient walk reaches the focused file-viewer. `runSwitch('viewers')`
+  // switches to the other viewer (a two-viewer file toggles directly, no picker; more → the host picker).
+  const offSwapViewer = intent.handle('swap-viewer-intent', {
+    claim: () => !!currentPath && viewerSwitchSets(host, currentPath).viewers.length > 0,
+    commit: () => runSwitch('viewers'),
+  })
 
   return () => {
     // Capture once before disposing styles: removing the editor sizing expands its
@@ -2047,6 +2123,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
     offHighlight()
     offOpen()
     offSave()
+    offSwapViewer()
     if (recomputeTimer) clearTimeout(recomputeTimer)
     clearTimeout(viewStateTimer)
     offReady?.()
@@ -2066,7 +2143,7 @@ function mount(container: HTMLElement, host: MountHost): () => void {
   }
 }
 
-// The editor's STATUS surface (editor-status, a `status-projection`): a compact "Ln L, Col C" for a
+// The editor's BAR ITEM surface (editor-bar-item, a `bar-item-projection`): a compact "Ln L, Col C" for a
 // status bar. It does NOT open an editor — it watchAll's the `cursor` slice the editor pane (the
 // `mount` export) publishes, and shows the MOST-RECENTLY-published one (≈ the active editor). Mounted
 // via the locator `export: status` (two surfaces, one module).
@@ -2079,7 +2156,7 @@ function mountStatusItem(container: HTMLElement, host: MountHost): () => void {
   const el = document.createElement('div')
   // LOGICAL box props so it renders identically when the container rotates us in a vertical bar
   // (writing-mode): `padding-inline` is start/end along the reading axis; `padding-block` +
-  // `min-block-size` are the CROSS axis (bar thickness, matching status-bar's 20px). Physical
+  // `min-block-size` are the CROSS axis (bar thickness, matching engine-status-bar-item's 20px). Physical
   // `padding`/`min-height` would inflate the thickness + drop the start/end pad when rotated.
   el.style.cssText =
     'font: var(--au-t-2xs)/var(--au-lh-2xs) var(--au-font-mono); display: flex; align-items: center; height: 100%; min-block-size: var(--au-status-h); min-inline-size: 0; max-inline-size: 100%; overflow: hidden; padding-block: 0; padding-inline: var(--au-space-2-5); box-sizing: border-box; color: var(--au-ink-3); white-space: nowrap;'
@@ -2121,6 +2198,6 @@ function mountStatusItem(container: HTMLElement, host: MountHost): () => void {
 
 // Two surfaces sharing one module, composed on the branded
 // default: `mount` is the editor pane (editor-pane); `status` is the compact Ln/Col status item
-// (editor-status, a status-projection) following the active editor's cursor. Each type-def's locator
+// (editor-bar-item, a bar-item-projection) following the active editor's cursor. Each type-def's locator
 // `export` selects which key the host mounts.
 export default defineProjection({ mount, status: mountStatusItem })

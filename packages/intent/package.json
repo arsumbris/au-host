@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo intent --module selection=@arsumbris/selection --module au-host-sdk=@arsumbris/au-host-sdk/generated --meta intent-routing-meta=const:ROUTING --meta-satisfies --out src/generated.ts"
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../codegen --repo intent --module selection=@arsumbris/selection --module au-host-sdk=@arsumbris/au-host-sdk/generated --meta intent-routing-meta=const:ROUTING --meta-satisfies --out src/generated.ts"
   },
   "dependencies": {
     "@arsumbris/selection": "link:../selection",

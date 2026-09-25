@@ -65,13 +65,9 @@ export class AuSplitterElement extends AuElement {
       width: 100%;
       cursor: row-resize;
     }
-    :host::before { content: ''; position: absolute; }
-    :host([orientation='vertical'])::before { width: max(100%, var(--au-space-3, 12px)); height: 100%; }
-    :host([orientation='horizontal'])::before { height: max(100%, var(--au-space-3, 12px)); width: 100%; }
-    @media (pointer: coarse) {
-      :host([orientation='vertical'])::before { min-width:24px; }
-      :host([orientation='horizontal'])::before { min-height:24px; }
-    }
+    /* The grab area is the visual gap itself — the host box (--au-pane-gap). It never extends past the
+       seam into an adjacent pane, so a pane's own edge content (e.g. a scrollbar flush at the seam) stays
+       fully interactive. A wider expanded hit-area would bleed into the neighbours and steal their edge. */
     .line {
       opacity: 0;
       background: var(--au-splitter-line);

@@ -1,0 +1,15 @@
+# editor-bar-item IS a `bar-item-projection`: a compact "Ln L, Col C" that follows the active editor's
+# cursor via the view-state bus. A SEPARATE surface from the editor pane, sharing the editor's module —
+# the locator's `export: status` selects the status mount fn. A bar discovers it as an item to add.
+#
+extends: bar-item-projection::au-host-sdk
+fields: {}
+meta:
+  # The human display name.
+  - type: projection-presentation-meta::au-host-sdk
+    title: Editor Status
+  # Shares the editor pane's entry; `export: status` mounts the status surface.
+  - type: projection-runtime-meta::au-host-sdk
+    entry: ./dist/index.js
+    export: status
+    contractVersion: 8

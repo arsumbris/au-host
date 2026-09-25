@@ -1,0 +1,10 @@
+type: keymap::au-host-sdk
+keybinds:
+  - chord:
+      - mods: [mod, alt]
+        key: j
+    intent: "[[e2e-shared-intent]]"
+  - chord:
+      - mods: [mod, alt]
+        key: k
+    intent: "[[save-intent::intent]]"

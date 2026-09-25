@@ -40,8 +40,11 @@ describe('engine declaration resolution', () => {
     const found = await resolveYamlField(engine,'/custom/file.yaml',at(source,'value')!)
     expect(found.map(field=>field.origin.name)).toEqual(['custom-a','custom-b'])
     expect(found.map(field=>field.shape)).toEqual(['String','Number'])
+    expect(found.map(field=>field.divergent)).toEqual([true,true])
     const qualified = 'type: combined\n"value{custom-b}": 0'
     const chosen = await resolveYamlField(engine,'/custom/file.yaml',at(qualified,'value')!)
     expect(chosen.map(field=>field.origin.name)).toEqual(['custom-b'])
+    // The qualifier picks an origin; the field is still divergent.
+    expect(chosen.map(field=>field.divergent)).toEqual([true])
   })
 })

@@ -16,6 +16,15 @@ export interface FileSelection extends Omit<Selection, 'type'> {
   path: string
 }
 
+/** A folder in the vault, picked or dragged as a whole. */
+export interface FolderSelection extends Omit<Selection, 'type'> {
+  type: 'folder-selection'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
+  /** The folder's path, in the host.files / engine address space. */
+  path: string
+}
+
 export interface LinkSelection extends Omit<Selection, 'type'> {
   type: 'link-selection'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */

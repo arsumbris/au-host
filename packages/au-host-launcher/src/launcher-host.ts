@@ -17,9 +17,11 @@ import type {
   FoundDep,
   GateInspection,
   McpStatus,
+  MissingMembers,
   ToolPathsInfo,
   ToolPathsPatch,
   TouchWorkspace,
+  WorkspaceClaim,
 } from '@arsumbris/au-host-app'
 import type { RecentWorkspace, WorkspaceTemplateCatalog, MaterializeWorkspaceRequest } from '@arsumbris/au-host-sdk'
 
@@ -27,11 +29,17 @@ export interface LauncherHost {
   app: {
     /** The workspace entry this instance was launched to open (`AU_ENTRY`), or null for a plain launch. */
     initialEntry(): Promise<string | null>
+    /** CLAIM a workspace before opening it. `claimed: false` = another live instance holds it (and has been
+     *  focused), so this launcher must not open it. */
+    claimWorkspace(entry: string): Promise<WorkspaceClaim>
   }
   daemon: {
     status(config: DaemonConfig): Promise<DaemonStatus>
     start(config: DaemonConfig): Promise<ActionResult>
     stop(config: DaemonConfig): Promise<ActionResult>
+    /** The main-side auto-resolved `au` binary (paths.yaml → PATH → login-shell → well-known dirs), or
+     *  null. The setup forms use it to show whether the engine is resolvable and validate the field. */
+    resolveBinary(): Promise<string | null>
     onLog(listener: (line: string) => void): () => void
     /** The owned daemon child exited; `entryPath` is the entry it was serving (null if unknown). */
     onExit(listener: (code: number | null, entryPath: string | null) => void): () => void
@@ -51,8 +59,8 @@ export interface LauncherHost {
     discoverClosure(located: Record<string, string>): Promise<ClosureResult>
     /** Scan a folder for repos matching any of `names`. */
     scanFor(folder: string, names: string[]): Promise<FoundDep[]>
-    /** The entry's declared members NOT located in the device registry (the first-run detector). */
-    missingLocations(entry: string): Promise<string[]>
+    /** The entry's declared members the engine would not mount (the first-run detector). */
+    missingLocations(entry: string, binaryPath: string): Promise<MissingMembers>
     /** Register located members into the device `repos.yaml`. */
     locateMembers(entries: FoundDep[]): Promise<{ ok: boolean; error?: string }>
     /** Turn a plain directory into a folder-repo entry (the not-a-repo scaffold offer). */

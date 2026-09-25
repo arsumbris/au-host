@@ -150,10 +150,10 @@ type OccupantKind = 'ref' | 'structural-node' | 'slot-wrapper' | 'projection' | 
  * - `projection`     an inline projection record: the child itself.
  * - `other`          a primitive / null / an unrecognised value: left untouched.
  *
- * Slot-wrapper detection is by the field's DECLARED slot type names. A third-party SUBTYPE of a slot
- * is not matched here (the host installs a closure predicate for that at the placement seam); for the
- * read layer the declared names cover every shipped container, and an unmatched slot subtype degrades
- * to being treated as a projection, which the validator would surface rather than corrupt.
+ * Slot-wrapper detection is BY CLOSURE: the field's admitted slot types include every subtype of its
+ * declared ones (`deriveContainerSchemas`), so a `sandwich-slot` at a field declaring `container-slot`
+ * is a wrapper, as the engine validates it. A hand-built field without that list falls back to its
+ * declared names.
  */
 function classifyOccupant(value: unknown, field: SlotField, schemas: ContainerSchemas): OccupantKind {
   if (isBlockRef(value)) return 'ref'
@@ -161,7 +161,8 @@ function classifyOccupant(value: unknown, field: SlotField, schemas: ContainerSc
   const names = typeNames((value as { type?: unknown }).type)
   if (names.length === 0) return 'other'
   if (names.some((t) => schemas.nodes.has(t))) return 'structural-node'
-  if (names.some((t) => field.slotTypes.includes(t))) return 'slot-wrapper'
+  const admitted = field.admittedSlotTypes ?? field.slotTypes
+  if (names.some((t) => admitted.includes(t))) return 'slot-wrapper'
   return 'projection'
 }
 
@@ -1198,6 +1199,185 @@ export function resolveLogicalParent(input: LogicalParentInput): PublisherRef | 
   if (parentNodeId === undefined) return null // a window root (or an orphan) has no parent → top
   if (poolRoots.includes(parentNodeId)) return rootPublisher // its parent IS a window (the root layer)
   return nodeIdToPublisher.get(parentNodeId) ?? null // parent not yet mounted → transient top (see doc)
+}
+
+// --- 1.4 slot-rule editing: read / set a position's RULES on a raw container record -------------
+//
+// A container position is a `<mountable* | container-slot>` union: a bare `[[^^id]]` ref when it has
+// nothing to say, or an inline `container-slot` wrapper `{type, ...rules, child: [[^^id]]}` when it
+// carries a rule (`fixed` / `admits` / `label` / `hideHeader`, plus per-container extras like sandwich's
+// `size`). These two functions are the RAW-POOL-FORM twin of container-core's `slot-codec`: the codec
+// reads/writes the RESOLVED tree a container mounts (child inlined); these read/write the POOL record the
+// host holds (child a `[[^^id]]` ref). They exist because the host's config-overlay edits a slot rule
+// on ANY container without the container cooperating — it reads the raw record, sets the rule, and
+// `propose`s it, exactly the "nothing is asked of the container author" property the slot model rests on.
+// They descend structural nodes (bento's leaves sit inside `bento-node.branch` records, not on the bento
+// record), the same walk every function in this file performs.
+
+/**
+ * Is a slot rule VALUE meaningful — present, not `false`, and (for a list) non-empty? The one predicate
+ * that decides whether a rule is worth writing and whether a position still SPEAKS (else it collapses to
+ * a bare `[[^^id]]` child). Owned here because au-host-sdk owns the slot vocabulary; container-core's
+ * `slot-codec` imports it, so a container and the host materialize / collapse a slot by the identical rule.
+ */
+export function slotRuleMeaningful(v: unknown): boolean {
+  if (v === undefined || v === false) return false
+  return !Array.isArray(v) || v.length > 0
+}
+
+/** Structural keys a slot wrapper carries that are NOT author-facing rules: its identity, its position
+ *  block-id, and its occupant reference. Excluded from the rule map a form reads and writes. */
+const SLOT_NON_RULE_KEYS: ReadonlySet<string> = new Set(['type', BLOCK_ID_KEY, 'child'])
+
+/** The base rule keys in canonical serialized order (matches `slot-codec`'s `write`). A container's own
+ *  EXTRAS (`size` / `sizing` / `collapsed`) are not known here, so they serialize between `placeholder`
+ *  and `label`, in input order — the same slot a container writes, and a stable, low-diff key order. */
+const SLOT_RULE_HEAD = ['admits', 'fixed', 'placeholder'] as const
+const SLOT_RULE_TAIL = ['label', 'hideHeader'] as const
+
+/** Order a rule map into the canonical serialized shape: head rules, then extras (input order), then tail. */
+function orderRules(rules: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of SLOT_RULE_HEAD) if (slotRuleMeaningful(rules[k])) out[k] = rules[k]
+  for (const [k, v] of Object.entries(rules)) {
+    if (SLOT_RULE_HEAD.includes(k as (typeof SLOT_RULE_HEAD)[number])) continue
+    if (SLOT_RULE_TAIL.includes(k as (typeof SLOT_RULE_TAIL)[number])) continue
+    if (slotRuleMeaningful(v)) out[k] = v
+  }
+  for (const k of SLOT_RULE_TAIL) if (slotRuleMeaningful(rules[k])) out[k] = rules[k]
+  return out
+}
+
+/**
+ * The CURRENT rule map at the position holding `childId` in a container record — the value the
+ * config-overlay form seeds from, and merges its edits onto (so a rule the form does not render, a
+ * third-party extra, survives). Everything except the structural `type` / `^` / `child` keys, so an
+ * unruled (bare) child yields `{}`. `slotType` is the field's QUALIFIED slot subtype — the record type
+ * the form resolves its schema against (`sandwich-slot::sandwich`), so the form shows the container's
+ * own extras (`size` / `sizing`) beside the base rules. `found` is false when `childId` is not a child
+ * of this record. Descends structural nodes; the FIRST match wins (a childId is one canonical edge).
+ */
+export function readSlotRules(
+  containerRecord: Record<string, unknown>,
+  childId: string,
+  schemas: ContainerSchemas,
+): { found: boolean; rules: Record<string, unknown>; slotType?: string } {
+  let result: { found: boolean; rules: Record<string, unknown>; slotType?: string } | undefined
+  const slotTypeOf = (field: SlotField): string | undefined => field.slotTypesQualified[0] ?? field.slotTypes[0]
+  const visit = (rec: Record<string, unknown>): void => {
+    if (result) return
+    const schema = schemaFor((rec as { type?: string }).type, schemas)
+    if (!schema) return
+    for (const field of schema.fields) {
+      if (!(field.name in rec)) continue
+      for (const occ of occupantsOf(rec, field)) {
+        if (result) return
+        switch (classifyOccupant(occ, field, schemas)) {
+          case 'ref':
+            if (parseBlockRef(occ) === childId) result = { found: true, rules: {}, slotType: slotTypeOf(field) }
+            break
+          case 'slot-wrapper': {
+            const w = occ as Record<string, unknown>
+            if (parseBlockRef(w['child']) !== childId) break
+            const rules: Record<string, unknown> = {}
+            for (const [k, v] of Object.entries(w)) if (!SLOT_NON_RULE_KEYS.has(k)) rules[k] = v
+            // Prefer the wrapper's OWN authored type (a third-party subtype the field's union admits),
+            // else the field's declared slot type.
+            const own = typeof w['type'] === 'string' ? (w['type'] as string) : undefined
+            result = { found: true, rules, slotType: own ?? slotTypeOf(field) }
+            break
+          }
+          case 'structural-node':
+            visit(occ as Record<string, unknown>)
+            break
+        }
+      }
+    }
+  }
+  visit(containerRecord)
+  return result ?? { found: false, rules: {} }
+}
+
+/**
+ * Set the RULES on the position holding `childId`, returning a NEW container record. `rules` is the
+ * COMPLETE desired rule set (the caller merges the form's edits onto `readSlotRules`, so carried extras
+ * survive); its `type` / `^` / `child` keys are ignored. When no rule is meaningful the position
+ * COLLAPSES to a bare `[[^^childId]]` ref; otherwise it MATERIALIZES / updates an inline wrapper,
+ * preserving an existing wrapper's `type` and position `^`, and stamping the matched field's QUALIFIED
+ * slot type (`SlotField.slotTypesQualified[0]`) on a freshly-materialized one. Returns the same object
+ * when `childId` is not found, or when a fresh wrapper is needed but the field names no slot type (the
+ * position stays bare — a field that admits only `mountable*` cannot carry a rule). Descends structural
+ * nodes; rewrites the first matching position only.
+ */
+export function setSlotRules(
+  containerRecord: Record<string, unknown>,
+  childId: string,
+  rules: Record<string, unknown>,
+  schemas: ContainerSchemas,
+): Record<string, unknown> {
+  const clean: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(rules)) if (!SLOT_NON_RULE_KEYS.has(k)) clean[k] = v
+  const ordered = orderRules(clean)
+  const speaks = Object.keys(ordered).length > 0
+  let done = false
+
+  // Build the new occupant for the matched position, from its existing form (a bare ref, or a wrapper
+  // whose `type`/`^` we preserve). Returns undefined for a position that does not hold `childId`.
+  const rebuild = (occ: unknown, field: SlotField): unknown | undefined => {
+    const kind = classifyOccupant(occ, field, schemas)
+    const wrapperType = field.slotTypesQualified[0] ?? field.slotTypes[0]
+    if (kind === 'ref') {
+      if (parseBlockRef(occ) !== childId) return undefined
+      // A fresh wrapper needs a slot type to claim; a field admitting only `mountable*` has none, so a
+      // rule is inexpressible there and the child stays bare.
+      if (!speaks || wrapperType === undefined) return blockRef(childId)
+      return { type: wrapperType, ...ordered, child: blockRef(childId) }
+    }
+    if (kind === 'slot-wrapper') {
+      const w = occ as Record<string, unknown>
+      if (parseBlockRef(w['child']) !== childId) return undefined
+      if (!speaks) return blockRef(childId) // collapse: nothing left to say
+      const type = typeof w['type'] === 'string' ? (w['type'] as string) : wrapperType
+      const posId = w[BLOCK_ID_KEY]
+      return {
+        ...(type !== undefined ? { type } : {}),
+        ...(posId !== undefined ? { [BLOCK_ID_KEY]: posId } : {}),
+        ...ordered,
+        child: blockRef(childId),
+      }
+    }
+    return undefined
+  }
+
+  const walk = (rec: Record<string, unknown>): Record<string, unknown> => {
+    const schema = schemaFor((rec as { type?: string }).type, schemas)
+    if (!schema) return rec
+    let changed = false
+    const out: Record<string, unknown> = { ...rec }
+    for (const field of schema.fields) {
+      if (done || !(field.name in rec)) continue
+      const occs = occupantsOf(rec, field)
+      const mapped = occs.map((occ) => {
+        if (done) return occ
+        const rebuilt = rebuild(occ, field)
+        if (rebuilt !== undefined) {
+          changed = true
+          done = true
+          return rebuilt
+        }
+        if (classifyOccupant(occ, field, schemas) === 'structural-node') {
+          const inner = walk(occ as Record<string, unknown>)
+          if (inner !== occ) changed = true
+          return inner
+        }
+        return occ
+      })
+      out[field.name] = field.list ? mapped : mapped.length > 0 ? mapped[0] : rec[field.name]
+    }
+    return changed ? out : rec
+  }
+
+  return walk(containerRecord)
 }
 
 /** Every block-id a record references at its child positions (refs and slot-wrapper children),

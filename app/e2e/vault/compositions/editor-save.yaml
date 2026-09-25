@@ -1,7 +1,11 @@
 # A bare editor at the window root with the default ⌘S → save-intent binding.
 # The host command handler is a fallback after eligible editor handlers, so the editor
 # saves its own sample.md file. Saving the clean buffer rewrites identical bytes.
+# `default-strategy: mru` opts out of the picker (both editor + host claim ⌘S), so the fallback-ordering
+# save stays deterministic and silent — the picker version of ⌘S is `picker-save.yaml` / picker.spec.ts.
 type: composition::au-host-sdk
+intent-routing:
+  default-strategy: mru
 keymaps:
   - "[[e2e-default.keymap]]"
 windows:

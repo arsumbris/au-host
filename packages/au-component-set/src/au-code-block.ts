@@ -4,6 +4,10 @@
 // plain <pre>; omit it and slot composed rows (e.g. diff lines) into the default slot instead. The copy
 // button flashes a check for ~1.4s. Composes the au-chip / au-icon-button / au-icon /
 // au-scroll-area (all registered by the same set).
+//
+// `line-start` numbers the `code` lines from that number in an unselectable gutter (the same mono grid
+// <au-diff-line> uses), one gutter width for every row. `mark-line` emphasizes one of those lines with the
+// accent wash: a whole-row tint, never an edge bar.
 
 import { css, html } from 'lit'
 import { AuElement } from './au-element'
@@ -13,6 +17,8 @@ export class AuCodeBlockElement extends AuElement {
     language: { type: String },
     copy: { type: Boolean },
     copyText: { type: String, attribute: 'copy-text' },
+    lineStart: { type: Number, attribute: 'line-start' },
+    markLine: { type: Number, attribute: 'mark-line' },
     _copied: { state: true },
     _copyFailed: { state: true },
   }
@@ -20,6 +26,8 @@ export class AuCodeBlockElement extends AuElement {
   declare language?: string
   declare copy: boolean
   declare copyText?: string
+  declare lineStart?: number
+  declare markLine?: number
   declare _copied: boolean
   private _copyFailed = false
   private copying = false
@@ -77,6 +85,39 @@ export class AuCodeBlockElement extends AuElement {
       flex-direction: column;
       min-width: max-content;
     }
+    /* Numbered lines: one grid for the block, each row a subgrid, so the gutter is as wide as the
+       widest number on every row and a marked row's tint spans the whole line. */
+    .numbered {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      min-width: max-content;
+      color: var(--au-ink-2, #c8c8c8);
+      font-family: var(--au-font-mono,ui-monospace, "SF Mono", monospace);
+      font-size: var(--au-t-xs, 12px);
+      line-height: var(--au-lh-base,20px);
+      letter-spacing: var(--au-ls-mono,-0.005em);
+    }
+    .line {
+      display: grid;
+      grid-column: 1 / -1;
+      grid-template-columns: subgrid;
+      column-gap: var(--au-space-3, 12px);
+      padding: 0 var(--au-space-3, 12px);
+    }
+    .line code {
+      white-space: pre;
+      tab-size: 2;
+    }
+    .gutter {
+      color: var(--au-ink-4, #777);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+    .line[data-mark] {
+      background: var(--au-accent-soft, rgba(140, 170, 255, 0.12));
+      color: var(--au-ink-1, #ededed);
+    }
   `
 
   private onCopy = async (): Promise<void> => {
@@ -108,6 +149,18 @@ export class AuCodeBlockElement extends AuElement {
     this._copyFailed = false
   }
 
+  private renderNumbered(code: string, start: number) {
+    return html`<div class="numbered" part="pre">
+      ${code.split('\n').map((text, i) => {
+        const n = start + i
+        const marked = n === this.markLine
+        return html`<div class="line" part=${marked ? 'line mark' : 'line'} ?data-mark=${marked}
+          ><span class="gutter" part="gutter" aria-hidden="true">${n}</span><code>${text}</code></div
+        >`
+      })}
+    </div>`
+  }
+
   render() {
     const showHead = Boolean(this.language) || this.copy
     return html`
@@ -131,9 +184,11 @@ export class AuCodeBlockElement extends AuElement {
           `
         : ''}
       <au-scroll-area axis="x" class="body" part="body">
-        ${this.code !== undefined
-          ? html`<pre part="pre"><code>${this.code}</code></pre>`
-          : html`<div class="lines"><slot></slot></div>`}
+        ${this.code === undefined
+          ? html`<div class="lines"><slot></slot></div>`
+          : this.lineStart === undefined
+            ? html`<pre part="pre"><code>${this.code}</code></pre>`
+            : this.renderNumbered(this.code, this.lineStart)}
       </au-scroll-area>
     `
   }

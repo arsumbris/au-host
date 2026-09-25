@@ -11,7 +11,15 @@
 // when the enclosing tree is hovered. The row draws one segment per ancestor depth (a pure function of
 // `level`), each bridging the inter-row gap so the lines read continuous; visibility rides the inherited
 // `--au-tree-guide-opacity` custom property, which the CONTAINER flips to 1 on hover (the container owns
-// the hover state; the component owns the geometry).
+// the hover state; the component owns the geometry). The gap a guide bridges is the CONTAINER's row gap,
+// read from the inherited `--au-tree-row-gap` (default `--au-space-0-5`): the container that lays rows
+// out sets it once and uses it as its own `gap`, so the bridge always matches the real gap.
+//
+// CONTAINMENT — a row skips layout + paint while outside the scrollport (`content-visibility: auto`), so a
+// folder of hundreds of rows scrolls and reflows at O(visible rows) while every row stays in the DOM (drag
+// targets, keyboard nav, focus intact). That containment clips paint at the host box, and the row paints
+// past it by construction (a guide bridging the gap below, the hover lift above), so the row declares its
+// own `overflow-clip-margin` covering both. The component owns the overhang, so it owns the margin.
 //
 // ROVING TABINDEX — the row itself is the SINGLE focusable unit: the parent tree sets the host's `tabindex` (0 on the
 // active row, -1 elsewhere — the ARIA-tree roving idiom), `:host(:focus-visible)` carries the ring, and
@@ -59,6 +67,13 @@ export class AuTreeRowElement extends AuElement {
     :host {
       display: block;
       border-radius: var(--au-radius-row, 8px);
+      /* Skipped while off-screen; the auto size reserves the row's measured height so the scrollbar is stable. */
+      content-visibility: auto;
+      contain-intrinsic-size: auto var(--au-row-h, 32px);
+      /* Paint allowance past the host box: the guide's bridge below, the hover lift above. Chromium takes
+         only a plain length here (no calc / max), so the margin is the gap itself; the lift (half a
+         space-0-5) fits inside any gap at least that wide. */
+      overflow-clip-margin: var(--au-tree-row-gap, var(--au-space-0-5, 2px));
     }
     /* The row body. Box-sizing border-box (shadow default is content-box). position:relative anchors
        the absolute nesting guides. */
@@ -94,12 +109,12 @@ export class AuTreeRowElement extends AuElement {
     }
 
     /* ── nesting guides — a continuous vertical line per ancestor level ──
-       Absolute, behind the content, bridging the inter-row gap (height + the gap) so stacked segments
-       read as one line. Hidden until the enclosing tree is hovered (the container sets the opacity). */
+       Absolute, behind the content, bridging the container's row gap (height + the gap) so stacked
+       segments read as one line. Hidden until the enclosing tree is hovered (the container sets the opacity). */
     .guide {
       position: absolute;
       top: 0;
-      height: calc(100% + var(--au-space-0-5, 2px));
+      height: calc(100% + var(--au-tree-row-gap, var(--au-space-0-5, 2px)));
       width: 1px;
       background: var(--au-line-1, #333);
       opacity: var(--au-tree-guide-opacity, 0);

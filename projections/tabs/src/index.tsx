@@ -50,6 +50,7 @@ import {
   EmptySlot,
   makePoolEdit,
   usePaneSwap,
+  useSwapPaneIntent,
   positionName,
   projectionTitleLookup,
   startDragGesture,
@@ -69,6 +70,7 @@ import {
   floatPaneRow,
   moveToWindowRow,
   reloadPaneRows,
+  slotRulesRow,
 } from '@arsumbris/container-kit'
 import { highlightIntent, isOpenIntent, isOpenPaneIntent, isRevealPaneIntent, isShowPaneIntent, openIntentViewer } from '@arsumbris/intent'
 import { isFileSelection } from '@arsumbris/selection'
@@ -105,7 +107,7 @@ type SlotState = CoreSlotState
  * tabs'. Tabs names the shared BASE slot and declares NO extras, which is the runtime half of
  * having no slot subtype: an author cannot write a size here, and tabs would not act on one.
  */
-const slots = makeSlotCodec<Projection>({ slotType: 'container-slot', label: 'tabs' })
+const slots = makeSlotCodec<Projection>({ site: { type: 'tabs', field: 'tabs' }, label: 'tabs' })
 
 /** One tab position: an optional occupant plus what the position says about it. `entryId` is the
  *  POSITION's address, DERIVED from the host-owned `^:` (the ruled position's own `^:`, else the bare
@@ -236,7 +238,19 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
     const prevId = prev.tabs.find((t) => t.entryId === prev.previewId)?.child?.id
     const nextId = next.tabs.find((t) => t.entryId === next.previewId)?.child?.id
     if (prevId && prevId !== nextId) host.openSurfaces?.setTransient(prevId, false)
+    // A commit that CHANGES the active child is a visible-child SWITCH — an open (a file pulled into the group),
+    // a tab select, a close that clamps to a survivor, a promote. Move REAL DOM focus into the new active child,
+    // per the focus substrate (a container that changes its visible child moves DOM focus to it, so the one
+    // focus source, the recency, and the ring agree — a report WITHOUT this stranded focus on the old tab, the
+    // dropped-tab-not-focused and 3-click-to-switch bugs). Driven from the COMMIT (a stable action callback),
+    // NOT a render effect: a child-set change REMOUNTS the tabs chrome and its passive effects never flush, so
+    // an effect-based focus is silently lost. `focusPane` is idempotent + timing-tolerant (it retries until the
+    // child's content mounts). A commit that leaves the active child unchanged (a non-active tab dragged out)
+    // moves nothing.
+    const prevActive = prev.tabs[clampIndex(prev.activeIndex, prev.tabs.length)]?.child?.id
+    const nextActive = next.tabs[clampIndex(next.activeIndex, next.tabs.length)]?.child?.id
     commitRaw(next)
+    if (nextActive && nextActive !== prevActive) host.focus.focusPane?.(nextActive)
   }, [live, commitRaw, host])
   // A tab's mounted child publisher maps through the host's publisher ↔ `^:` bridge (a tab's id IS its
   // child's `^:`), so a firer-relative `promote-intent` maps back to the tab that fired it, and focus
@@ -251,8 +265,9 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
     [host],
   )
 
-  // Seed focus through the publisher-to-node bridge so the active child is a live
-  // open target whether children are mounted locally or through portal anchors.
+  // Seed focus through the publisher-to-node bridge so the active child is a live open target (recency-only,
+  // no DOM focus move — that rides `commitModel` on a real switch, above). Covers cold load and a benign
+  // re-render where the active child is already what it should be.
   useEffect(() => {
     reportFocusFor(live().tabs[activeIndex]?.child?.id)
   }, [activeIndex, reportFocusFor])
@@ -349,6 +364,33 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
   // (`setPaneContent`), which honours `fixed` / `admits` at the seam — no tabs-local fixity check, and
   // the ⇄ is hidden for a fixed tab. Keyed by `entryId` (which IS the occupant's `^:`).
   const swapPane = usePaneSwap(host)
+  // Keyboard swap (swap-pane-intent): swap THIS group's focused tab, via the same picker the ⋯ row opens.
+  useSwapPaneIntent(host, swapPane, (id) => live().tabs.some((t) => t.child?.id === id))
+
+  // The full pane-actions ROW LIST for a tab's occupant, shared by the current-tab `⋯` dropdown and the
+  // placement's `paneActions` (the focused-pane menu `open-pane-actions-intent` opens). `id` is the
+  // occupant's `^:`. "Layout rules…" is offered even on a FIXED tab (that is how you un-fix it — a fixed
+  // tab draws no strip dropdown, so the keybind is its only reach); the rest are gated by `fixed`.
+  const paneActionRows = (id: PaneId): ContextMenuItem[] => {
+    const tab = live().tabs.find((t) => t.child?.id === id)
+    const contentId = tab?.child?.id
+    if (!contentId) return []
+    const fixed = tab!.slot.fixed === true
+    const choose = host.chooser ? host.chooser.choose.bind(host.chooser) : async () => null
+    const rows: ContextMenuItem[] = []
+    if (!fixed) {
+      rows.push({ id: 'tab.swap', label: 'Swap pane', icon: 'swap', enabled: true, run: () => swapPane.toggle(contentId) })
+      rows.push({ id: 'tab.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => void wrapPaneInteractive(contentId, { choose }) })
+      if (live().tabs.length === 1) rows.push({ id: 'tab.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(contentId) })
+      const floatRow = floatPaneRow(host, contentId)
+      if (floatRow) rows.push(floatRow)
+      const moveRow = moveToWindowRow(host, contentId)
+      if (moveRow) rows.push(moveRow)
+    }
+    rows.push(slotRulesRow(contentId))
+    rows.push(...reloadPaneRows(host, contentId))
+    return rows
+  }
 
   /** A tab position holding a fresh child, for the open / show / add paths. The entry id IS the child's
    *  host-assigned `^:` (a bare position), so it round-trips from the moment of creation — no mint. */
@@ -562,9 +604,14 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
     const m = live()
     const idx = m.tabs.findIndex((t) => t.child?.id === intent.paneId)
     if (idx < 0) return false
-    if (apply) commitModel({ ...m, activeIndex: idx })
+    if (apply) {
+      commitModel({ ...m, activeIndex: idx })
+      // Also focus explicitly: a reveal must both activate AND focus, even when the tab was already active
+      // (commitModel only moves focus on an active-child CHANGE). Idempotent, so no double-focus.
+      host.focus.focusPane?.(intent.paneId)
+    }
     return true
-  }, [live, commitModel])
+  }, [live, commitModel, host])
 
   useEffect(() => {
     const ch = host.intent
@@ -777,6 +824,8 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
       const tab = live().tabs[indexOf(id)]
       return tab ? slots.toSeamSlot(tab.slot) : null
     },
+    // The focused-pane MENU — the same rows the current-tab `⋯` dropdown opens, for `open-pane-actions-intent`.
+    paneActions: (id) => paneActionRows(id),
     ...(poolEdit ? { poolEdit } : {}),
   }
   // tabs declares BOTH its placement + its drop dialect on its root element.
@@ -908,35 +957,13 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
           // Swap the ACTIVE tab: TabGroup calls this for the active tab only, and wraps it with
           // stopPropagation, so the strip carries one swap control for the tab in view.
           renderTabActions={(tab) => {
+            // A fixed tab draws no strip dropdown (its actions are reachable via open-pane-actions-intent).
             if (tab.fixed) return null
-            // The occupant's own id (its `data-pane-id`) is what the wrap/unwrap seams address.
+            // The occupant's own id (its `data-pane-id`) is what the wrap/unwrap/slot seams address. The
+            // current tab's dropdown addresses its content; `paneActionRows` builds the same rows the
+            // focused-pane menu opens.
             const contentId = model.tabs.find((t) => t.entryId === tab.id)?.child?.id
-            const choose = host.chooser ? host.chooser.choose.bind(host.chooser) : async () => null
-            // The current tab's dropdown addresses its content; the enclosing pane's overflow
-            // addresses the entire tab container. Distinct triggers preserve both action scopes.
-            const rows: ContextMenuItem[] = [
-              { id: 'tab.swap', label: 'Swap pane', icon: 'swap', enabled: true, run: () => swapPane.toggle(tab.id) },
-            ]
-            if (contentId) {
-              rows.push({
-                id: 'tab.wrap',
-                label: 'Wrap in a container',
-                icon: 'wrap',
-                enabled: true,
-                run: () => void wrapPaneInteractive(contentId, { choose }),
-              })
-              // Unwrap this tabs only when it holds ONE tab (lift the occupant into the grandparent slot).
-              if (model.tabs.length === 1)
-                rows.push({ id: 'tab.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(contentId) })
-              const floatRow = floatPaneRow(host, contentId) // the GENERIC host float, shared across containers
-              if (floatRow) rows.push(floatRow)
-            }
-            // "Move to other window" appended LAZILY — its gate reflects the CURRENT window set at open, not
-            // this tab's render (a foreign window opening does not re-render this container). See paneActionsMenu.
-            return paneActionsMenu(host, () => {
-              const moveRow = contentId ? moveToWindowRow(host, contentId) : null
-              return [...rows, ...(moveRow ? [moveRow] : []), ...(contentId ? reloadPaneRows(host, contentId) : [])]
-            }, 'Current tab actions', 'chevron-down')
+            return paneActionsMenu(host, () => (contentId ? paneActionRows(contentId) : []), 'Current tab actions', 'chevron-down')
           }}
           onTabDragStart={(tabId, point, sourceEl) => {
             // A drag began on a tab's grip (the bar's au-tab-drag-start). Start the container's drag
@@ -981,7 +1008,7 @@ function TabsApp({ host }: { host: MountHost }): ReactNode {
             }
             const child = t.child
             // Swap picker for this tab (only the active tab shows the swap control that sets this).
-            if (swapPane.isSwapping(t.entryId)) return swapPane.swapPicker(t.entryId, child.instance)
+            if (swapPane.isSwapping(child.id)) return swapPane.swapPicker(child.id, child.instance)
             return (
               <PaneProjection
                 // Key on type + the open FILE (if any) — matches bento: an open

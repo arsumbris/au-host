@@ -18,12 +18,13 @@ import { gateRoot } from './gate'
 import type { GateSelection } from './gate'
 import type { LauncherHost } from './launcher-host'
 import type { RecentWorkspace } from '@arsumbris/au-host-sdk'
+import { layoutLabelOf } from './layout-label'
 
 /** Reconstruct a gate selection from a recents entry. Entry == root, so `root` IS the selection. */
 function selectionFromRecent(w: RecentWorkspace): GateSelection {
   return { entry: w.root }
 }
-import type { DaemonConfig, DaemonStatus, GateInspection, McpStatus } from '@arsumbris/au-host-app'
+import type { DaemonConfig, DaemonStatus, GateInspection, McpStatus, MissingMembers } from '@arsumbris/au-host-app'
 
 const POLL_INTERVAL_MS = 1500
 const MAX_LOG_LINES = 300
@@ -84,10 +85,20 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
   const [mcpConfigured, setMcpConfigured] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [createStarter,setCreateStarter]=useState<{source:string;path:string}|undefined>(undefined)
-  // First-run / freshly-cloned detection: the entry's declared members (workspace.yaml edit:/discover:
-  // plus repo.yaml deps) not yet located
-  // in the device `repos.yaml` (they would not mount). Guided locate flow below.
-  const [missing, setMissing] = useState<string[]>([])
+  // First-run / freshly-cloned detection: the engine's answer (`au members`) to which declared members
+  // would not mount. `null` while the check for the current selection is in flight, so nothing reads an
+  // unanswered check as "nothing missing". Guided locate flow below.
+  const [members, setMembers] = useState<MissingMembers | null>(null)
+  const missing = members?.ok ? members.missing : []
+  // Why the member check could not answer in full: it failed, or a locked dependency is not cached yet.
+  const membersNote =
+    members === null || (members.ok && members.complete)
+      ? ''
+      : !members.ok
+        ? members.error
+        : 'a locked dependency is not in the package cache yet, so this list may be incomplete'
+  // A settled answer that is not a clean "every member mounts": failed, incomplete, or members missing.
+  const membersProblem = members !== null && (!members.ok || !members.complete || members.missing.length > 0)
   const [locating, setLocating] = useState(false)
   const [locateMsg, setLocateMsg] = useState('')
   const logRef = useRef<HTMLPreElement>(null)
@@ -113,17 +124,26 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
   const invalid = inspection !== null && !inspection.ok
   const [scaffolding, setScaffolding] = useState(false)
 
-  // Detect unlocated members of the selected workspace (pre-daemon, raw). Re-checked when the
-  // selection changes and after a locate pass.
+  // Ask the engine which declared members of the selected workspace would not mount. Only the latest
+  // check's answer lands: a slower answer for an earlier selection is dropped.
+  const checkSeq = useRef(0)
   const refreshMissing = useCallback(async (): Promise<void> => {
-    if (!gate.entry.trim()) {
-      setMissing([])
-      return
-    }
-    setMissing(await host.gate.missingLocations(gate.entry.trim()))
-  }, [gate.entry])
+    const seq = ++checkSeq.current
+    const entry = gate.entry.trim()
+    const r: MissingMembers = entry
+      ? await host.gate.missingLocations(entry, config.binaryPath)
+      : { ok: true, missing: [], complete: true }
+    if (seq === checkSeq.current) setMembers(r)
+  }, [gate.entry, config.binaryPath])
+  // Re-checked when the selection or the engine binary changes, debounced so typing a path does not
+  // spawn a check per keystroke. The previous answer is cleared at once: it belongs to another selection.
   useEffect(() => {
-    void refreshMissing()
+    setMembers(null)
+    const timer = setTimeout(() => void refreshMissing(), 250)
+    return () => {
+      clearTimeout(timer)
+      checkSeq.current++
+    }
   }, [refreshMissing])
 
   // Turn the picked directory into a folder-repo, then re-inspect so `enter` unlocks. The engine
@@ -255,6 +275,19 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     const picked = await host.dialog.select()
     if (!picked) return
     updateGate({ entry: picked })
+    // "Open folder…" OPENS the folder, it does not merely select it. A folder that fails the
+    // daemon-free probe drops straight to the setup form. Otherwise it takes the same auto-open path
+    // the launch entry uses, which waits for the engine's member check and falls to the setup form on
+    // anything to resolve: unlocated members, an incomplete check, or a failed one.
+    const ins = await host.gate.inspect(picked)
+    if (!ins.ok) {
+      setShowSetup(true)
+      return
+    }
+    didAutoOpen.current = false
+    setError('')
+    setShowSetup(false)
+    setAutoEntry(picked)
   }
 
   // Poll the daemon status until it is SERVING (socket bound), the child EXITS, or a
@@ -312,6 +345,18 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     return s.booting && !s.running && !s.ownedByFrame
   }
 
+  // THE CLAIM: a workspace is claimed before it opens (before its daemon starts). Another live instance
+  // holding it has just been focused, so this launcher stays put and says why. Returns whether to proceed.
+  const claimOrRefuse = async (entry: string): Promise<boolean> => {
+    const claim = await host.app.claimWorkspace(entry)
+    if (claim.claimed) return true
+    setError(claim.reason === 'held'
+      ? 'this workspace is already open in another window — switched to it'
+      : `could not open this workspace: ${claim.message}`)
+    setBusy(false)
+    return false
+  }
+
   const start = async (): Promise<void> => {
     if (!root) {
       setError('select a workspace file or a location first')
@@ -319,6 +364,7 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     }
     setBusy(true)
     setError('')
+    if (!(await claimOrRefuse(root))) return
     onConfigChange({ entryPath: root })
     const cfg = { ...config, entryPath: root }
     if (await foreignBootingDaemon(cfg)) {
@@ -412,6 +458,7 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     }
     setBusy(true)
     setError('')
+    if (!(await claimOrRefuse(root))) return false
     onConfigChange({ entryPath: root })
 
     const cfg = { ...config, entryPath: root }
@@ -469,29 +516,44 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     return true
   }
 
-  const enter = (): void => {
+  // Every way into a workspace ends here, so the claim is made here: no button can open a workspace this
+  // instance does not hold (unbound stores would drop every draft and view-state write). A path that
+  // already claimed to start the daemon re-claims as a no-op. Resolves whether it entered: a refused claim
+  // leaves the launcher up, with the reason shown.
+  const enter = async (): Promise<boolean> => {
+    if (!(await claimOrRefuse(root))) return false
     onConfigChange({ entryPath: root })
     // Record the open in the recents store (the composition open is recorded post-daemon-ready).
     void host.recents.touchWorkspace({ root })
     onEnter()
+    return true
   }
 
   // A spawned instance (`AU_ENTRY`) opens its workspace on its own once the preselected entry is a
-  // valid, fully-located repo — reusing the same one-click start + enter the button drives. If the
-  // selection is not valid (not a repo, invalid, or members unlocated) it stays on the gate so the
-  // user resolves it, exactly as a manual selection would. Fires at most once.
+  // valid, fully-located repo — reusing the same one-click start + enter the button drives. It waits
+  // for the engine's member check, and a check that failed, came back incomplete, or found members
+  // unlocated leaves it on the gate so the user resolves it, exactly as a manual selection would.
+  // Fires at most once.
   useEffect(() => {
     if (!autoEntry || didAutoOpen.current) return
     if (gate.entry !== autoEntry) return // wait until the preselect has applied
     if (inspection === null) return // wait for the validity probe to land
-    if (invalid || notARepo || missing.length > 0) return // leave the gate up to resolve
+    if (members === null) return // wait for the member check to answer
+    if (invalid || notARepo || membersProblem) {
+      // Something to resolve: the auto-open is over, and the setup form stays up as it would for a
+      // manual selection. Re-checks after a fix (a located member, a set binary) never re-arm it, so
+      // the form does not fold back into the loader while the user works in it; Start is theirs.
+      setAutoEntry(null)
+      setShowSetup(true)
+      return
+    }
     didAutoOpen.current = true
     void (async () => {
       const ok = await startWorkspace()
-      if (ok) enter()
+      if (ok) await enter()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoEntry, gate.entry, inspection, invalid, notARepo, missing])
+  }, [autoEntry, gate.entry, inspection, invalid, notARepo, members, membersProblem])
 
   const running = status?.running ?? false
   const ready = status?.probe?.ready ?? false
@@ -535,7 +597,7 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
   // falls back to the full gate the moment the selection is invalid / unlocated, the daemon errors,
   // or the user asks for setup — exactly the cases where the form is actually needed.
   const autoOpening =
-    autoEntry !== null && !showSetup && error === '' && inspection?.notARepo !== true && !invalid && missing.length === 0
+    autoEntry !== null && !showSetup && error === '' && inspection?.notARepo !== true && !invalid && !membersProblem
   // Also loader while the launch entry is still resolving (`!bootChecked`), so the full form never
   // flashes for a frame before we know this is an auto-opening instance.
   const booting = !bootChecked && !showSetup
@@ -592,7 +654,7 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
     if (invalid || notARepo || missing.length > 0) {
       setGate({ entry: '' })
       setInspection(null)
-      setMissing([])
+      setMembers(null)
     }
   }
 
@@ -613,15 +675,13 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
       // "serving" is the daemon actually up for THIS entry — only the current one in a single process.
       live: running && w.root === root,
       needsSetup: w.stale,
-      layoutLabel: w.compositions?.[0]?.path.split(/[/\\]/).pop()?.replace(/\.(yaml|yml|md)$/, ''),
+      layoutLabel: layoutLabelOf(w.compositions?.[0]?.path),
     }))
     // One-click launch: start the engine (+ mcp), wait until ready, then enter — reusing the existing
     // single-process flow. `onOpen` fires only for the selected path, which is already `gate`/`root`.
     const launchSelected = async (): Promise<void> => {
       setLaunching(true)
-      const ok = await startWorkspace()
-      if (ok) enter()
-      else setLaunching(false)
+      if (!(await startWorkspace()) || !(await enter())) setLaunching(false)
     }
     // TWO daemons, shown distinctly: the ENGINE (`au`, what
     // the workspace runs on) always, and MCP (`au-mcp`, the agent-tools broker) only when it is
@@ -763,6 +823,12 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
             </div>
           )}
 
+          {!createOpen && !invalid && !notARepo && membersNote && (
+            <div className="gate-missing">
+              <div className="gate-missing-head">⚠ {membersNote}</div>
+            </div>
+          )}
+
           {!createOpen && !invalid && !notARepo && missing.length > 0 && (
             <div className="gate-missing">
               <div className="gate-missing-head">
@@ -783,7 +849,7 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
           <button className="gate-info-toggle" onClick={() => transitionLauncher(() => setCreateOpen(true))}>Create a new workspace</button>
         </div>
 
-        <button className="gate-start-workspace" onClick={async()=>{if(running)enter();else if(await startWorkspace())enter()}} disabled={busy || !root || invalid || notARepo || missing.length>0}>
+        <button className="gate-start-workspace" onClick={async()=>{if(running)await enter();else if(await startWorkspace())await enter()}} disabled={busy || !root || invalid || notARepo || members === null || missing.length>0}>
           {busy?'Starting workspace…':running?'Open workspace →':'Start and open workspace →'}
         </button>
 
@@ -806,11 +872,14 @@ export function Launcher({ host, config, onConfigChange, onEnter, defaultEntry }
             <div className="config">
           <label>
             <span>Engine executable · required to open</span>
-            <input
-              value={config.binaryPath}
-              onChange={(e) => onConfigChange({ binaryPath: e.target.value })}
-              spellCheck={false}
-            />
+            <div className="gate-engine-input">
+              <input
+                value={config.binaryPath}
+                onChange={(e) => onConfigChange({ binaryPath: e.target.value })}
+                spellCheck={false}
+              />
+              <button type="button" aria-label="Choose the au engine binary" onClick={async () => { try { const file = await host.dialog.pickPath('file'); if (file) onConfigChange({ binaryPath: file }) } catch { /* cancelled / unavailable */ } }}>↗</button>
+            </div>
           </label>
           <div className="gate-root">
             engine root <code>{root || '—'}</code>

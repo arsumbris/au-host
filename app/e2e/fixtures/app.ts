@@ -5,12 +5,13 @@
 // The whole point is to assert on the DECISION ("open-intent fired → tabs claimed → editor mounted"),
 // not scraped pixels, so a behaviour test reads like the spec it enforces.
 import { test as base, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
-import { MAIN_ENTRY, VAULT, EVENT_CATEGORIES, AU_BINARY } from '../support/paths'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { MAIN_ENTRY, EVENT_CATEGORIES, AU_BINARY } from '../support/paths'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { seedComposition } from '../support/recents'
-import { stopDaemon } from '../support/daemon'
+import { seedComposition, shortTempDir } from '../support/recents'
+import { daemonStatus, stopDaemon } from '../support/daemon'
+import { freshVault, removeVault } from '../support/vault'
 
 /** A host event record, mirrored from `@arsumbris/au-host-sdk`'s HostEvent (kept local so the e2e
  *  package needs no build-time dep on the SDK types). */
@@ -84,6 +85,25 @@ export async function floatedWindow(app: ElectronApplication): Promise<Page> {
 
 export { makeEvents }
 
+/** The Electron main process's own stdout + stderr, per launch, bounded to the most recent lines. The
+ *  daemon supervisor logs there, so a boot failure or a failed test can show what the engine said. */
+const MAIN_LOG_LINES = 400
+const mainLogs = new WeakMap<ElectronApplication, string[]>()
+function captureMainLog(app: ElectronApplication): void {
+  const lines: string[] = []
+  mainLogs.set(app, lines)
+  const push = (stream: string) => (chunk: Buffer) => {
+    for (const line of chunk.toString('utf8').split('\n')) {
+      if (!line) continue
+      lines.push(`[${stream}] ${line}`)
+      if (lines.length > MAIN_LOG_LINES) lines.shift()
+    }
+  }
+  app.process().stdout?.on('data', push('out'))
+  app.process().stderr?.on('data', push('err'))
+}
+const mainLogOf = (app: ElectronApplication): string => (mainLogs.get(app) ?? []).join('\n')
+
 export interface Drive {
   /** Click a pane-header action button by its accessible label, scoped to the app. */
   clickButton(name: string | RegExp): Promise<void>
@@ -96,6 +116,9 @@ function makeDrive(page: Page): Drive {
 }
 
 interface Fixtures {
+  /** This test's vault: a fresh copy of the authored fixture in its own git repository (support/vault.ts).
+   *  The app opens it as AU_ENTRY; engine writes commit there, never into au-host. */
+  vault: string
   electronApp: ElectronApplication
   page: Page
   events: Events
@@ -111,38 +134,86 @@ interface Options {
 export const test = base.extend<Fixtures & Options>({
   projectionDevelopment: [false, { option: true }],
   composition: ['sanity', { option: true }],
-  electronApp: async ({ composition, projectionDevelopment }, use) => {
-    // Deterministically auto-mount THIS test's composition: seed recents to rank-0, and stop any stale
-    // vault daemon so the app spawns a fresh one that sees the current vault (compositions + files).
-    seedComposition(composition)
-    stopDaemon()
-    const profile = mkdtempSync(join(tmpdir(), 'au-host-e2e-'))
-    const app = await electron.launch({
-      args: [MAIN_ENTRY, `--user-data-dir=${profile}`],
-      // AU_E2E_OFFSCREEN: create the app window hidden so the run never covers the developer's screen (real
-      // Chromium still renders; Playwright drives it over CDP). Unset it in the env to watch a run live.
-      env: { ...process.env, AU_ENTRY: VAULT, AU_HOST_EVENTS: EVENT_CATEGORIES, AU_E2E_OFFSCREEN: '1', AU_PROJECTION_DEV: projectionDevelopment ? '1' : '0' } as Record<string, string>,
-    })
+  vault: async ({}, use) => {
+    const vault = freshVault()
     try {
-      const initial = await app.firstWindow()
-      // These tests exercise mounted workspace behavior with a configured engine.
-      // Keep that fixture configuration out of the developer's Electron profile.
-      const setup = initial.getByText('Engine and agent tools', { exact: true })
-      await setup.or(initial.locator('[data-pane-id]').first()).first().waitFor({ timeout: 60_000 }).catch(async error => {
-        throw new Error(`Workspace setup did not complete: ${await initial.locator('body').innerText()}`, { cause: error })
-      })
-      if (await setup.isVisible()) {
-        await setup.click()
-        await initial.getByLabel('Engine executable · required to open').fill(AU_BINARY)
-        await initial.getByRole('button', { name: 'Start and open workspace →', exact: true }).click()
-      }
-      await use(app)
+      await use(vault)
     } finally {
-      await app.close()
-      rmSync(profile, { recursive: true, force: true })
+      stopDaemon(vault)
+      removeVault(vault)
     }
   },
-  page: async ({ electronApp }, use) => {
+  electronApp: async ({ vault, composition, projectionDevelopment }, use, testInfo) => {
+    // ISOLATION: each launch gets its own au-host device dir (AU_HOST_DEVICE_DIR) — its own drafts,
+    // view-state, recents and workspace claims — so a run never reads or writes the user's real stores and
+    // never restores state another run left behind. The engine tenant (the device registry) is NOT relocated.
+    const hostDir = shortTempDir('auh-')
+    // Deterministically auto-mount THIS test's composition: seed recents to rank-0.
+    seedComposition(composition, hostDir, vault)
+    // The engine binary is configured in the relocated host config, as an install would, so the launcher's
+    // member check answers and the workspace auto-opens with no setup UI to drive.
+    mkdirSync(join(hostDir, 'config'), { recursive: true })
+    writeFileSync(join(hostDir, 'config', 'paths.yaml'), `au: ${AU_BINARY}\n`)
+    const profile = mkdtempSync(join(tmpdir(), 'au-host-e2e-'))
+    // The temp dirs are removed however the launch ends, a failed launch included.
+    try {
+      const app = await electron.launch({
+        args: [MAIN_ENTRY, `--user-data-dir=${profile}`],
+        // AU_E2E_OFFSCREEN: create the app window hidden so the run never covers the developer's screen (real
+        // Chromium still renders; Playwright drives it over CDP). Unset it in the env to watch a run live.
+        env: { ...process.env, AU_HOST_DEVICE_DIR: hostDir, AU_ENTRY: vault, AU_HOST_EVENTS: EVENT_CATEGORIES, AU_E2E_OFFSCREEN: '1', AU_PROJECTION_DEV: projectionDevelopment ? '1' : '0' } as Record<string, string>,
+      })
+      // The app is closed however the rest ends. A failure before the test body (a failed trace start, a
+      // setup that never completes) keeps the same evidence a failed test does.
+      let failedBeforeTest = false
+      try {
+        captureMainLog(app)
+        // A trace covers every window of the app (one browser context). It is written only for a failed test.
+        await app.context().tracing.start({ screenshots: true, snapshots: true })
+        try {
+          const initial = await app.firstWindow()
+          // These tests exercise mounted workspace behavior with a configured engine.
+          // Keep that fixture configuration out of the developer's Electron profile.
+          const setup = initial.getByText('Engine and agent tools', { exact: true })
+          await setup.or(initial.locator('[data-pane-id]').first()).first().waitFor({ timeout: 60_000 }).catch(async error => {
+            throw new Error(`Workspace setup did not complete: ${await initial.locator('body').innerText()}`, { cause: error })
+          })
+          if (await setup.isVisible()) {
+            await setup.click()
+            await initial.getByLabel('Engine executable · required to open').fill(AU_BINARY)
+            await initial.getByRole('button', { name: 'Start and open workspace →', exact: true }).click()
+          }
+        } catch (error) {
+          failedBeforeTest = true
+          throw error
+        }
+        await use(app)
+      } finally {
+        if (failedBeforeTest || testInfo.status !== testInfo.expectedStatus) {
+          const trace = testInfo.outputPath('trace.zip')
+          await app.context().tracing.stop({ path: trace }).catch(() => undefined)
+          await testInfo.attach('trace', { path: trace, contentType: 'application/zip' }).catch(() => undefined)
+          for (const [i, window] of app.windows().entries()) {
+            try {
+              const shot = testInfo.outputPath(`window-${i}.png`)
+              await window.screenshot({ path: shot, timeout: 5_000 })
+              await testInfo.attach(`window-${i}`, { path: shot, contentType: 'image/png' })
+            } catch (error) {
+              await testInfo.attach(`window-${i}-screenshot-failed`, { body: String(error), contentType: 'text/plain' })
+            }
+          }
+          await testInfo.attach('main-process-log', { body: mainLogOf(app), contentType: 'text/plain' })
+        } else {
+          await app.context().tracing.stop().catch(() => undefined)
+        }
+        await app.close()
+      }
+    } finally {
+      rmSync(profile, { recursive: true, force: true })
+      rmSync(hostDir, { recursive: true, force: true })
+    }
+  },
+  page: async ({ electronApp, vault }, use) => {
     const page = await electronApp.firstWindow()
     const logs: string[] = []
     page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`))
@@ -153,8 +224,10 @@ export const test = base.extend<Fixtures & Options>({
       await expect(page.locator('.au-dissolve')).toHaveAttribute('data-phase', 'done')
     } catch (err) {
       const text = await page.evaluate(() => document.body.innerText).catch(() => '<no body>')
+      // The launcher's startup log sits in a collapsed disclosure, which innerText skips.
+      const startup = await page.locator('.gate-disclosure pre.log').textContent().catch(() => null)
       throw new Error(
-        `composition never painted (no [data-pane-id] in 60s).\n--- on-screen text ---\n${text}\n--- recent console (${logs.length}) ---\n${logs.slice(-40).join('\n')}\n--- original ---\n${(err as Error).message}`,
+        `composition never painted (no [data-pane-id] in 60s).\n--- on-screen text ---\n${text}\n--- launcher startup log ---\n${startup ?? '<none>'}\n--- au daemon status ---\n${daemonStatus(vault)}\n--- main process (tail) ---\n${mainLogOf(electronApp).split('\n').slice(-60).join('\n')}\n--- recent console (${logs.length}) ---\n${logs.slice(-40).join('\n')}\n--- original ---\n${(err as Error).message}`,
       )
     }
     await use(page)

@@ -1,0 +1,32 @@
+# float-reorder with a composition `group-into: column`: a floated window's wrap must use it silently, as the main window does.
+type: composition::au-host-sdk
+grouping:
+  group-into: "[[column::column]]"
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabs]]"
+    center: "[[^^edC]]"
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - "[[^^edA]]"
+      - "[[^^tree]]"
+  - ^: edA
+    type: editor-pane::editor
+    file: sample.md
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: edC
+    type: editor-pane::editor
+    file: sample.md

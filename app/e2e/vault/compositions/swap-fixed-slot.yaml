@@ -1,0 +1,20 @@
+# SWAP-FIXED-SLOT fixture — a window → tabs whose one tab is a FIXED position holding editor#ed.
+# The Swap pane command must decline it, as the ⋯ menu hides its Swap row.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^tabs]]"
+    ^: w
+  - ^: tabs
+    type: tabs::tabs
+    tabs:
+      - ^: fixedslot
+        type: container-slot::au-host-sdk
+        fixed: true
+        child: "[[^^ed]]"
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

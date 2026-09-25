@@ -33,7 +33,11 @@ async function inspect(host: MountHost, path: string): Promise<Inspection> {
       const type = await readType(host.engine, `${origin.name}::${origin.repo}`)
       return 'ready' in type && type.ready && type.result ? type.result.fields.map(field => ({ ...field, origin })) : []
     }))
-    return { claim, closure: entry, fields: declarations.flat() }
+    // A field is divergent when its origins declare it with different shapes; each origin keeps its own row.
+    const declared = declarations.flat()
+    const shapes = new Map<string, Set<string>>()
+    for (const field of declared) shapes.set(field.name, (shapes.get(field.name) ?? new Set()).add(field.shape))
+    return { claim, closure: entry, fields: declared.map(field => ({ ...field, divergent: (shapes.get(field.name)?.size ?? 0) > 1 })) }
   }))
   return { instance, types }
 }

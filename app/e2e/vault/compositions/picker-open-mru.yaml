@@ -1,0 +1,38 @@
+# PICKER-OPEN-MRU fixture — the `picker-open` layout plus the `default-strategy: mru` opt-out, so an
+# ambient open with >1 capable group auto-picks the focus/MRU head SILENTLY (the old behaviour) instead
+# of showing the picker. The regression guard for the opt-out.
+type: composition::au-host-sdk
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+intent-routing:
+  default-strategy: mru
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tabsL]]"
+    center: "[[^^tree]]"
+    right: "[[^^tabsR]]"
+  - ^: tabsL
+    type: tabs::tabs
+    tabs:
+      - "[[^^edL]]"
+  - ^: edL
+    type: editor-pane::editor
+    file: other.md
+  - ^: tabsR
+    type: tabs::tabs
+    tabs:
+      - "[[^^edR]]"
+  - ^: edR
+    type: editor-pane::editor
+    file: other.md
+  - ^: tree
+    type: file-tree::file-tree

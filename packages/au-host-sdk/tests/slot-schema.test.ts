@@ -9,7 +9,7 @@ import { bareTypeName, deriveContainerSchemas, type SlotTypeView } from '../src/
 // --------------------------------------------------------------- the real corpus
 
 /** `<projection::au-host-sdk& | X>` — the per-branch-suffix union every container carries. */
-const union = (slot: string, ...nodes: string[]): SlotTypeView['fields'][number]['shape_ast'] => ({
+const union = (slot: string, ...nodes: string[]): SlotTypeView['effective_fields'][number]['shape_ast'] => ({
   kind: 'union',
   branches: [
     { kind: 'inline-or-reference', name: 'projection::au-host-sdk' },
@@ -19,27 +19,27 @@ const union = (slot: string, ...nodes: string[]): SlotTypeView['fields'][number]
 })
 
 const list = (
-  inner: SlotTypeView['fields'][number]['shape_ast'],
-): SlotTypeView['fields'][number]['shape_ast'] => ({ kind: 'list', min: 0, inner: inner! })
+  inner: SlotTypeView['effective_fields'][number]['shape_ast'],
+): SlotTypeView['effective_fields'][number]['shape_ast'] => ({ kind: 'list', min: 0, inner: inner! })
 
 const NODES: SlotTypeView[] = [
-  { name: 'container-slot::au-host-sdk', parents: ['container-node'], fields: [
+  { name: 'container-slot::au-host-sdk', parents: ['container-node'], effective_fields: [
     { name: 'child', shape_ast: { kind: 'inline-or-reference', name: 'projection' } },
     { name: 'admits', shape_ast: { kind: 'list', min: 1, inner: { kind: 'def-reference', bound: { kind: 'single', name: 'projection' } } } },
     { name: 'fixed', shape_ast: { kind: 'primitive', name: 'Boolean' } },
     { name: 'label', shape_ast: { kind: 'primitive', name: 'String' } },
   ] },
-  { name: 'sandwich-slot::sandwich', parents: ['container-slot::au-host-sdk'], fields: [
+  { name: 'sandwich-slot::sandwich', parents: ['container-slot::au-host-sdk'], effective_fields: [
     { name: 'size', shape_ast: { kind: 'primitive', name: 'Number' } },
     { name: 'collapsed', shape_ast: { kind: 'primitive', name: 'Boolean' } },
   ] },
-  { name: 'column-slot::column', parents: ['container-slot::au-host-sdk'], fields: [
+  { name: 'column-slot::column', parents: ['container-slot::au-host-sdk'], effective_fields: [
     { name: 'size', shape_ast: { kind: 'primitive', name: 'Number' } },
     { name: 'collapsed', shape_ast: { kind: 'primitive', name: 'Boolean' } },
   ] },
-  { name: 'bento-slot::bento', parents: ['container-slot::au-host-sdk'], fields: [] },
-  { name: 'bento-node::bento', parents: ['container-node::au-host-sdk'], fields: [] },
-  { name: 'bento-node.branch::bento', parents: ['bento-node'], fields: [
+  { name: 'bento-slot::bento', parents: ['container-slot::au-host-sdk'], effective_fields: [] },
+  { name: 'bento-node::bento', parents: ['container-node::au-host-sdk'], effective_fields: [] },
+  { name: 'bento-node.branch::bento', parents: ['bento-node'], effective_fields: [
     { name: 'direction', shape_ast: { kind: 'enum', members: ['row', 'column'] } },
     { name: 'ratio', shape_ast: { kind: 'primitive', name: 'Number' } },
     { name: 'children', shape_ast: list(union('bento-slot', 'bento-node.branch')) },
@@ -47,28 +47,28 @@ const NODES: SlotTypeView[] = [
 ]
 
 const CONTAINERS: SlotTypeView[] = [
-  { name: 'sandwich::sandwich', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'sandwich::sandwich', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'left', shape_ast: union('sandwich-slot') },
     { name: 'center', shape_ast: union('sandwich-slot') },
     { name: 'right', shape_ast: union('sandwich-slot') },
   ] },
-  { name: 'column::column', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'column::column', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'items', shape_ast: list(union('column-slot')) },
     { name: 'showItemHeaders', shape_ast: { kind: 'primitive', name: 'Boolean' } },
     { name: 'allowWrap', shape_ast: { kind: 'primitive', name: 'Boolean' } },
   ] },
-  { name: 'tabs::tabs', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'tabs::tabs', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'tabs', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'activeTabIndex', shape_ast: { kind: 'primitive', name: 'Number' } },
   ] },
-  { name: 'dock::dock', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'dock::dock', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'top', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'bottom', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'left', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'right', shape_ast: list(union('container-slot::au-host-sdk')) },
     { name: 'center', shape_ast: union('container-slot::au-host-sdk') },
   ] },
-  { name: 'bento::bento', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'bento::bento', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'root', shape_ast: union('bento-slot', 'bento-node.branch') },
     { name: 'detached', shape_ast: list({ kind: 'inline-or-reference', name: 'projection::au-host-sdk' }) },
     { name: 'groupNewPanes', shape_ast: { kind: 'primitive', name: 'Boolean' } },
@@ -76,7 +76,7 @@ const CONTAINERS: SlotTypeView[] = [
   // `bar` holds NO layout positions: it lays out chrome it aggregates, with no placement seam. So its
   // three regions are `bar-item[]` — bar's OWN type, holding the widget in `view` — which is neither a
   // `mountable` nor a `container-node`, so the walk skips a bar BY TYPE.
-  { name: 'bar::bar', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'bar::bar', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'orientation', shape_ast: { kind: 'enum', members: ['horizontal', 'vertical'] } },
     { name: 'role', shape_ast: { kind: 'def-reference', bound: { kind: 'single', name: 'projection::au-host-sdk' } } },
     { name: 'start', shape_ast: list({ kind: 'record', name: 'bar-item::bar' }) },
@@ -86,7 +86,7 @@ const CONTAINERS: SlotTypeView[] = [
   // `aup-workspace-sidebar` holds ONE child in a BARE `mountable*` position — no slot union, so no per-slot rules.
   // Its occupant is-a `mountable`, so it is a position; a slot type would be optional. Shape dumped
   // from the live daemon verbatim.
-  { name: 'aup-workspace-sidebar::aup-workspace-sidebar', parents: ['container-projection::au-host-sdk'], fields: [
+  { name: 'aup-workspace-sidebar::aup-workspace-sidebar', parents: ['container-projection::au-host-sdk'], effective_fields: [
     { name: 'body', shape_ast: { kind: 'reference', name: 'mountable::au-host-sdk' } },
   ] },
 ]
@@ -95,9 +95,9 @@ const CONTAINERS: SlotTypeView[] = [
 // (a bare `mountable*` needs no family — a type's closure includes itself). The host reads these as
 // `subtypes('mountable')`; the unit corpus states the edges it needs.
 const MOUNTABLE: SlotTypeView[] = [
-  { name: 'projection::au-host-sdk', parents: ['mountable::au-host-sdk'], fields: [] },
-  { name: 'composition::au-host-sdk', parents: ['mountable::au-host-sdk'], fields: [] },
-  { name: 'editor-pane::editor', parents: ['projection::au-host-sdk'], fields: [] },
+  { name: 'projection::au-host-sdk', parents: ['mountable::au-host-sdk'], effective_fields: [] },
+  { name: 'composition::au-host-sdk', parents: ['mountable::au-host-sdk'], effective_fields: [] },
+  { name: 'editor-pane::editor', parents: ['projection::au-host-sdk'], effective_fields: [] },
 ]
 
 const derived = deriveContainerSchemas(CONTAINERS, NODES, MOUNTABLE)
@@ -175,7 +175,7 @@ describe('deriveContainerSchemas — the nested case', () => {
   it('reaches a structural node by CLOSURE when a union names its base', () => {
     // Resolving only the exact base name would omit its structural subtypes.
     const viaBase: SlotTypeView[] = [
-      { name: 'other::x', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'other::x', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'root', shape_ast: union('container-slot::au-host-sdk', 'bento-node::bento') },
       ] },
     ]
@@ -204,7 +204,7 @@ describe('deriveContainerSchemas — what it must NOT report', () => {
     // A <projection | editor-pane> field is a position: both alternatives are mountable occupants.
     // bar uses its own bar-item wrapper type and is excluded from this bare-child case.
     const picker: SlotTypeView[] = [
-      { name: 'picker::x', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'picker::x', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'shown', shape_ast: { kind: 'union', branches: [
           { kind: 'inline-or-reference', name: 'projection::au-host-sdk' },
           { kind: 'record', name: 'editor-pane::editor' },
@@ -216,7 +216,7 @@ describe('deriveContainerSchemas — what it must NOT report', () => {
 
   it('ignores a field whose shape did not parse', () => {
     const broken: SlotTypeView[] = [
-      { name: 'busted::x', parents: ['container-projection::au-host-sdk'], fields: [{ name: 'oops', shape_ast: null }] },
+      { name: 'busted::x', parents: ['container-projection::au-host-sdk'], effective_fields: [{ name: 'oops', shape_ast: null }] },
     ]
     expect(deriveContainerSchemas(broken, NODES).containers.has('busted')).toBe(false)
   })
@@ -226,7 +226,7 @@ describe('deriveContainerSchemas — what it must NOT report', () => {
     // Reading a bound as an occupant would make every `admits` list read as a position — and would
     // do it on `container-slot` itself, so every slot would appear to contain slots.
     const bounded: SlotTypeView[] = [
-      { name: 'boundy::x', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'boundy::x', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'allowed', shape_ast: { kind: 'list', min: 1, inner: { kind: 'def-reference', bound: { kind: 'single', name: 'container-slot::au-host-sdk' } } } },
       ] },
     ]
@@ -240,14 +240,14 @@ describe('deriveContainerSchemas — a slot-ONLY position', () => {
     // container may legitimately declare "every position here carries rules", and refusing to
     // enumerate it while still enforcing its slots would serve only the shape we happen to write.
     const strict: SlotTypeView[] = [
-      { name: 'frame::third-party', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'frame::third-party', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'header', shape_ast: { kind: 'record', name: 'container-slot::au-host-sdk' } },
         { name: 'rows', shape_ast: { kind: 'list', min: 0, inner: { kind: 'record', name: 'container-slot::au-host-sdk' } } },
       ] },
     ]
     expect(deriveContainerSchemas(strict, NODES).containers.get('frame')!.fields).toEqual([
-      { name: 'header', list: false, slotTypes: ['container-slot'], nodeTypes: [] },
-      { name: 'rows', list: true, slotTypes: ['container-slot'], nodeTypes: [] },
+      { name: 'header', list: false, slotTypes: ['container-slot'], slotTypesQualified: ['container-slot'], admittedSlotTypes: ['container-slot', 'sandwich-slot', 'column-slot', 'bento-slot'], nodeTypes: [] },
+      { name: 'rows', list: true, slotTypes: ['container-slot'], slotTypesQualified: ['container-slot'], admittedSlotTypes: ['container-slot', 'sandwich-slot', 'column-slot', 'bento-slot'], nodeTypes: [] },
     ])
   })
 })
@@ -257,22 +257,48 @@ describe('deriveContainerSchemas — spellings a third party may use', () => {
     // `<projection | container-slot>&` is the same statement the grammar spells differently. Serving
     // only the form our own containers happen to use would make the traversal first-party-only.
     const other: SlotTypeView[] = [
-      { name: 'carousel::third-party', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'carousel::third-party', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'slides', shape_ast: { kind: 'list', min: 0, inner: { kind: 'compound-reference', mode: 'inline-or-ref', op: 'union', branches: ['projection::au-host-sdk', 'container-slot::au-host-sdk'] } } },
       ] },
     ]
     const d = deriveContainerSchemas(other, NODES)
     expect(d.containers.get('carousel')!.fields).toEqual([
-      { name: 'slides', list: true, slotTypes: ['container-slot'], nodeTypes: [] },
+      { name: 'slides', list: true, slotTypes: ['container-slot'], slotTypesQualified: ['container-slot'], admittedSlotTypes: ['container-slot', 'sandwich-slot', 'column-slot', 'bento-slot'], nodeTypes: [] },
     ])
   })
 
   it('does not read an INTERSECTION as a choice of occupant', () => {
     const bad: SlotTypeView[] = [
-      { name: 'weird::x', parents: ['container-projection::au-host-sdk'], fields: [
+      { name: 'weird::x', parents: ['container-projection::au-host-sdk'], effective_fields: [
         { name: 'both', shape_ast: { kind: 'compound-reference', mode: 'inline-or-ref', op: 'intersection', branches: ['projection::au-host-sdk', 'container-slot::au-host-sdk'] } },
       ] },
     ]
     expect(deriveContainerSchemas(bad, NODES).containers.has('weird')).toBe(false)
+  })
+})
+
+describe('deriveContainerSchemas — an INHERITED child-bearing field', () => {
+  // A kind declaring a position on its BASE (`frame-container.center`) must make that position a position
+  // of every subtype — otherwise a subtype's inherited `center` subtree is unreachable and gets reaped.
+  const FRAME: SlotTypeView[] = [
+    { name: 'frame-container::au-host-sdk', parents: ['container-projection::au-host-sdk'], effective_fields: [
+      { name: 'center', shape_ast: union('container-slot::au-host-sdk') },
+    ] },
+    // As the engine serves it, sorted by name: the inherited `center`, then the own `left`.
+    { name: 'my-frame::mine', parents: ['frame-container::au-host-sdk'], fields: [{ name: 'left' }], effective_fields: [
+      { name: 'center', shape_ast: union('container-slot::au-host-sdk') },
+      { name: 'left', shape_ast: union('sandwich-slot') },
+    ] },
+  ]
+  const d = deriveContainerSchemas(FRAME, NODES, MOUNTABLE)
+
+  it('includes the inherited position, own fields first', () => {
+    expect((d.containers.get('my-frame')?.fields ?? []).map((f) => f.name)).toEqual(['left', 'center'])
+  })
+
+  it('carries the inherited position\'s slot types', () => {
+    const center = d.containers.get('my-frame')!.fields.find((f) => f.name === 'center')!
+    expect(center.slotTypes).toEqual(['container-slot'])
+    expect(center.list).toBe(false)
   })
 })

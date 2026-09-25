@@ -55,6 +55,44 @@ export function yamlFieldContext(source: string, pos: number): YamlFieldContext 
   return { from: key.from, to: key.to, steps }
 }
 
+/** The type NAME a `.type.yaml` file declares — its basename stem minus the `.type` tail. The type
+ *  system derives a def's identity from its filename, so this is authoritative, bundles included
+ *  (`<bundle>/<member>.type.yaml` → `<member>`). Null for a non-type-def path. */
+export function typeNameFromPath(path: string): string | null {
+  const m = /(?:^|\/)([^/]+?)\.type\.ya?ml$/.exec(path)
+  return m ? m[1]! : null
+}
+
+/** A field KEY declared directly under a type-def's top-level `fields:` map. Returns the field name +
+ *  key span. A type-def DECLARES fields, it does not CLAIM a type, so `yamlFieldContext` (which needs a
+ *  `type:` claim) returns null here; this is its type-def-file twin. */
+export function typeDefFieldAt(source: string, pos: number): { field: string; from: number; to: number } | null {
+  if (cachedSource !== source || !cachedTree) { cachedSource = source; cachedTree = yamlLanguage.parser.parse(source) }
+  let key: SyntaxNode | null = cachedTree.resolveInner(pos, -1)
+  while (key && key.name !== 'Key') key = key.parent
+  if (!key || pos < key.from || pos > key.to) return null
+  const raw = scalar(source, key)
+  if (!raw) return null
+  // Parent chain: Key → Pair → (block mapping) → Pair whose key is `fields`. So the key sits directly
+  // inside the value map of a `fields:` declaration, not (say) a `meta:` sub-region.
+  const fieldsPair = key.parent?.parent?.parent ?? null
+  if (!fieldsPair || fieldsPair.name !== 'Pair' || scalar(source, fieldsPair.getChild('Key')) !== 'fields') return null
+  // The optional marker `?` sits on the NAME side of a declaration (`myField?: shape`); it is not part of
+  // the field's name. `?` is illegal in a type-def name, so a trailing one is always the marker. Strip it
+  // so the name matches the engine's declared field.
+  return { field: raw.replace(/\?$/, ''), from: key.from, to: key.to }
+}
+
+/** The qualified self-claim for a type-def file (`name::repo`), so its OWN field declarations resolve
+ *  through the same closure read the instance path uses. */
+export async function typeDefClaim(reader: WireReader, path: string): Promise<string | null> {
+  const name = typeNameFromPath(path)
+  if (!name) return null
+  const owner = await readResolveMember(reader, path)
+  const repo = 'ready' in owner && owner.ready ? owner.result?.repo : undefined
+  return repo ? `${name}::${repo}` : name
+}
+
 function inlineTypes(shape: WireShape | null): string[] {
   if (!shape) return []
   switch (shape.kind) {
@@ -78,12 +116,15 @@ export async function resolveYamlField(reader: WireReader, path: string, context
     // for divergent fields. Read each declared shape so no valid origin is hidden.
     const identities = closures.flatMap(result => 'ready' in result && result.ready ? result.result.flatMap(entry => entry.ancestors) : [])
     const declarations = await Promise.all([...new Map(identities.map(identity => [`${identity.name}::${identity.repo}`, identity])).values()].map(async identity => {
-      if (step.origin && step.origin !== identity.name && step.origin !== `${identity.name}::${identity.repo}`) return []
       const type = await readType(reader, `${identity.name}::${identity.repo}`)
       return 'ready' in type && type.ready && type.result ? type.result.fields.filter(field => field.name === step.field).map(field => ({ ...field, origin: identity })) : []
     }))
-    fields = declarations.flat()
-    fields = [...new Map(fields.map(field => [`${field.origin.repo}:${field.origin.name}:${field.name}`, field])).values()]
+    const declared = [...new Map(declarations.flat().map(field => [`${field.origin.repo}:${field.origin.name}:${field.name}`, field])).values()]
+    // A field is divergent when its origins declare it with different shapes, whichever origin a qualifier
+    // then picks; each origin keeps its own row.
+    const divergent = new Set(declared.map(field => field.shape)).size > 1
+    const picked = step.origin ? declared.filter(field => step.origin === field.origin.name || step.origin === `${field.origin.name}::${field.origin.repo}`) : declared
+    fields = picked.map(field => ({ ...field, divergent }))
     claims = fields.flatMap(field => inlineTypes(field.shape_ast).map(name => qualify(name, field.origin.repo)))
   }
   return fields

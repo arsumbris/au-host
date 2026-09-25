@@ -6,6 +6,8 @@
 # container DOM lives on the SURFACE — the DOM-keyed `wrapPane` cannot reach it, so the authority wraps the
 # window's content directly (a pool re-point + a surface re-drive). viewer-defaults route md → editor, so
 # the viewer resolves without a second chooser.
+# The LEFT and RIGHT slots admit only an editor or a tabs group, so neither holds a placeholder: the slot
+# the float vacates stays a true hole, and a placeholder cannot claim the open ahead of the chooser floor.
 type: composition::au-host-sdk
 windows:
   - "[[^^w]]"
@@ -20,8 +22,20 @@ projections:
     ^: w
   - ^: sw
     type: sandwich::sandwich
-    left: "[[^^ed]]"
+    left:
+      ^: left-slot
+      type: sandwich-slot::sandwich
+      child: "[[^^ed]]"
+      admits:
+        - "[[editor-pane::editor]]"
+        - "[[tabs::tabs]]"
     center: "[[^^tree]]"
+    right:
+      ^: right-slot
+      type: sandwich-slot::sandwich
+      admits:
+        - "[[editor-pane::editor]]"
+        - "[[tabs::tabs]]"
   - ^: ed
     type: editor-pane::editor
     file: other.md

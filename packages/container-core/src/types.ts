@@ -56,14 +56,21 @@ export const ROOT_SLOT = '__root__';
 // editor imports+inlines); the router never centralizes it.
 
 
+/** What a content destination says about THIS drag, at hit-test time.
+ *  - `accept`: it takes the drag, and is offered.
+ *  - `pass`: not its kind of drag (a folder under a PANE drag, which carries no content). It emits no target,
+ *    and the walk goes on outward, so the container zone around it can win.
+ *  - `refuse`: its kind of drag, but the drop is invalid or a no-op HERE (a folder over itself or its own
+ *    subtree, or over the folder it already sits in). Nothing is offered, not here and not further out, so a
+ *    refusal never falls through to an ancestor that would accept a move the user did not point at. */
+export type ContentDropVerdict = 'accept' | 'pass' | 'refuse';
+
 /** A surface's content-drop contract, declared via `registerDropTarget`. */
 export interface ContentDropSpec {
   /** Optional destination-owned wording for the drag preview; never used for routing. */
   previewLabel?: string;
-  /** Whether this surface accepts THIS drag, evaluated at HIT-TEST time. A surface that refuses (a folder
-   *  over a PANE drag, which carries no `content`) emits NO target, so deepest-wins gives the container
-   *  zone beneath it. Typically `isFileSelection(content)` or `content != null`. */
-  accepts(source: DragSource, content: DragContent): boolean;
+  /** This surface's verdict on THIS drag, evaluated at HIT-TEST time. See `ContentDropVerdict`. */
+  consider(source: DragSource, content: DragContent): ContentDropVerdict;
   /** Handle the drop. The surface owns the outcome (a folder move through the blast-radius preview; an
    *  editor import+inline). The spec closes over its own identity (the folder's dir), so no point/target
    *  is threaded. */

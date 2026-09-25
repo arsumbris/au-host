@@ -56,7 +56,7 @@ meta:
   # `entry` is relative to the owning package root; the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
     customTokenEntry:
       - ./graph.tokens.css
   # The intents this projection FIRES (fires-intent-meta, the mirror of handles-intent-meta).

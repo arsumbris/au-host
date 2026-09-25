@@ -17,7 +17,7 @@ import { injectManifest } from './inject'
 import { launchAgent } from './agent-launch'
 import { listAdapters, selectAdapter } from './adapter-discovery'
 import { listDormant, retentionConfig, retentionPreview, retireSession, setRetentionWindow } from './retention'
-import { loadToolPaths, saveToolPaths, ensurePathsFile } from './tool-paths'
+import { loadToolPaths, saveToolPaths, ensurePathsFile, resolveDaemonBinary } from './tool-paths'
 import { SurfaceWindows } from './surface-windows'
 import { macFrameOptions, reassertTrafficLights } from './window-frame'
 import { EngineConnections } from './engine-connections'
@@ -29,9 +29,10 @@ import { discoverWorkspaceTemplates, materializeWorkspace } from './workspace-te
 import {hostConfigDir as templateHostConfigDir, engineConfigDir as templateEngineConfigDir} from './device-paths'
 import type {MaterializeWorkspaceRequest} from '@arsumbris/au-host-sdk'
 import { TerminalSessions } from './terminal'
-import { addMember, declarePeer, removeMember, scaffoldRegistry, setMemberDisabled, setMemberRole } from './workspace-edit'
+import { addMember, declarePeer, removeMember, scaffoldRegistry, setMemberDisabled, setMemberRole, type Mutate } from './workspace-edit'
 import { listCompositions, listWorkspaces, touchComposition, touchWorkspace } from './host-recents'
 import { ViewStateStore } from './view-state-store'
+import { CompositionDraftStore, type CompositionDraft } from './composition-draft-store'
 import {
   installProjectionProtocol,
   projectionScheme,
@@ -41,8 +42,9 @@ import {
 import { installAssetProtocol, registerAsset, assetScheme, artifactScheme } from './asset-sources'
 import { installSharedProtocol, sharedScheme } from './shared-deps-sources'
 import { installRendererCsp } from './csp'
-import type { AgentProfileData, DaemonConfig, FoundDep, SurfaceCommand, SurfaceOpenRequest, ThemeSyncState, ToolPathsPatch, TouchWorkspace, WorkspaceMemberListRole } from '../shared/daemon-api'
+import type { AgentProfileData, DaemonConfig, FoundDep, SurfaceCommand, SurfaceOpenRequest, ThemeSyncState, ToolPathsPatch, TouchWorkspace, WorkspaceClaim, WorkspaceMemberListRole } from '../shared/daemon-api'
 import type { ReadRequest, SubscribeRequest } from '@arsumbris/au-engine-sdk'
+import type { WireDiagnostic } from '@arsumbris/au-engine-sdk/reads'
 import type { HostCommand, HostResult } from '@arsumbris/au-host-sdk'
 
 // KNOWN-BENIGN macOS/libuv teardown race, last-resort belt. A supervised child's (daemon / au-mcp) stdio
@@ -60,27 +62,104 @@ process.on('uncaughtException', (err) => {
   throw err
 })
 
+// This process's own stdout / stderr carry the daemon, mcp and event-mirror lines. When the terminal (or
+// pipe) that launched the app goes away, the next write fails with EPIPE, emitted as an 'error' event that,
+// unhandled, is thrown and crashes main. Losing a log line to a vanished reader is fine; crashing is not.
+for (const stream of [process.stdout, process.stderr]) stream.on('error', () => undefined)
+
 const supervisor = new DaemonSupervisor()
 const mcp = new McpSupervisor()
 const viewState = new ViewStateStore()
+const compositionDrafts = new CompositionDraftStore()
 const connections = new EngineConnections()
 const surfaces = new SurfaceWindows()
 const terminals = new TerminalSessions()
+
+// Handle for the gated leak/CPU metrics sampler (see `AU_HOST_METRICS` below). Cleared on shutdown.
+let metricsTimer: NodeJS.Timeout | undefined
 
 // The host's main BrowserWindow — the renderer that owns the live composition and
 // executes agent-host transport commands. Set in createWindow; the transport routes
 // commands to it (a secondary surface is not a second command target).
 let mainWindow: BrowserWindow | null = null
 
-// This instance's presence socket, bound while a workspace is open (see the hostbridge lifecycle
-// below). A `focus` request from another instance raises this window — `windows.open` on an
+// This instance's WORKSPACE CLAIM (the per-entry presence socket), held from the moment the workspace is
+// claimed until quit. A `focus` request from another instance raises this window — opening an
 // already-open workspace routes here instead of spawning a duplicate.
-const instancePresence = new InstancePresence(() => {
-  if (!mainWindow) return
+const instancePresence = new InstancePresence(() => showMainWindow())
+
+/** True until startup has decided whether this process shows a window at all (see the startup probe). */
+let booting = true
+
+/**
+ * Bring the main window forward, creating it when there is none: on macOS the process (and its claim)
+ * outlives a closed window, so an activation or a focus request from another instance must be able to
+ * reopen it. While booting, startup creates the window itself.
+ */
+function showMainWindow(): void {
+  if (booting) return
+  if (!mainWindow) {
+    createWindow()
+    return
+  }
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()
-})
+}
+
+/** The workspace this instance has claimed, or null before any claim. */
+let claimedEntry: string | null = null
+
+/**
+ * Claim `entry` for this instance and bind the local stores to it. Fails (without opening anything) when
+ * another live instance holds it; that instance is focused. A spawned instance launched for that entry
+ * then has nothing to show, so it quits.
+ */
+async function claimWorkspace(entry: string): Promise<WorkspaceClaim> {
+  let claimed: boolean
+  // Switching workspaces: the old workspace's stores are flushed and unbound while this process still
+  // holds BOTH claims, so no other instance can take the old workspace before its last write lands.
+  const handover = (): void => {
+    viewState.close()
+    compositionDrafts.close()
+    claimedEntry = null
+  }
+  try {
+    claimed = await instancePresence.claim(entry, handover)
+  } catch (err) {
+    // NOT "held elsewhere": the claim could not be made at all (e.g. the socket path is unusable). Said as
+    // what it is, so a failure never reads as another window owning the workspace.
+    return { claimed: false, reason: 'error', message: err instanceof Error ? err.message : String(err) }
+  }
+  if (!claimed) {
+    if (claimedEntry === null && sameEntry(process.env['AU_ENTRY'], entry)) app.quit()
+    return { claimed: false, reason: 'held' }
+  }
+  if (claimedEntry !== entry) {
+    viewState.open(entry)
+    compositionDrafts.open(entry)
+    claimedEntry = entry
+  }
+  return { claimed: true }
+}
+
+/** Whether two entry paths name one folder (the claim's identity is the realpath). */
+function sameEntry(a: string | undefined, b: string): boolean {
+  if (!a) return false
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b)
+  } catch {
+    return a === b
+  }
+}
+
+/** Flush the local stores and give up the claim (quit). */
+function releaseWorkspace(): void {
+  viewState.close()
+  compositionDrafts.close()
+  instancePresence.release()
+  claimedEntry = null
+}
 
 // The agent-host transport server. Its handler round-trips each socket command to
 // the renderer and awaits the reply: main mints an internal correlation id, sends
@@ -177,10 +256,12 @@ function createWindow(): void {
     if (window.isDestroyed() || window.webContents.isDestroyed()) return
     window.webContents.send(channel, ...args)
   }
-  supervisor.onLog = (line) => safeSend('daemon:log', line)
-  supervisor.onExit = (code, entryPath) => safeSend('daemon:exit', code, entryPath)
-  mcp.onLog = (line) => safeSend('mcp:log', line)
-  mcp.onExit = (code) => safeSend('mcp:exit', code)
+  // The engine and tools lifecycle also goes to THIS process's stdout, so a failed launch is readable
+  // from the terminal that started the app (and from a test harness) without the launcher open.
+  supervisor.onLog = (line) => { process.stdout.write(`[daemon] ${line}\n`); safeSend('daemon:log', line) }
+  supervisor.onExit = (code, entryPath) => { process.stdout.write(`[daemon] exited (code ${code ?? '?'}) for ${entryPath}\n`); safeSend('daemon:exit', code, entryPath) }
+  mcp.onLog = (line) => { process.stdout.write(`[mcp] ${line}\n`); safeSend('mcp:log', line) }
+  mcp.onExit = (code) => { process.stdout.write(`[mcp] exited (code ${code ?? '?'})\n`); safeSend('mcp:exit', code) }
 
   // EVENT-SUBSTRATE DEV TOGGLE via env, so a category is on from the FIRST frame — no reload dance.
   // `AU_HOST_EVENTS=portal` (or `*`, or `a,b`) turns those categories on AND the console mirror; the
@@ -190,6 +271,17 @@ function createWindow(): void {
   const eventsQuery: Record<string, string> = eventsToggle
     ? { 'au-events': eventsToggle, 'au-events-mirror': '1' }
     : {}
+  // FORWARD the renderer's `[au-event …]` console-mirror lines to THIS process's stdout, so an
+  // `AU_HOST_EVENTS=…` run is readable in the terminal that launched it. Renderer console goes to
+  // DevTools, not stdout, so without this a BOOT HANG (when the in-app trace pane is unreachable and
+  // DevTools may be closed) leaves the trace nowhere the operator is looking. Gated on the same env
+  // toggle, so a normal run attaches no listener and prints nothing.
+  if (eventsToggle) {
+    window.webContents.on('console-message', (e) => {
+      const message = (e as { message?: unknown }).message
+      if (typeof message === 'string' && message.startsWith('[au-event')) process.stdout.write(`${message}\n`)
+    })
+  }
   if (process.env['ELECTRON_RENDERER_URL']) {
     const url = new URL(process.env['ELECTRON_RENDERER_URL'])
     for (const [k, v] of Object.entries(eventsQuery)) url.searchParams.set(k, v)
@@ -216,6 +308,19 @@ void app.whenReady().then(() => {
   ipcMain.handle('daemon:status', (_event, config: DaemonConfig) => supervisor.status(config))
   ipcMain.handle('daemon:start', (_event, config: DaemonConfig) => supervisor.start(config))
   ipcMain.handle('daemon:stop', (_event, config: DaemonConfig) => supervisor.stop(config))
+  // The main-side auto-resolved `au` binary (paths.yaml `au:` → PATH → login-shell → well-known dirs), or
+  // null. Lets the launcher SEE what the daemon would use — the renderer's own `config.binaryPath` is
+  // otherwise independent of this, so a form field looks empty even when `au` is resolvable.
+  ipcMain.handle('daemon:resolve-binary', () => resolveDaemonBinary() ?? null)
+  // One-click applicable fixes on a diagnostic banner. `appliableFix` is node-only (it applies a
+  // mutation), so it runs in main: `appliable-fixes` returns the serializable titles, `apply-fix`
+  // re-resolves from the same diagnostic and runs the chosen entry (the stateless render/apply split).
+  ipcMain.handle('daemon:appliable-fixes', (_event, entryPath: string, diag: WireDiagnostic) =>
+    connections.appliableFixes(entryPath, diag),
+  )
+  ipcMain.handle('daemon:apply-fix', (_event, entryPath: string, diag: WireDiagnostic, index: number) =>
+    connections.applyFix(entryPath, diag, index),
+  )
 
   // au-mcp daemon supervision (the agent-tools broker, keyed on the workspace root).
   ipcMain.handle('mcp:status', (_event, workspace: string) => mcp.status(workspace))
@@ -263,8 +368,9 @@ void app.whenReady().then(() => {
     }
   })
   // Build a ready agent launch via the resolved adapter's `launch.ts` — the launcher owns the whole
-  // `AU_MCP_*` env (session handle, tool/native-tool allowlists, materialized skill+inject dirs),
-  // so the renderer delegates command construction to it. stderr rides the mcp:log surface.
+  // `AU_MCP_*` env (session handle, active-profile locator, materialized skill+inject dirs), so the
+  // renderer delegates command construction to it. Tool/native-tool visibility is NOT a launch flag:
+  // it resolves daemon-side from the --profile agent-profile. stderr rides the mcp:log surface.
   ipcMain.handle(
     'mcp:launch',
     async (event, workspace: string, opts: { resumeSession?: string; skills?: string[]; inject?: string[]; tools?: string[]; nativeTools?: string[]; profile?: string; adapter?: string }) => {
@@ -305,12 +411,6 @@ void app.whenReady().then(() => {
   // relay tools connect). `entry` is the workspace root / manifest path — the same
   // string the socket file name hashes, so au-mcp derives the path identically.
   ipcMain.handle('hostbridge:start', async (_event, entry: string) => {
-    // The instance presence socket rides the same workspace-open lifecycle as the agent transport:
-    // this instance is now serving `entry`, so announce it so a `windows.open` of the same workspace
-    // focuses here rather than spawning a duplicate. A distinct socket, not the transport's.
-    instancePresence.bind(entry).catch((err) => {
-      console.warn(`[instance] could not bind presence socket for ${entry}: ${err instanceof Error ? err.message : String(err)}`)
-    })
     try {
       await hostBridge.start(entry)
       return { ok: true as const, socket: hostBridge.boundSocket }
@@ -320,8 +420,12 @@ void app.whenReady().then(() => {
   })
   ipcMain.handle('hostbridge:stop', () => {
     hostBridge.stop()
-    instancePresence.unbind()
   })
+
+  // CLAIM a workspace before it opens (before its daemon starts): the one gate every open path goes
+  // through. A live holder is focused and the claim fails; a successful claim binds the local stores to
+  // the entry, so only this process ever writes the workspace's drafts / view-state.
+  ipcMain.handle('workspace:claim', (_event, entry: string) => claimWorkspace(entry))
 
   // Open a workspace in its own host instance: focus the running instance for `entry` if one is
   // serving it, else spawn a new independent instance at that entry.
@@ -377,13 +481,14 @@ void app.whenReady().then(() => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
   })
 
-  // Workspace editing: add / remove a LOCAL member of an existing workspace (manifest + location).
-  // Mounts / un-mounts live — no daemon restart (verified). Raw fs, like gate-create.
-  ipcMain.handle('workspace:add-member', (_event, wsRoot: string, member: { name: string; memberPath: string; role?: WorkspaceMemberListRole; description?: string }) => addMember(wsRoot, member))
-  ipcMain.handle('workspace:remove-member', (_event, wsRoot: string, name: string) => removeMember(wsRoot, name))
-  ipcMain.handle('workspace:set-member-role', (_event, wsRoot: string, name: string, role: WorkspaceMemberListRole) => setMemberRole(wsRoot, name, role))
-  ipcMain.handle('workspace:set-member-disabled', (_event, wsRoot: string, name: string, disabled: boolean) => setMemberDisabled(wsRoot, name, disabled))
-  ipcMain.handle('workspace:declare-peer', (_event, memberRoot: string, memberName: string, peerName: string, remote?: string) => declarePeer(memberRoot, memberName, peerName, remote))
+  // Workspace editing: add / remove / re-role a member of an existing workspace, declare a peer. Mounts /
+  // un-mounts live, no daemon restart. Through the engine's composition verbs on the entry's daemon.
+  const mutate: Mutate = (entry, run) => connections.mutate(entry, run)
+  ipcMain.handle('workspace:add-member', (_event, wsRoot: string, member: { name: string; memberPath: string; role?: WorkspaceMemberListRole; description?: string }) => addMember(mutate, wsRoot, member))
+  ipcMain.handle('workspace:remove-member', (_event, wsRoot: string, name: string) => removeMember(mutate, wsRoot, name))
+  ipcMain.handle('workspace:set-member-role', (_event, wsRoot: string, name: string, role: WorkspaceMemberListRole) => setMemberRole(mutate, wsRoot, name, role))
+  ipcMain.handle('workspace:set-member-disabled', (_event, wsRoot: string, name: string, disabled: boolean) => setMemberDisabled(mutate, wsRoot, name, disabled))
+  ipcMain.handle('workspace:declare-peer', (_event, entry: string, memberRoot: string, peerName: string, remote?: string) => declarePeer(mutate, entry, memberRoot, peerName, remote))
   ipcMain.handle('workspace:scaffold-registry', (_event, memberRoot: string, memberName: string, description?: string) => scaffoldRegistry(memberRoot, memberName, description))
 
   // Host launcher recents (local, per-machine, non-git). Best-effort; never blocks startup.
@@ -400,6 +505,12 @@ void app.whenReady().then(() => {
   ipcMain.on('viewstate:set', (_event, comp: string, node: string, sub: string, value: unknown) => viewState.set(comp, node, sub, value))
   ipcMain.on('viewstate:prune', (_event, comp: string, liveNodeIds: string[]) => viewState.prune(comp, liveNodeIds))
   ipcMain.on('viewstate:drop', (_event, comp: string) => viewState.drop(comp))
+
+  // The MAIN-owned unsaved-composition draft store (mirrors view-state): `get` (async, on reopen to
+  // restore/ask), fire-and-forget `set` (debounced on every dirty echo) / `clear` (on save / discard / delete).
+  ipcMain.handle('composition-draft:get', (_event, comp: string) => compositionDrafts.get(comp))
+  ipcMain.on('composition-draft:set', (_event, comp: string, draft: CompositionDraft) => compositionDrafts.set(comp, draft))
+  ipcMain.on('composition-draft:clear', (_event, comp: string) => compositionDrafts.clear(comp))
   // CROSS-WINDOW THEME SYNC: a window's theme change fans out to every OTHER window (main + surfaces), which
   // apply + persist it. Theme is app-global per-machine state; main is the one-authority relay hub. Excludes
   // the sender (it already applied locally), so there is no echo loop.
@@ -474,6 +585,32 @@ void app.whenReady().then(() => {
       connections.releaseEntry(watcher.entryPath)
     }
   })
+
+  // LEAK / CPU DIAGNOSTIC (gated, off by default). `AU_HOST_METRICS=<seconds>` (a bare `1` also works;
+  // any value < 1 or non-numeric falls back to 10s) starts a sampler that writes per-process CPU + the
+  // live token-routed counts to THIS process's stdout, so a long-running instance's growth is
+  // attributable in the terminal that launched it. Per-process CPU (`app.getAppMetrics`) pinpoints WHICH
+  // process is hot (a renderer, the GPU, a pty utility, or main); the counts show whether engine
+  // subscriptions / ready-watchers / ptys GROW over time (a leak) or stay bounded (normal concurrency).
+  // Relaunch to change it; unset attaches nothing. This is the standing tool for attributing the P7 CPU.
+  const metricsEnv = process.env['AU_HOST_METRICS']
+  if (metricsEnv) {
+    const seconds = Number(metricsEnv)
+    const intervalMs = Number.isFinite(seconds) && seconds >= 1 ? seconds * 1000 : 10_000
+    const sample = (): void => {
+      const rows = app.getAppMetrics()
+        .map((p) => {
+          const label = p.name ?? p.serviceName ?? p.type
+          return `${label} pid=${p.pid} cpu=${p.cpu.percentCPUUsage.toFixed(1)}% mem=${Math.round(p.memory.workingSetSize / 1024)}MB`
+        })
+        .join('  |  ')
+      process.stdout.write(
+        `[au-metrics] subs=${subscriptionDetach.size} ready=${readyWatchers.size} ptys=${terminals.liveCount}  ${rows}\n`,
+      )
+    }
+    sample() // one baseline line immediately, then on the interval.
+    metricsTimer = setInterval(sample, intervalMs)
+  }
 
   // Trust boundary: every web-contents (main + surface) is locked to
   // its own entry, and on destroy its subscriptions / ready-watchers / terminal subscribers
@@ -563,6 +700,12 @@ void app.whenReady().then(() => {
   ipcMain.handle('files:rename', (_event, entryPath: string, from: string, to: string) =>
     connections.rename(entryPath, from, to),
   )
+  ipcMain.handle('files:move-dir', (_event, entryPath: string, from: string, to: string) =>
+    connections.moveDir(entryPath, from, to),
+  )
+  ipcMain.handle('files:delete-dir', (_event, entryPath: string, dirPath: string) =>
+    connections.deleteDir(entryPath, dirPath),
+  )
 
   // Turn a `file*` asset reference into a loadable `au-asset://` URL: resolve the ref to
   // an absolute path over the engine (within-workspace only), register it for serving,
@@ -618,7 +761,19 @@ void app.whenReady().then(() => {
   })
   ipcMain.handle('gate:discover-closure', (_event, located: Record<string, string>) => discoverClosure(located))
   ipcMain.handle('gate:scan-for', (_event, folder: string, names: string[]) => scanFor(folder, names))
-  ipcMain.handle('gate:missing-locations', (_event, entry: string) => missingLocations(entry))
+  // One member check in flight per window: a newer check kills the one it supersedes.
+  const memberChecks = new Map<number, AbortController>()
+  ipcMain.handle('gate:missing-locations', async (event, entry: string, binaryPath: string) => {
+    const window = event.sender.id
+    memberChecks.get(window)?.abort()
+    const check = new AbortController()
+    memberChecks.set(window, check)
+    try {
+      return await missingLocations(entry, binaryPath, check.signal)
+    } finally {
+      if (memberChecks.get(window) === check) memberChecks.delete(window)
+    }
+  })
   ipcMain.handle('gate:locate-members', (_event, entries: FoundDep[]) => locateMembers(entries))
   ipcMain.handle('gate:scaffold-entry', (_event, dir: string, name?: string) => scaffoldEntry(dir, name))
   ipcMain.handle('gate:create-workspace', (_event, dir: string, name: string, deps: FoundDep[]) =>
@@ -698,11 +853,20 @@ void app.whenReady().then(() => {
   // loose in dev (vite needs unsafe-inline + unsafe-eval + ws). Set before the window loads its document.
   installRendererCsp({ dev: !!process.env['ELECTRON_RENDERER_URL'], rendererDir: path.join(__dirname, '../renderer') })
 
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  // A spawned instance whose workspace is ALREADY open elsewhere never shows a window: the probe focuses
+  // the holder and this process exits. The renderer's claim is the authoritative gate; this only avoids
+  // painting a window that would close again.
+  const initialEntry = process.env['AU_ENTRY']
+  void (initialEntry ? focusExistingInstance(initialEntry) : Promise.resolve(false)).then((heldElsewhere) => {
+    if (heldElsewhere) {
+      app.exit(0)
+      return
+    }
+    booting = false
+    createWindow()
   })
+
+  app.on('activate', () => showMainWindow())
 })
 
 app.on('window-all-closed', () => {
@@ -710,13 +874,14 @@ app.on('window-all-closed', () => {
 })
 
 function disposeApplication(): void {
+  if (metricsTimer) clearInterval(metricsTimer)
   surfaces.dispose()
   connections.dispose()
   mcp.dispose()
   supervisor.dispose()
   terminals.killAll()
   hostBridge.stop()
-  viewState.dispose() // flush the last cursor positions so they survive a restart.
+  releaseWorkspace() // flush the last cursor positions + unsaved layout, then give up the claim.
 }
 
 let quitting = false

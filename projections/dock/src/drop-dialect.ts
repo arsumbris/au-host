@@ -1,5 +1,5 @@
 /** Dock participates in the shared drag protocol without React. It offers no drop
- * targets: composition places bars on the edges, and `reposition` moves them.
+ * targets: bars are added, moved and removed through dock's own menu.
  * The container occupying the centre owns its own drop targets. */
 
 import type { ContainerDialect, DragPoint, DragSource, DropTarget } from '@arsumbris/container-core'

@@ -24,6 +24,12 @@ export const STYLE = `
 .au-kme-bind__cmd { min-width:0; overflow-wrap:anywhere; color:var(--au-ink-1); }
 .au-kme-bind__scope, .au-kme-consumed { display:block; font:var(--au-t-xs)/var(--au-lh-xs) var(--au-font-sans); color:var(--au-ink-3); }
 .au-kme-bind__scope { margin-top:var(--au-space-1); }
+/* Chord conflict review: a clear danger-accented warning when the recorded shortcut is already taken,
+   the reassuring muted note otherwise. The icon aligns to the first line of the wrapped text. */
+.au-kme-conflict { display:flex; align-items:flex-start; gap:var(--au-space-1); }
+.au-kme-conflict[data-conflict="warn"] { color:var(--au-color-danger); }
+.au-kme-conflict[data-conflict="warn"] au-icon { flex:none; margin-top:0.1em; }
+.au-kme-conflict[data-conflict="clear"] { color:var(--au-ink-3); }
 .au-kme-edit { display:grid; gap:var(--au-space-3); padding:0 var(--au-space-3) var(--au-space-3); overflow:hidden; interpolate-size:allow-keywords; height:auto; opacity:1; transition:height var(--au-m-fast) var(--au-e-std), opacity var(--au-m-fast) var(--au-e-std); }
 @starting-style { .au-kme-edit { height:0; opacity:0; } }
 .au-kme-edit au-chord-input { display:flex; width:100%; border-radius:var(--au-radius-md); transition:box-shadow var(--au-m-fast) var(--au-e-std); }

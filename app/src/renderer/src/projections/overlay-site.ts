@@ -115,8 +115,10 @@ export function createOverlaySite(host: HTMLElement): OverlaySite {
     const el = document.createElement('div')
     el.className = LAYER_CLASS
     el.dataset.level = level
-    // A keyboard-driven LAUNCHER (the palette) opts OUT of the keybind guard, so its own toggle chord still
-    // reaches it while open. Default (absent) keeps a blocking band suppressing chords.
+    // A layer that does not own the keyboard opts OUT of the keybind guard, so command chords stay live
+    // while it is up: a keyboard-driven LAUNCHER (the palette, whose own toggle chord must still reach it)
+    // or keyboard-PASSIVE decoration (a hover peek / preview card, dismissed by the pointer, never by key).
+    // Default (absent) keeps a blocking band suppressing chords, for a modal / menu / chooser.
     if (options?.keyguard === false) el.dataset.keyguard = 'false'
 
     // NESTING: a layer summoned from INSIDE another layer (a select opened in a modal palette) is placed
@@ -190,10 +192,18 @@ export function overlaySiteHasBlockingLayer(): boolean {
   const layers = document.querySelectorAll(`.${ROOT_CLASS} .${LAYER_CLASS}`)
   for (const layer of layers) {
     const el = layer as HTMLElement
-    const level = el.dataset.level
     // A layer that opted out of the keyguard (a keyboard launcher, e.g. the palette) never suppresses a chord.
     if (el.dataset.keyguard === 'false') continue
-    if (level && BLOCKING_BANDS.has(level) && layer.childElementCount > 0) return true
+    const level = el.dataset.level
+    if (!(level && BLOCKING_BANDS.has(level))) continue
+    // BLOCKING means an OPEN modal — VISIBLE content, not merely a present child. A surface that claims its
+    // layer once and toggles `display` (rather than releasing) leaves an empty/hidden `display:none` child
+    // behind when idle; that is not an open modal and must not suppress chords. `getClientRects()` is empty
+    // for a `display:none` subtree, so it distinguishes a shown modal from a dormant hidden mount container,
+    // which must not block keybinds.
+    for (const child of el.children) {
+      if ((child as HTMLElement).getClientRects().length > 0) return true
+    }
   }
   return false
 }

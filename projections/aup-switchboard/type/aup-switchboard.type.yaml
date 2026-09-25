@@ -15,7 +15,7 @@ meta:
   # `entry` is relative to the owning package root; the built ESM is./dist/. No `export` → default `mount`.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # EDIT RIGHTS: the switchboard writes the `intent-routing` composition-config aspect (the consolidated
   # bundle holding wires / defaults / reach / initial-focus) through `compositionEdit`, so it DECLARES it.
   # The grant is WHOLE-ASPECT (coarse): "edit routing" covers every routing kind together. The host's

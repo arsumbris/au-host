@@ -10,7 +10,7 @@ meta:
   # `customTokenEntry` is the per-tree categorical colour sheet, discovered before mount.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
     customTokenEntry:
       - ./aup-git-activity.tokens.css
   # The intents this projection FIRES: a changed file in an expanded row opens in the focused editor.

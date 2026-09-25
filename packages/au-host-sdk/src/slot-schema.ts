@@ -37,6 +37,7 @@
 
 import type { WireShape } from '@arsumbris/au-engine-sdk/reads'
 
+
 /** The structural root every slot and every structural node descends from. Disjoint from
  *  `projection`, which is what makes the union discriminable AND terminates this walk. */
 const NODE_ROOT = 'container-node'
@@ -84,6 +85,24 @@ export interface SlotField {
  */
   slotTypes: string[]
   /**
+   * The same slot types, QUALIFIED with their owning repo (`sandwich-slot::sandwich`), positionally
+   * parallel to `slotTypes`. This is the `type:` a NEWLY-materialized slot wrapper must carry in a
+   * composition that does not own the slot type: a slot subtype is owned by its container's package,
+   * so a composition authored elsewhere claims it `::owner`, and the bare form would be `unknown-type-claim`.
+   * A slot type whose owner is unknown (a hand-built `SlotTypeView` with no `repo`) falls back to bare.
+   * (Reading / classifying an EXISTING wrapper needs only the bare `slotTypes`; the qualifier matters
+   * only when writing a fresh wrapper — see `setSlotRules`.)
+   */
+  slotTypesQualified: string[]
+  /**
+   * Every bare slot type a record at this field may claim: the declared `slotTypes` first, then every
+   * SUBTYPE of them in the workspace. A union naming a slot admits its subtypes (the engine validates
+   * a `sandwich-slot` at a `container-slot` field), so READING an existing wrapper matches against
+   * this list. Writing a fresh wrapper still takes `slotTypes[0]`. Absent on a hand-built field, where
+   * a reader falls back to `slotTypes`.
+   */
+  admittedSlotTypes?: string[]
+  /**
    * The STRUCTURAL node types this field's union also admits, BARE — the descent edges. Empty for
    * every container but bento, whose `root` and `bento-node.branch.children` both admit a
    * `bento-node.branch`. Each name is a key into `ContainerSchemas.nodes`.
@@ -123,9 +142,19 @@ export interface ContainerSchemas {
  */
 export interface SlotTypeView {
   name: string
+  /** The repo that OWNS this type-def. Present on a `WireTypeDef` (the subtypes read), so the host's
+   *  defs carry it for free; a hand-built view may omit it, and then a materialized wrapper of this
+   *  type falls back to a bare `type:`. Used only to qualify a slot type in `slotTypesQualified`. */
+  repo?: string
   /** Declared direct parents, verbatim; a cross-repo parent reads `name::repo`. */
   parents: string[]
-  fields: ReadonlyArray<{ name: string; shape_ast: WireShape | null }>
+  /** The engine's EFFECTIVE field set: own and inherited, so a position an abstract kind declares
+   *  (`frame-container.center`) is a position of every subtype. A divergent field is one entry per
+   *  origin. The def's own `fields` are not read here: they miss every inherited position. */
+  effective_fields: ReadonlyArray<{ name: string; shape_ast: WireShape | null }>
+  /** The def's OWN fields, read only for ORDER: a schema lists own positions in declared order, then the
+   *  inherited ones in the order served. Absent, the served order stands. */
+  fields?: ReadonlyArray<{ name: string }>
 }
 
 /** Every ancestor of `name`, plus `name` itself. Bare throughout. Cycle-safe (the engine already
@@ -176,15 +205,22 @@ function occupantNames(shape: WireShape | null): { list: boolean; names: string[
   }
 }
 
-/** The child-bearing fields of one type, in declared order. */
+/** The child-bearing fields of one type, read from its effective fields: own ones first in declared order. */
 function fieldsOf(
   def: SlotTypeView,
   isSlot: (n: string) => boolean,
   isNode: (n: string) => boolean,
   isMountable: (n: string) => boolean,
+  qualify: (bare: string) => string,
+  subtypesOf: (bare: string) => string[],
 ): SlotField[] {
   const out: SlotField[] = []
-  for (const f of def.fields) {
+  const own = new Map((def.fields ?? []).map((f, i) => [f.name, i]))
+  const ordered = def.effective_fields
+    .map((f, i) => ({ f, rank: own.get(f.name) ?? own.size + i }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ f }) => f)
+  for (const f of ordered) {
     const { list, names } = occupantNames(f.shape_ast)
     const slotTypes = names.filter(isSlot)
     // A CHILD-BEARING POSITION's occupant is-a `mountable` (content — a bare child) OR is-a
@@ -200,6 +236,8 @@ function fieldsOf(
       name: f.name,
       list,
       slotTypes,
+      slotTypesQualified: slotTypes.map(qualify),
+      admittedSlotTypes: [...new Set([...slotTypes, ...slotTypes.flatMap(subtypesOf)])],
       // A slot IS a container-node, so subtract the slots or every field would claim to descend
       // into its own slot type.
       nodeTypes: names.filter((n) => isNode(n) && !isSlot(n)),
@@ -239,6 +277,14 @@ export function deriveContainerSchemas(
   const isSlot = (n: string): boolean => closureOf(n, byName).has(SLOT_ROOT)
   const isNode = (n: string): boolean => closureOf(n, byName).has(NODE_ROOT)
   const isMountable = (n: string): boolean => closureOf(n, byName).has(MOUNTABLE_ROOT)
+  // A bare slot type → the `type:` a fresh wrapper must claim: `sandwich-slot::sandwich`. The owning
+  // repo is the slot subtype's own `repo` (present on a `WireTypeDef`); unknown owner falls back to bare.
+  const qualify = (bare: string): string => {
+    const repo = byName.get(bare)?.repo
+    return repo ? `${bare}::${repo}` : bare
+  }
+  // Every known type whose closure reaches `bare` (itself included): the names a union naming `bare` admits.
+  const subtypesOf = (bare: string): string[] => [...byName.keys()].filter((n) => closureOf(n, byName).has(bare))
 
   const containers = new Map<string, SlotSchema>()
   const nodes = new Map<string, SlotSchema>()
@@ -257,7 +303,7 @@ export function deriveContainerSchemas(
     for (const [name, def] of byName) {
       if (name !== typeName && !closureOf(name, byName).has(typeName)) continue
       if (nodes.has(name)) continue
-      const fields = fieldsOf(def, isSlot, isNode, isMountable)
+      const fields = fieldsOf(def, isSlot, isNode, isMountable, qualify, subtypesOf)
       nodes.set(name, { type: name, fields })
       for (const f of fields) for (const n of f.nodeTypes) descend(n)
     }
@@ -267,10 +313,9 @@ export function deriveContainerSchemas(
   // a window holds its one `content`), so both are enumerated into `containers`.
   for (const def of [...containerDefs, ...windowDefs]) {
     const name = bareTypeName(def.name)
-    const fields = fieldsOf(def, isSlot, isNode, isMountable)
-    // A container-projection holding no children is not absent by accident. `bar` genuinely holds
-    // none: it AGGREGATES a role via `readSubtypes(kind)`, so it registers no placement seam and
-    // has no positions to govern. Omitting it keeps "has slots" and "has a seam" agreeing.
+    const fields = fieldsOf(def, isSlot, isNode, isMountable, qualify, subtypesOf)
+    // A container-projection with no child-holding field has no positions to govern and registers no
+    // placement seam. Omitting it keeps "has slots" and "has a seam" agreeing.
     if (fields.length === 0) continue
     containers.set(name, { type: name, fields })
     for (const f of fields) for (const n of f.nodeTypes) descend(n)

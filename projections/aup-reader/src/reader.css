@@ -141,6 +141,11 @@
 .au-md li {
   margin: var(--au-space-1, 4px) 0;
 }
+/* A multi-paragraph bullet keeps its <p>s (see remarkSplitBulletGroups), but the last one must not add a
+ * flow gap inside the item — the item's own margin already spaces it. */
+.au-md li > p:last-child {
+  margin-bottom: 0;
+}
 .au-md li::marker {
   color: var(--au-ink-4);
 }

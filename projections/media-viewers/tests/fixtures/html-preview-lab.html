@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML preview containment lab</title>
+<style>
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; background: #171717; color: #eae7df; font: 15px/1.6 system-ui, sans-serif; }
+  body { margin: 0; }
+  header { position: sticky; top: 0; z-index: 4; padding: 12px 20px; background: #242424; border-bottom: 1px solid #545454; }
+  main { padding: 24px; max-width: 860px; margin: auto; }
+  h1 { font-size: clamp(24px, 5vw, 36px); line-height: 1.2; }
+  h2 { font-size: 19px; margin-top: 32px; }
+  p { color: #c8c5be; }
+  section { margin-bottom: 28px; }
+  pre { width: 1800px; padding: 16px; background: #292929; border: 1px solid #626262; }
+  svg, img { display: block; width: 100%; max-width: 620px; height: auto; border-radius: 12px; }
+  label { display: block; margin-bottom: 8px; }
+  input, button { font: inherit; color: inherit; background: #303030; border: 1px solid #737373; border-radius: 7px; padding: 8px 12px; max-width: 100%; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid #f4da91; outline-offset: 3px; }
+  output { display: block; padding-block: 12px; }
+  .fixed { position: fixed; right: 12px; bottom: 12px; z-index: 10; background: #45412e; color: #fff2c6; border: 1px solid #938458; border-radius: 8px; padding: 6px 12px; pointer-events: none; }
+  .content { padding-bottom: 60px; }
+</style>
+<header>HTML artifact · sticky within this document</header>
+<main>
+  <h1>A document with its own viewport</h1>
+  <p>This fixture deliberately contains an oversized code line, sticky chrome and a fixed badge. They must stay inside the preview frame while the surrounding application remains usable.</p>
+  <section>
+    <h2>Local interactions</h2>
+    <label for="note">Preview note</label><input id="note" value="Sandbox interaction works">
+    <button id="update" type="button">Update message</button>
+    <output id="message" aria-live="polite">Ready for input.</output>
+  </section>
+  <section>
+    <h2>Inline SVG</h2>
+    <svg viewBox="0 0 620 200" role="img" aria-label="Three circles on a dark grid">
+      <defs><pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#444"/></pattern></defs>
+      <rect width="620" height="200" fill="#252525"/><rect width="620" height="200" fill="url(#grid)"/>
+      <circle cx="180" cy="100" r="58" fill="#a8baa3"/><circle cx="310" cy="100" r="58" fill="#d5bd87"/><circle cx="440" cy="100" r="58" fill="#b2a5c2"/>
+    </svg>
+  </section>
+  <section><h2>Embedded image</h2><img alt="Small blue and amber landscape" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 620 160'%3E%3Crect width='620' height='160' fill='%23334151'/%3E%3Ccircle cx='470' cy='48' r='24' fill='%23dfbf73'/%3E%3Cpath d='M0 160L140 40L290 160L430 80L620 160' fill='%237d9181'/%3E%3C/svg%3E"></section>
+  <section><h2>Deliberate document overflow</h2><p>The line below is 1800px wide. Horizontal scrolling belongs to this document, not the host pane.</p><pre>const artifact = { viewport: "iframe", width: 1800, sticky: "document header", fixed: "document badge", isolation: "opaque sandbox", expected: "the surrounding application never grows with this code line" };</pre></section>
+  <section class="content" id="sections"><h2>Long document</h2></section>
+</main>
+<div class="fixed">Fixed inside preview</div>
+<script>
+  document.querySelector('#update').addEventListener('click', () => {
+    document.querySelector('#message').textContent = document.querySelector('#note').value;
+  });
+  for (let index = 1; index <= 16; index++) {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = `Section ${index}. Scroll the document and watch the sticky header and fixed badge. Neither belongs to the application viewport. Text selection, keyboard input and local script interactions should remain usable inside this document.`;
+    document.querySelector('#sections').append(paragraph);
+  }
+</script>
+</html>

@@ -7,7 +7,7 @@
 # the app-owned `compositionEdit`), not a type crossing.
 type: au.engine.repo::au-engine
 name: aup-switchboard
-description: intent switchboard pane-projection — a visual patch-bay for the composition's intent wires (dogfood)
+description: intent switchboard pane-projection — a visual patch-bay for the composition's intent wires
 deps:
   - name: au-host-sdk
   # The switchboard EDITS the `intent-wires` composition-config aspect (it writes wires) and declares that

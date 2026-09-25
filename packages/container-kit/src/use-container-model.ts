@@ -19,8 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MountHost } from '@arsumbris/au-host-sdk';
-import { event, on } from '@arsumbris/au-host-sdk';
-import { assertDeterministicRead, createModelCell, type ModelCell } from '@arsumbris/container-core';
+import { createModelCell, watchOwnRecord, type ModelCell } from '@arsumbris/container-core';
 
 export interface ContainerModel<T> {
   /** The rendered model. Use in RENDER only. */
@@ -33,34 +32,15 @@ export interface ContainerModel<T> {
 
 /**
  * How a container RE-SEEDS its model when the SUBSTRATE changed its record without going through the
- * container's own `commit` — a drag re-parent, a `closePane` from a placeholder, a `wrapPane`. These
- * write the container's pool record directly (`applyStructural`), so its local model, and thus the
- * anchors it renders, go stale. The hook re-reads `resolveRecord(host.instanceId)` on each pool change
- * and rebuilds the model with the container's own `fromConfig`. See the effect below.
+ * container's own `commit` (a drag re-parent, a `closePane`, a `wrapPane`). The React binding of
+ * container-core's `watchOwnRecord`, which owns the gate; see it for the mechanism.
  */
 export interface ContainerModelResync<T> {
   host: MountHost;
   /** Rebuild the model from a raw pool record (the container's own `fromConfig`). */
   fromConfig: (raw: unknown) => T;
-  /**
-   * The container's SAVE serializer (its `toConfig` / `persistableConfig`), OPTIONAL. When given, the
-   * re-seed gate compares in CONFIG space (`toConfig(current)` vs `toConfig(fromPool)`) instead of model
-   * space, so RUNTIME-ONLY state the serializer strips (tabs' preview) never counts as a divergence and
-   * is not re-seeded away. Only a genuine change to the container's OWN config re-seeds. A container with
-   * no runtime-only state may omit it (model space and config space then agree).
-   */
+  /** The container's SAVE serializer, OPTIONAL: gates the re-seed in config space. See `RecordResync.toConfig`. */
   toConfig?: (model: T) => unknown;
-}
-
-/** A cheap structural equality for the re-seed gate. Models are plain data (records / lists), so
- *  JSON is total here, and `fromConfig` is deterministic, so an unchanged record round-trips equal.
- *  Exported so a probe can drive the exact gate predicate (see probe-container-resync-churn.ts). */
-export function sameModel<T>(a: T, b: T): boolean {
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -89,46 +69,19 @@ export function useContainerModel<T>(
 
   useEffect(() => cell.subscribe(setModel), [cell]);
 
-  // RE-SEED from the pool on an EXTERNAL structural edit. Re-read this container's record and, if it
-  // DIVERGES from the current model, advance the CELL ONLY (`cell.commit`, NOT the hook's `commit`) — so
-  // NO save-back fires and there is no loop. Pool changes are coalesced (one per gesture), so a multi-step
-  // drop re-seeds once, to the final state. A normal React re-render (anchors kept by key), never a
-  // remount. A same-record round-trip (the container's OWN commit) is a no-op via the equality gate.
+  // RE-SEED from the pool on an EXTERNAL structural edit: advance the CELL ONLY (`cell.commit`, NOT the
+  // hook's `commit`), so no save-back fires. A normal React re-render (anchors kept by key), never a remount.
   useEffect(() => {
-    const subscribe = resyncRef.current?.host.children.pool?.subscribe;
-    if (!subscribe) return;
-    // THE ROUND-TRIP GUARD runs ONCE per mount (a container's read determinism does not change). It
-    // asserts the RE-SEED READ — the EXACT predicate the gate below compares, `toConfig ∘ fromConfig`
-    // when a serializer is given, else `fromConfig` — is deterministic. That is precisely the churn
-    // condition: the resync re-seeds iff two reads of the SAME record differ THROUGH the gate. Checking
-    // `fromConfig` alone would false-positive a container whose `fromConfig` mints a runtime id (a
-    // position id via genId) but whose `toConfig` STRIPS it (bento) — churn-safe, yet flagged. Runs in
-    // the built dist (NOT dev-gated: projections load a production bundle, where an `import.meta.env.DEV`
-    // gate would tree-shake it away).
-    let guarded = false;
-    return subscribe(() => {
-      const r = resyncRef.current;
-      const id = r?.host.instanceId;
-      if (!r || !id) return;
-      const raw = r.host.children.pool?.resolveRecord(id);
-      if (raw === undefined) return; // transiently unresolvable — leave the model; the next event resyncs.
-      if (!guarded) {
-        guarded = true;
-        const gateRead = r.toConfig ? (x: unknown) => r.toConfig!(r.fromConfig(x)) : r.fromConfig;
-        assertDeterministicRead((r.host.config as { type?: string } | undefined)?.type ?? 'container', raw, gateRead);
-      }
-      const fresh = r.fromConfig(raw);
-      // Gate in CONFIG space when a serializer is given: runtime-only state the save strips (tabs' preview)
-      // must not read as a divergence, or an unrelated pool event re-seeds it away. Only a genuine change
-      // to this container's OWN config re-seeds. Without a serializer, fall back to model-space equality.
-      const willReseed = r.toConfig
-        ? !sameModel(r.toConfig(cell.read()), r.toConfig(fresh))
-        : !sameModel(fresh, cell.read());
-      if (!willReseed) return;
-      // A re-seed from an EXTERNAL structural edit (a drag re-parent, a placeholder close). Trace it under
-      // the ambient cause so a moved-in / moved-out pane reads under the drag's own pass.
-      if (on('resync')) event('resync', 're-seed', { subject: (r.host.config as { type?: string } | undefined)?.type ?? 'container', id });
-      cell.commit(fresh);
+    const r = resyncRef.current;
+    if (!r) return;
+    return watchOwnRecord<T>({
+      host: r.host,
+      fromConfig: (raw) => resyncRef.current!.fromConfig(raw),
+      // Read through the ref on every call, presence included: the latest render's serializer, or the
+      // model itself when it declares none (the gate then compares models, the same as no serializer).
+      toConfig: (m: T) => resyncRef.current?.toConfig?.(m) ?? m,
+      current: () => cell.read(),
+      reseed: (next) => cell.commit(next),
     });
   }, [cell]);
 

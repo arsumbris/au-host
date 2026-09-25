@@ -16,6 +16,7 @@ import type {
   ChooserSurface,
   CloseGuard,
   CloseGuardChannel,
+  AffectedRef,
   ConfirmOutcome,
   ConfirmRequest,
   ConfirmSurface,
@@ -23,6 +24,7 @@ import type {
   FileReadResult,
   FileWriteResult,
   FillFn,
+  FillTeardown,
   FilesControl,
   FocusChannel,
   IntentChannel,
@@ -79,6 +81,7 @@ export type {
   ChromeContribution,
   PreviewSurface,
   FillFn,
+  FillTeardown,
   LinkResolver,
   // The OVERLAY SITE: a place to draw above the composition, for what a pane cannot contain.
   // Additive + optional on `MountHost`, so no contract bump.
@@ -99,6 +102,7 @@ export type {
   MenuAnchor,
   MenuHandle,
   // Re-exported from MountHost here so the renderer imports from one place.
+  AffectedRef,
   ConfirmSurface,
   ConfirmRequest,
   ConfirmOutcome,

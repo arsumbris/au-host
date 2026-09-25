@@ -48,7 +48,7 @@ fields:
 meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
     customTokenEntry:
       - ./focal-tree.tokens.css
   # radial-tree's rationale applies: handles open-intent so it is openable from other sources.

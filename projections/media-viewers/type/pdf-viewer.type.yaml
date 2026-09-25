@@ -7,7 +7,7 @@ meta:
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
     export: pdf
-    contractVersion: 7
+    contractVersion: 8
   - type: opens-meta::au-host-sdk
     opens: [pdf]
   - type: handles-intent-meta::au-host-sdk

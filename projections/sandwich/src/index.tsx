@@ -45,6 +45,7 @@ import {
   PaneProjection,
   EmptySlot,
   usePaneSwap,
+  useSwapPaneIntent,
   makePoolEdit,
   positionName,
   bareTypeName,
@@ -64,6 +65,8 @@ import {
   floatPaneRow,
   moveToWindowRow,
   reloadPaneRows,
+  slotRulesRow,
+  useRevealPaneHeaders,
 } from '@arsumbris/container-kit'
 import { AuSplitter } from '@arsumbris/au-component-catalog/react'
 import { sandwichDropDialect } from './drop-dialect'
@@ -79,18 +82,29 @@ const REGIONS: readonly RegionName[] = ['left', 'center', 'right']
 const SIDES: readonly RegionName[] = ['left', 'right']
 
 /**
- * THE UNION CODEC — reading and writing `<projection& | sandwich-slot>` is the substrate's job, not
- * sandwich's. Sandwich declares only what is genuinely its own: which slot type it writes, the two
- * extras it HONOURS, and its own id prefix.
+ * THE UNION CODEC, one per region — reading and writing a region is the substrate's job, and which
+ * slot type it holds is the region's field type's. Sandwich declares only what is genuinely its own:
+ * the extras it HONOURS on its sides.
  *
  * `size` and `sizing` are declared here as well as on the type-def, and the pair is not
  * redundant: the type-def says what may be AUTHORED, this says what sandwich ACTS ON.
  */
-const slots = makeSlotCodec<Projection, SandwichExtras>({
-  slotType: 'sandwich-slot',
-  extras: ['size', 'sizing', 'minSize', 'showCollapseControl'],
-  label: 'sandwich',
-})
+const sideCodec = (field: 'left' | 'right') =>
+  makeSlotCodec<Projection, SandwichExtras>({
+    site: { type: 'sandwich', field },
+    extras: ['size', 'sizing', 'minSize', 'showCollapseControl'],
+    label: 'sandwich',
+  })
+const codecs = {
+  left: sideCodec('left'),
+  right: sideCodec('right'),
+  /** `center` is the fill a frame inherits (`frame-container`): sandwich never sizes or collapses it,
+   *  so it honours no extras there. */
+  center: makeSlotCodec<Projection, SandwichExtras>({ site: { type: 'sandwich', field: 'center' }, label: 'sandwich center' }),
+}
+
+/** The codec for a region. */
+const codecFor = (name: RegionName) => codecs[name]
 
 /** A region's occupant: its stable `^:` id + the projection instance it mounts. */
 type ChildState = Occupant<Projection>
@@ -145,25 +159,25 @@ function nextSizing(current: RegionSizing, compactReachable: boolean): RegionSiz
 }
 
 /** Read one region's union value into the runtime shape. */
-function regionFrom(value: Sandwich['left']): RegionState {
-  return slots.read(value)
+function regionFrom(name: RegionName, value: Sandwich[RegionName]): RegionState {
+  return codecFor(name).read(value)
 }
 
 function fromConfig(cfg: Sandwich | undefined): SandwichModel {
-  return { left: regionFrom(cfg?.left), center: regionFrom(cfg?.center), right: regionFrom(cfg?.right) }
+  return { left: regionFrom('left', cfg?.left), center: regionFrom('center', cfg?.center), right: regionFrom('right', cfg?.right) }
 }
 
 // The host derives config ownership from the type graph and preserves unowned fields
 // at saveConfig. This projection emits only the fields it understands.
-function regionToConfig(region: RegionState): Sandwich['left'] {
-  return slots.write(region) as Sandwich['left']
+function regionToConfig(name: RegionName, region: RegionState): Sandwich[RegionName] {
+  return codecFor(name).write(region) as Sandwich[RegionName]
 }
 
 function toConfig(model: SandwichModel): Sandwich {
   const out: Sandwich = { type: 'sandwich' }
   for (const r of REGIONS) {
-    const value = regionToConfig(model[r])
-    if (value !== undefined) out[r] = value
+    const value = regionToConfig(r, model[r])
+    if (value !== undefined) (out as Record<RegionName, unknown>)[r] = value
   }
   //...and everything ELSE the instance carried. As the composition ROOT this sandwich also holds
   // `intent-defaults` / `initial-focus`, which are composition-level and NOT ours to re-emit: a
@@ -184,7 +198,7 @@ function regionOf(model: SandwichModel, id: string): RegionName | null {
 function slotOf(model: SandwichModel, id: string): ContainerSlot | null {
   const r = regionOf(model, id)
   if (!r) return null
-  return slots.toSeamSlot(model[r].slot)
+  return codecFor(r).toSeamSlot(model[r].slot)
 }
 
 // Chrome is the token-only <au-*> vocabulary: the region header is <au-pane-header surface="rail"> (sides)
@@ -308,6 +322,9 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
     // sandwich's record without a local commit), so its region anchors never go stale.
     { host, fromConfig: (raw) => fromConfig(raw as Sandwich | undefined) },
   )
+  // The temporary reveal-all-headers toggle (`toggle-pane-headers-intent`): while on, a `hideHeader` region
+  // shows its header anyway, so its ⋯ actions (incl. un-hide) are reachable. Reactive across the flip.
+  const revealHeaders = useRevealPaneHeaders()
   /** The width of the side currently being dragged, if any. Transient — see `startResize`. */
   const [dragWidth, setDragWidth] = useState<{ side: RegionName; width: number } | null>(null)
   // The ACTIVE pane's `^:` from the HOST focus signal — the centre card rings when its occupant is the
@@ -434,6 +451,7 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
         const r = REGIONS.find((x) => m[x].child?.id === intent.paneId)
         if (!r) return
         if (sizingOf(r) !== 'free') setSizing(r, 'free')
+        host.focus.focusPane?.(intent.paneId) // reveal both shows AND focuses the pane
       },
     })
     return () => {
@@ -567,6 +585,9 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
     // named the position, its occupant, or the slot itself. The substrate owns what the answer
     // MEANS; sandwich only knows where its slots are.
     slotFor: (id: string): ContainerSlot | null => slotOf(live(), id),
+    // The focused-pane MENU — the same rows the `⋯` header button opens, for `open-pane-actions-intent`.
+    // Referenced lazily (runs at menu-open, after `paneActionRows` is defined below).
+    paneActions: (id) => paneActionRows(id),
     ...(poolEdit ? { poolEdit } : {}),
   }
 
@@ -586,6 +607,35 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
   // anchor, which carries the child id, and sandwich's `findPane` matches child ids only — a region name
   // would not resolve. `regionOf` accepts the child id, so `slotFor` / `setSlotContent` map it back.
   const swapPane = usePaneSwap(host)
+  // Keyboard swap (swap-pane-intent): swap the focused region's content, via the same picker the ⋯ row opens.
+  useSwapPaneIntent(host, swapPane, (id) => REGIONS.some((r) => live()[r].child?.id === id))
+
+  // The full pane-actions ROW LIST for a region's occupant, shared by the `⋯` header button and the
+  // placement's `paneActions` (the focused-pane menu `open-pane-actions-intent` opens — the escape for a
+  // `hideHeader` region with no header). `id` is the occupant's `^:`. "Layout rules…" is offered even on a
+  // FIXED region (that is how you un-fix it); the rest are gated by `fixed`.
+  const paneActionRows = (id: PaneId): ContextMenuItem[] => {
+    const m = live()
+    const region = regionOf(m, id)
+    const child = region ? m[region].child : undefined
+    if (!child) return []
+    const fixed = m[region!].slot.fixed === true
+    const choose = host.chooser ? host.chooser.choose.bind(host.chooser) : async () => null
+    const rows: ContextMenuItem[] = []
+    if (!fixed) {
+      rows.push({ id: 'region.swap', label: "Swap this region's content", icon: 'swap', enabled: true, run: () => swapPane.toggle(child.id) })
+      rows.push({ id: 'region.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => void wrapPaneInteractive(child.id, { choose }) })
+      if (REGIONS.filter((r) => m[r].child != null).length === 1)
+        rows.push({ id: 'region.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(child.id) })
+      const floatRow = floatPaneRow(host, child.id)
+      if (floatRow) rows.push(floatRow)
+      const moveRow = moveToWindowRow(host, child.id)
+      if (moveRow) rows.push(moveRow)
+    }
+    rows.push(slotRulesRow(child.id))
+    rows.push(...reloadPaneRows(host, child.id))
+    return rows
+  }
 
   const renderRegion = (name: RegionName): ReactNode => {
     const child = model[name].child
@@ -645,26 +695,7 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
       <span slot="actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--au-space-1)' }}>
         {/* The occupant-level actions collapse behind ONE `⋯` overflow menu; close (Remove) + the region
             collapse toggle stay distinct affordances. */}
-        {child &&
-          !fixed &&
-          (() => {
-            const choose = host.chooser ? host.chooser.choose.bind(host.chooser) : async () => null
-            const rows: ContextMenuItem[] = [
-              { id: 'region.swap', label: "Swap this region's content", icon: 'swap', enabled: true, run: () => swapPane.toggle(child.id) },
-              { id: 'region.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => void wrapPaneInteractive(child.id, { choose }) },
-            ]
-            // Unwrap this sandwich only when ONE region is occupied (lift the occupant into the grandparent slot).
-            if (REGIONS.filter((r) => model[r].child != null).length === 1)
-              rows.push({ id: 'region.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(child.id) })
-            const floatRow = floatPaneRow(host, child.id) // the GENERIC host float, shared across containers
-            if (floatRow) rows.push(floatRow)
-            // "Move to other window" appended LAZILY — its gate reflects the CURRENT window set at open (a
-            // foreign window opening does not re-render this container). See paneActionsMenu.
-            return paneActionsMenu(host, () => {
-              const moveRow = moveToWindowRow(host, child.id)
-              return [...rows, ...(moveRow ? [moveRow] : []), ...(child.id ? reloadPaneRows(host, child.id) : [])]
-            })
-          })()}
+        {child && paneActionsMenu(host, () => paneActionRows(child.id))}
         {child && !fixed && (
           <au-close-button label="Remove this region's content" onClick={() => clearRegion(name)} />
         )}
@@ -718,7 +749,7 @@ function SandwichApp({ host }: { host: MountHost }): ReactNode {
         style={isSide ? { width: showStrip ? 24 : sizing === 'compact' && compactW !== null ? compactW : widthOf(name) } : undefined}
       >
         <div className="au-sw-content" inert={showStrip} style={showStrip ? { width: widthOf(name) } : undefined}>
-          {hideHeader ? (
+          {hideHeader && !revealHeaders ? (
             // A self-chrome occupant owns its surface — no region header, and no card either (bare).
             <>
               {isSide && model[name].slot.showCollapseControl && (

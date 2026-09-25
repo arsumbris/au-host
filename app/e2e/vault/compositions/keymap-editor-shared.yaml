@@ -1,0 +1,14 @@
+# The keymap editor over a SHARED keymap: the e2e-shared fixture member ships shared.keymap, consumed here,
+# so an edit copies it into the vault first.
+type: composition::au-host-sdk
+keymaps:
+  - "[[shared.keymap::e2e-shared]]"
+projections:
+  - ^: w
+    content: "[[^^ed]]"
+    primary: true
+    type: window::au-host-sdk
+  - ^: ed
+    type: keymap-editor::keymap-editor
+windows:
+  - "[[^^w]]"

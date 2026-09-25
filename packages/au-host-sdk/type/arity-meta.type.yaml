@@ -1,0 +1,17 @@
+# Owned by au-host-sdk. A META (mixes in the engine's meta marker), declared on a CONTAINER type-def.
+# How many children the container takes is a fact about its TYPE, so it is declared here, where the type
+# graph can see it, rather than in module code. Meta surfaces from the closest ancestor, so a kind
+# declares it once for every subtype (`frame-container` declares `max: 1`).
+#
+# Read by the substrate: `min` is the dissolve floor, and a wrap target ADMITS N children when
+# `(min ?? 1) <= N <= (max ?? unbounded)`. `min > max` on one block is a host diagnostic, since a type
+# cannot relate two of its own fields.
+
+#: How many children a container takes. Every field is optional; an absent bound is no bound.
+extends: au.engine.meta::au-engine
+fields:
+  #: The dissolve floor: below this many children the container dissolves to its lone child.
+  #: Absent = it never dissolves.
+  min?: Number{integer & >=1}
+  #: The most children one wrap may put into it. Absent = unbounded.
+  max?: Number{integer & >=1}

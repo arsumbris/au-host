@@ -23,4 +23,4 @@ deps:
   - name: dock
   - name: aup-reader
   - name: bar
-  - name: status-bar
+  - name: engine-status

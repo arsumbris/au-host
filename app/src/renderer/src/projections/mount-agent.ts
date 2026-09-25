@@ -24,14 +24,15 @@ import { isDefinedProjection, currentCause, resumeCause, bareTypeName, keystroke
 import type { LoadedModule, MountHost, OpaqueConfig, IntentChannel, IntentHandler, FocusChannel, SelectionChannel, PublisherId, IntentPayload, ProjectionSource, ContainerPlacement, Occupant, PaneInstance, CanonicalKeystroke, CloseGuard, CloseGuardChannel } from '@arsumbris/au-host-sdk'
 import { CloseGuardTree } from './close-guard-channel'
 
-import type { SurfaceCommand, SurfaceEvent, SurfaceInit, SlotDescriptor, WindowSite } from '../../../shared/daemon-api'
-import { placementForPane, resolveAddress, registerContainer, deregisterContainer, wrapTargets, wrapTargetOutcome, closePane } from '@arsumbris/container-core'
-import { paneIdOfActiveElement } from './pane-focus'
+import type { GroupingPolicy, SurfaceCommand, SurfaceEvent, SurfaceInit, SlotDescriptor, WindowSite } from '../../../shared/daemon-api'
+import { placementForPane, resolveAddress, registerContainer, deregisterContainer, wrapChoice, closePane } from '@arsumbris/container-core'
+import { paneIdOfActiveElement, focusWithinPaneWhenReady } from './pane-focus'
 import { pickTargetWindow } from './window-picker'
 import { getChooserSurface } from './chooser-surface'
 import { GenerationGuard } from './surface-protocol'
 import { IdRange, DEFAULT_WATERMARK, type IdBlock } from './id-allocator'
 import { createInProcessMountHost, createDaemonControl, createMcpControl } from './mount-host'
+import { createMountLifetime, type MountLifetime } from './mount-lifetime'
 import { createEngineReadiness } from './engine-readiness'
 import { createViewStore, hydrate as hydrateViewState } from './view-store'
 import { createTerminalChannel } from './terminal-channel'
@@ -61,6 +62,8 @@ interface MountedRecord {
   typeName: string
   /** The projection's own unmount (from its `mount(slot, host)` return). */
   dispose: () => void
+  /** The lifetime of the host built for this record; ended at unmount, closing the overlays it opened. */
+  lifetime?: MountLifetime
   /** The reflect-in-place inbound handler the leaf registered via `host.onOwnConfigChange`, or null. */
   inbound: ((config: OpaqueConfig) => void) | null
   /**
@@ -160,6 +163,9 @@ export class MountAgent {
      *  shell's root ⋯ opens correctly through it.
      */
     private readonly onRoot?: (info: { host: MountHost; label: string; id: string }) => void,
+    /** Hands the composition's grouping policy to the shell, which owns this window's discovered container
+     *  capabilities and installs the two together. Fired on every `grouping-policy` push. */
+    private readonly onGroupingPolicy?: (policy: GroupingPolicy) => void,
   ) {
     this.windowSet = init.windows ?? []
   }
@@ -368,6 +374,12 @@ export class MountAgent {
     }
     // ACTIVE-PANE (the ring): the authority pushed THIS window's scoped active pane.
     // Window-wide state, not a record lifecycle, so handled before the generation guard (like active-chords).
+    // GROUPING-POLICY: the composition's grouping aspect changed; this window's wraps honour it too.
+    if (command.op === 'grouping-policy') {
+      const { op: _op, ...policy } = command
+      this.onGroupingPolicy?.(policy)
+      return
+    }
     if (command.op === 'active-pane') {
       this.setActivePane(command.activePane)
       return
@@ -561,11 +573,9 @@ export class MountAgent {
         this.poolListeners.add(listener)
         return () => this.poolListeners.delete(listener)
       },
-      // THE ASK: a structural edit a floated container built goes UP; the authority applies it.
+      // THE ASK — the sole write channel: a structural edit a floated container built goes UP; the
+      // authority applies it. The surface holds no write of its own.
       propose,
-      // The substrate holds no write; `applyStructural` is never the channel here — delegate to `propose`
-      // so the transition guard (`propose ?? applyStructural`) is correct whichever a caller reaches for.
-      applyStructural: propose,
       // STRUCTURAL mint: DRAW a final granted id, stamp `^:`, and stage the record into the
       // propose batch — no pool write until the authority applies. A GROUP is staged with its children
       // EMBEDDED (the surface has no schemas to flatten); the authority NORMALIZES each edit before
@@ -616,7 +626,7 @@ export class MountAgent {
     const targetIsMain = sites.find((w) => w.id === targetWindowId)?.primary === true
     let wrapKind: string | undefined
     if (!targetIsMain) {
-      const picked = await this.pickWrapKind()
+      const picked = await this.pickWrapKind(2)
       if (picked === 'cancel') return
       wrapKind = picked.kind
     }
@@ -628,6 +638,18 @@ export class MountAgent {
     const ex = pe && pe.recordId() && pos != null ? pe.extractEdit(pos) : undefined
     const sourceEdit = pe && ex ? { id: pe.recordId(), record: ex.record } : undefined
     this.emit({ kind: 'move-to-window', subtreeId, sourceEdit, targetWindowId, wrapKind })
+  }
+
+  /** The surface twin of the main window's root-header "Wrap in a container" affordance
+   *  (`wrapPaneInteractive(rootId, …, rootContentPlacement())`). The surface holds no pool, so a local
+   *  `wrapPaneSolo` would hit `not-pooled`; instead pick the wrap kind HERE (in this window's chooser, so the
+   *  pick renders where the user acted, the twin-pick pattern of `moveToWindow`) and proxy the wrap UP. The
+   *  authority owns the window record and does the solo wrap + re-drive. Cancel aborts before any emit. */
+  async wrapRoot(): Promise<void> {
+    if (!this.rootContentId) return
+    const picked = await this.pickWrapKind(1)
+    if (picked === 'cancel') return
+    this.emit({ kind: 'wrap-root', contentId: this.rootContentId, wrapKind: picked.kind })
   }
 
   /** The user asked to close THIS floated window and it is non-empty (the authority found content + prevented
@@ -655,21 +677,16 @@ export class MountAgent {
     // 'cancel' or dismissed (null) → the window stays open.
   }
 
-  /** The surface twin of the authority's `pickWrapKind`: choose which container a move-into-an-occupied
-   *  window wraps [content, moved] into, in THIS window's chooser. Mirrors the authority's ladder — a
-   *  composition-`group-into` or a sole wrap target is used silently; otherwise the family-SECTIONED picker
-   *  (Stack: grouping / Arrange: spatial). `{}` when nothing declares a wrap target (the authority falls back);
-   *  `'cancel'` when the user dismisses the picker. */
-  private async pickWrapKind(): Promise<{ kind?: string } | 'cancel'> {
-    const outcome = wrapTargetOutcome()
-    if (!outcome || outcome.available.length === 0) return {}
-    if ((outcome.reason === 'requested' || outcome.reason === 'only') && outcome.chosen) return { kind: outcome.chosen.typeName }
-    const bare = (t: string): string => t.split('::')[0] ?? t
-    const SECTION = { grouping: 'Stack', spatial: 'Arrange' } as const
-    const options = [...wrapTargets()]
-      .sort((a, b) => (a.family === b.family ? 0 : a.family === 'grouping' ? -1 : 1))
-      .map((t) => ({ id: t.typeName, label: bare(t.typeName), section: SECTION[t.family] }))
-    const picked = await getChooserSurface().choose({ title: 'Wrap pane in which container?', options })
+  /** The surface twin of the authority's `pickWrapKind`: choose which container a wrap of `n` children
+   *  builds, in THIS window's chooser, through the one `wrapChoice` (a composition-`group-into` admitting
+   *  `n` or a sole candidate is used silently; otherwise the family-SECTIONED picker over the candidates).
+   *  `n` is 2 for a move into an occupied window (wraps [content, moved]) and 1 for the root wrap. `{}` when
+   *  nothing admits `n` (the authority falls back); `'cancel'` when the user dismisses the picker. */
+  private async pickWrapKind(n: number): Promise<{ kind?: string } | 'cancel'> {
+    const choice = wrapChoice(n)
+    if (choice.options.length === 0) return {}
+    if (choice.use) return { kind: choice.use }
+    const picked = await getChooserSurface().choose({ title: 'Wrap pane in which container?', options: choice.options })
     return picked ? { kind: picked } : 'cancel'
   }
 
@@ -764,6 +781,8 @@ export class MountAgent {
       // eslint-disable-next-line no-console
       console.error(`mount agent: unmounting "${id}" threw`, err)
     }
+    // After the view's own teardown: close whatever it still has open above the composition.
+    record.lifetime?.end()
     // Close-guard hygiene: `dispose()` normally unregisters the projection's guard (emitting `drop`). If a
     // guard outlived its projection, drop it from the tree + tell the authority, so no stale proxy lingers.
     if (this.guardCounts.has(id)) {
@@ -809,6 +828,10 @@ export class MountAgent {
 
     const focus: FocusChannel = {
       report: () => this.reportFocus(id),
+      // A visible-child change moves REAL DOM focus into the child — LOCAL to this surface window's document
+      // (the pane lives here), so a floated tabs group behaves the same as the main window's. The surface's
+      // own focusin tracker then reports it UP to the authority's one recency. Idempotent via `focusWithinPane`.
+      focusPane: (nodeId: string) => { if (paneIdOfActiveElement() !== nodeId) focusWithinPaneWhenReady(nodeId) },
       activePane: () => this.gatedActivePane(),
       watchActive: (listener) => {
         this.activePaneListeners.add(listener)
@@ -839,7 +862,10 @@ export class MountAgent {
     // `SurfaceEvent`s (intent/focus/selection/config cross to the authority) and its handlers register as
     // async remote candidates; capabilities the surface does not own are stubbed/absent. The direct twin is
     // the authority's `makeHost`. Same assembly (`createInProcessMountHost`), the other binding.
+    const lifetime = createMountLifetime()
+    record.lifetime = lifetime
     return createInProcessMountHost({
+      lifetime,
       // Common / per-window.
       entryPath: this.init.entryPath,
       engineReady: createEngineReadiness(this.init.entryPath),

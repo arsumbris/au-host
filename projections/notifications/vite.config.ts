@@ -3,8 +3,8 @@ import { defineConfig } from 'vite'
 import { sharedDepExternal } from '@arsumbris/au-host-sdk/shared-deps'
 
 // Two surfaces, one module (like the editor): the built ESM exports `mount` (the toast
-// overlay) + `status` (the status-bar indicator); the two type-defs' locators select
-// which export mounts. See notification-toast.type.yaml / notification-status.type.yaml.
+// overlay) + `status` (the bar item bell); the two type-defs' locators select
+// which export mounts. See notification-toast.type.yaml / notification-bar-item.type.yaml.
 
 export default defineConfig({
   plugins: [],

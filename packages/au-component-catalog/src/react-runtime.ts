@@ -65,6 +65,20 @@ export function makeAuWrapper<P extends object>(
       })
     })
 
+    // autoFocus → focus on mount. React honors the `autoFocus` prop only for NATIVE focusable
+    // elements, so on a custom element it is a silent no-op (it lands as a passthrough attribute and
+    // nothing focuses). Mirror React's native behavior here: focus the element once on mount. Elements
+    // that `delegatesFocus` (au-input, …) forward it to their inner field across the shadow boundary.
+    // Upgrade-safe like the field apply below, since focus delegation only works once the tag is defined.
+    const wantsAutoFocus = (props as AnyRecord).autoFocus === true
+    useLayoutEffect(() => {
+      if (!wantsAutoFocus) return
+      const focus = (): void => elRef.current?.focus()
+      if (customElements.get(tag)) focus()
+      else void customElements.whenDefined(tag).then(focus)
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // Events → addEventListener, bound ONCE; each listener reads the current handler off propsRef.
     useLayoutEffect(() => {
       const el = elRef.current

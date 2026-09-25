@@ -1,7 +1,7 @@
 # editor-pane IS a `pane-projection` (a full content surface). Its instance IS its config:
 # `file` records the open vault file so a saved composition reopens where you left off.
 # `meta` declares its loadable code (the default `mount` export), resolved via the type owner.
-# The editor's status item is a SEPARATE surface — editor-status (status-projection) — sharing
+# The editor's status item is a SEPARATE surface — editor-bar-item (a bar-item-projection) — sharing
 # this same module via the locator `export`.
 extends: pane-projection::au-host-sdk
 fields:
@@ -19,7 +19,7 @@ meta:
   # No `export` → the default `mount` export (the editor pane).
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The intents this projection HANDLES (typed capability). Discovered in the
   # `subtypes('projection')` pass; the runtime handler binds at mount.
   # - `handles` (AMBIENT): ui-intent-highlight (flashes when it holds the target file); save-intent (⌘S
@@ -35,6 +35,7 @@ meta:
     handles:
       - "[[ui-intent-highlight::intent]]"
       - "[[save-intent::intent]]"
+      - "[[swap-viewer-intent::intent]]"
     handlesTargeted:
       - "[[open-intent::intent]]"
   # The content this viewer opens (content-routing axis). `*` = any file: the editor is ELIGIBLE for

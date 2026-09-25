@@ -49,6 +49,7 @@ import {
   describeForPicker,
   EmptySlot,
   usePaneSwap,
+  useSwapPaneIntent,
   makePoolEdit,
   positionName,
   bareTypeName,
@@ -64,6 +65,8 @@ import {
   paneActionsMenu,
   floatPaneRow,
   moveToWindowRow,
+  slotRulesRow,
+  useRevealPaneHeaders,
 } from '@arsumbris/container-kit'
 // AuChevron is the React WRAPPER (wires `au-activate` → onAuActivate); the named import also brings the
 // JSX-type augmentation for the other <au-*> chrome intrinsic elements this file uses.
@@ -90,11 +93,11 @@ interface ColumnExtras {
 type SlotState = CoreSlotState<ColumnExtras>
 
 /**
- * THE UNION CODEC — reading and writing `<projection& | column-slot>` is the substrate's, not
- * column's. Column declares only its slot type, the two extras it HONOURS, and its own id prefix.
+ * THE UNION CODEC — reading and writing an `items` position is the substrate's, and which slot type
+ * it holds is the field type's. Column declares only the two extras it HONOURS.
  */
 const slots = makeSlotCodec<Projection, ColumnExtras>({
-  slotType: 'column-slot',
+  site: { type: 'column', field: 'items' },
   extras: ['size', 'collapsed'],
   label: 'column',
 })
@@ -283,15 +286,7 @@ function ItemHeader({
 }
 
 function ColumnApp({ host }: { host: MountHost }): ReactNode {
-  const [revealHeaders,setRevealHeaders]=useState(()=>document.documentElement.dataset.auPaneHeaders==='show')
-  useEffect(()=>{
-    const root=document.documentElement
-    const update=()=>setRevealHeaders(root.dataset.auPaneHeaders==='show')
-    const observer=new MutationObserver(update)
-    observer.observe(root,{attributes:true,attributeFilter:['data-au-pane-headers']})
-    update()
-    return ()=>observer.disconnect()
-  },[])
+  const revealHeaders = useRevealPaneHeaders()
 
   const columnId = useMemo(() => genId(), [])
   const initial = useMemo(() => fromConfig(host.config as Column | undefined), [host])
@@ -356,10 +351,13 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
   // so this only un-collapses its section. `live` is ref-stable, so the handler reads current state.
   useEffect(() => {
     return host.intent.handle('reveal-pane-intent', {
-      // CLAIM (pure): this column holds the pane. COMMIT: un-collapse its section (idempotent).
+      // CLAIM (pure): this column holds the pane. COMMIT: un-collapse its section (idempotent) AND move DOM
+      // focus into it, so a reveal (a file-tree "Open panes" click) both shows and focuses the pane.
       claim: (intent) => isRevealPaneIntent(intent) && live().items.some((x) => x.child?.id === intent.paneId),
       commit: (intent) => {
-        if (isRevealPaneIntent(intent) && isCollapsed(intent.paneId)) toggle(intent.paneId)
+        if (!isRevealPaneIntent(intent)) return
+        if (isCollapsed(intent.paneId)) toggle(intent.paneId)
+        host.focus.focusPane?.(intent.paneId)
       },
     })
   }, [host])
@@ -400,6 +398,8 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
   // column-local fixity check, and the ⇄ is hidden for a fixed item. Keyed by `entryId` (which IS the
   // occupant's `^:`), resolved via the portal anchor and column's `slotFor` / `setSlotContent`.
   const swapPane = usePaneSwap(host)
+  // Keyboard swap (swap-pane-intent): swap the focused item's content, via the same picker the ⋯ row opens.
+  useSwapPaneIntent(host, swapPane, (id) => live().items.some((x) => x.child?.id === id))
 
   /** Fill an empty position, or append a new one when no id is given. */
   const placeItem = (typeId: string, at?: string): void => {
@@ -643,10 +643,54 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
     },
     // The lookup only this container can answer. The substrate owns what the answer MEANS.
     slotFor: (id: string): ContainerSlot | null => slotOf(live(), id),
+    // The focused-pane MENU — the same rows the `⋯` header button opens, for `open-pane-actions-intent`.
+    // Referenced lazily (runs at menu-open, after `paneActionRows` is defined below).
+    paneActions: (id) => paneActionRows(id),
     ...(poolEdit ? { poolEdit } : {}),
   }
 
   const setPlacementRoot = useContainerPlacement(placement)
+  // The full pane-actions ROW LIST for an item's occupant, shared by the `⋯` header button and the
+  // placement's `paneActions`. `id` is the occupant's `^:`. "Layout rules…" is offered even on a FIXED
+  // item (that is how you un-fix it); the rest are gated by `fixed`.
+  const paneActionRows = (id: PaneId): ContextMenuItem[] => {
+    const m = live()
+    const index = m.items.findIndex((i) => i.child?.id === id)
+    if (index < 0) return []
+    const item = m.items[index]!
+    const child = item.child
+    if (!child) return []
+    const fixed = item.slot.fixed === true
+    const rows: ContextMenuItem[] = []
+    if (!fixed) {
+      for (const direction of [-1, 1] as const) {
+        rows.push({
+          id: direction < 0 ? 'item.move-up' : 'item.move-down',
+          label: direction < 0 ? 'Move up' : 'Move down',
+          enabled: !!m.items[index + direction] && !m.items[index + direction]!.slot.fixed,
+          run: () => {
+            const cur = live()
+            const at = indexOf(child.id)
+            const target = cur.items[at + direction]
+            if (at < 0 || !target || target.slot.fixed || cur.items[at]!.slot.fixed) return
+            placement.moveWithin?.(child.id, { shape: 'slot-rect', slotId: target.entryId, zone: direction < 0 ? 'top' : 'bottom' } as DropTarget)
+          },
+        })
+      }
+      const choose = host.chooser ? host.chooser.choose.bind(host.chooser) : async () => null
+      rows.push({ id: 'item.swap', label: "Swap this item's content", icon: 'swap', enabled: true, run: () => swapPane.toggle(child.id) })
+      rows.push({ id: 'item.wrap', label: 'Wrap in a container', icon: 'wrap', enabled: true, run: () => void wrapPaneInteractive(child.id, { choose }) })
+      if (m.items.length === 1) rows.push({ id: 'item.unwrap', label: 'Unwrap container', icon: 'unwrap', enabled: true, run: () => dissolvePane(child.id) })
+      const floatRow = floatPaneRow(host, child.id)
+      if (floatRow) rows.push(floatRow)
+      const moveRow = moveToWindowRow(host, child.id)
+      if (moveRow) rows.push(moveRow)
+      rows.push({ id: 'item.remove', label: 'Remove', enabled: true, run: () => removeItem(item.entryId) })
+    }
+    rows.push(slotRulesRow(child.id))
+    rows.push(...reloadPaneRows(host, child.id))
+    return rows
+  }
   const setDialectRoot = useContainerDialect(columnDropDialect)
   const setContainerRoot = useMergedRef(setPlacementRoot, setDialectRoot)
   // A child's DECLARED title (`projection-presentation-meta`) off the host descriptor set, built once
@@ -699,23 +743,7 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
           // falls back. See the sandwich note: gating on `child` drops an authored label the moment the
           // position is emptied.
           const label = positionName(item.slot, child?.instance.type, titleOf(child?.instance.type)) || 'empty'
-          const actionRows = (): ContextMenuItem[] => {
-            if(!child || fixed)return []
-            const choose=host.chooser ? host.chooser.choose.bind(host.chooser) : async()=>null
-            const rows:ContextMenuItem[]=[...[-1,1].map(direction=>({
-              id:direction<0?'item.move-up':'item.move-down',label:direction<0?'Move up':'Move down',
-              enabled:!!model.items[index+direction] && !model.items[index+direction]!.slot.fixed,
-              run:()=>{const current=live();const at=indexOf(child.id);const target=current.items[at+direction];if(at<0||!target||target.slot.fixed||current.items[at]!.slot.fixed)return;placement.moveWithin?.(child.id,{shape:'slot-rect',slotId:target.entryId,zone:direction<0?'top':'bottom'} as DropTarget)},
-            })),
-              {id:'item.swap',label:"Swap this item's content",icon:'swap',enabled:true,run:()=>swapPane.toggle(item.entryId)},
-              {id:'item.wrap',label:'Wrap in a container',icon:'wrap',enabled:true,run:()=>void wrapPaneInteractive(child.id,{choose})},
-            ]
-            if(model.items.length===1)rows.push({id:'item.unwrap',label:'Unwrap container',icon:'unwrap',enabled:true,run:()=>dissolvePane(child.id)})
-            const floatRow=floatPaneRow(host,child.id);if(floatRow)rows.push(floatRow)
-            const moveRow=moveToWindowRow(host,child.id);if(moveRow)rows.push(moveRow)
-            rows.push({id:'item.remove',label:'Remove',enabled:true,run:()=>removeItem(item.entryId)})
-            return [...rows, ...reloadPaneRows(host, child.id)]
-          }
+          const actionRows = (): ContextMenuItem[] => (child ? paneActionRows(child.id) : [])
           const grip=child&&!fixed ? <ColumnGrip host={host} paneId={child.id} type={child.instance.type} label={label} rows={actionRows} /> : null
 
           return (
@@ -761,20 +789,22 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
                   </span>
                 }
                 actions={
-                  child && !fixed ? (
+                  child ? (
                     <span slot="actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--au-space-1)' }}>
                       {/* The occupant-level actions collapse behind ONE `⋯` overflow menu; the close (Remove)
                           stays a distinct destructive affordance. The item header owns its own collapse
-                          click, so the menu button + the close both stopPropagation (the menu via the helper). */}
+                          click, so the menu button + the close both stopPropagation (the menu via the helper).
+                          The ⋯ shows even on a FIXED item (its only row is "Layout rules…", to un-fix); the
+                          destructive Remove stays gated by `!fixed`. */}
                       {paneActionsMenu(host, actionRows)}
-                      <au-close-button
+                      {!fixed && <au-close-button
                         tone="danger"
                         label="Remove"
                         onClick={(e) => {
                           e.stopPropagation()
                           removeItem(item.entryId)
                         }}
-                      />
+                      />}
                     </span>
                   ) : null
                 }
@@ -783,8 +813,8 @@ function ColumnApp({ host }: { host: MountHost }): ReactNode {
               {!collapsed && (
                 <div className="au-col-body">
                   {child ? (
-                    swapPane.isSwapping(item.entryId) ? (
-                      swapPane.swapPicker(item.entryId, child.instance)
+                    swapPane.isSwapping(child.id) ? (
+                      swapPane.swapPicker(child.id, child.instance)
                     ) : (
                     <PaneProjection
                       key={`${child.instance.type}:${(child.instance as { file?: string }).file ?? ''}`}

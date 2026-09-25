@@ -1,7 +1,9 @@
-# Each named region contains a child reference or a sandwich-slot. The slot owns
-# sizing, collapse, and fixity, so those rules survive a change of occupant.
+# A FRAME: the `center` fill is inherited from `frame-container`; sandwich adds the two collapsible SIDES.
+# Each side contains a child reference or a sandwich-slot. The slot owns sizing, collapse, and fixity,
+# so those rules survive a change of occupant. The center takes the base `container-slot`: sandwich never
+# sizes or collapses it.
 
-extends: container-projection::au-host-sdk
+extends: frame-container::au-host-sdk
 #
 # The slot branch is BARE, not `sandwich-slot::sandwich`. Sandwich owns that type, and a
 # `::repo` qualifier naming your own repo is legal but redundant — the bare form is
@@ -10,14 +12,13 @@ extends: container-projection::au-host-sdk
 # exist. `projection::au-host-sdk` stays qualified because that peer really is another repo.
 fields:
   left?: <mountable::au-host-sdk* | sandwich-slot>
-  center?: <mountable::au-host-sdk* | sandwich-slot>
   right?: <mountable::au-host-sdk* | sandwich-slot>
 meta:
   # Loadable-code metadata for the sandwich projection's ESM. `entry` is relative to
   # the OWNING PACKAGE ROOT (where this type-def lives), so the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   # The intents this container HANDLES. `collapse-region` (firer-relative) reaches sandwich as the
   # firer's enclosing container: it toggles the SIDE region holding the firer (a rail's collapse
   # toggle collapses its own region), declining the non-collapsible center so the walk continues out.
@@ -28,3 +29,4 @@ meta:
       - "[[collapse-region::intent]]"
       - "[[toggle-left-sidebar-intent]]"
       - "[[toggle-right-sidebar-intent]]"
+      - "[[swap-pane-intent::intent]]"

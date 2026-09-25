@@ -6,4 +6,4 @@ meta:
   # hello is TypeScript over the SDK, built to./dist/index.js (like every projection).
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8

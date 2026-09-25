@@ -17,7 +17,7 @@
 
 import type { ContainerKind, ContainerPlacement, DropTarget, Occupant, PaneId, PaneInstance } from '@arsumbris/au-host-sdk';
 import { POOL_EDIT_NOOP } from '@arsumbris/au-host-sdk';
-import { isGroupingKind } from './grouping.ts';
+import { admitsChildren, isGroupingKind } from './grouping.ts';
 import type { GroupingCapability } from './grouping.ts';
 
 type PoolEditSeam = NonNullable<ContainerPlacement['poolEdit']>;
@@ -60,7 +60,7 @@ export type ReparentOutcome = 'wrap' | 'inject' | 'move' | 'noop';
 
 export type Reparented =
   | { ok: true; edits: StructuralEdit[]; outcome: ReparentOutcome }
-  | { ok: false; reason: 'no-grouping-declared' | 'refused' };
+  | { ok: false; reason: 'no-grouping-declared' | 'arity-refused' | 'refused' };
 
 /** A source extract that a builder refused, distinct from "no source". */
 const REFUSED: unique symbol = Symbol('reparent-source-refused');
@@ -87,6 +87,8 @@ export function reparentSafeCenter(args: ReparentArgs): Reparented {
   // occupant is never replaced.
   if (existing != null && !isGroupingKind(target.containerKind)) {
     if (!grouping) return { ok: false, reason: 'no-grouping-declared' };
+    // The group holds two children, so a kind whose declared arity refuses two (a frame) is never built.
+    if (!admitsChildren(grouping, 2)) return { ok: false, reason: 'arity-refused' };
     const group = grouping.build([
       { id: existing.id, instance: existing.instance },
       { id: incoming.id, instance: incoming.instance },

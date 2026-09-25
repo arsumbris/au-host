@@ -2,17 +2,40 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { setHostDiagnosticSink, type HostDiagnostic } from '@arsumbris/au-host-sdk';
+import { setHostDiagnosticSink, type ContainerSchemas, type HostDiagnostic, type SlotField } from '@arsumbris/au-host-sdk';
 
 import { makeSlotCodec, persistedId, type SlotState } from '../src/slot-codec.ts';
-import { setSlotTypeProvider } from '../src/slots.ts';
+import { setContainerSchemas, setSlotTypeProvider } from '../src/slots.ts';
 import { _resetBlockIdsForTests } from '../src/block-id.ts';
+
+/** One derived child field, the way `deriveContainerSchemas` reports it. */
+const fieldOf = (name: string, list: boolean, slot?: [string, string]): SlotField => ({
+  name, list, slotTypes: slot ? [slot[0]] : [], slotTypesQualified: slot ? [slot[1]] : [], nodeTypes: [],
+});
+const schema = (type: string, fields: SlotField[]) => [type, { type, fields }] as const;
+
+/** The shipped containers' shapes: each field's slot type is its TYPE's, never the codec's. */
+const SCHEMAS: ContainerSchemas = {
+  containers: new Map([
+    schema('sandwich', [fieldOf('left', false, ['sandwich-slot', 'sandwich-slot::sandwich']), fieldOf('center', false, ['container-slot', 'container-slot::au-host-sdk'])]),
+    schema('column', [fieldOf('items', true, ['column-slot', 'column-slot::column'])]),
+    schema('tabs', [fieldOf('tabs', true, ['container-slot', 'container-slot::au-host-sdk'])]),
+    // dock's edges are bare `bar-projection*[]`: no slot type at all.
+    schema('dock', [fieldOf('top', true), fieldOf('center', false, ['container-slot', 'container-slot::au-host-sdk'])]),
+    schema('bento', [fieldOf('root', false, ['bento-slot', 'bento-slot::bento'])]),
+  ]),
+  nodes: new Map(),
+};
 
 // The codec mints an id-less child's pool `^:` via the SUBSTRATE minter, so pin its
 // session prefix so a minted id is assertable (`wrap-test-1`, ...).
-beforeEach(() => _resetBlockIdsForTests());
+beforeEach(() => {
+  _resetBlockIdsForTests();
+  setContainerSchemas(SCHEMAS);
+});
 afterEach(() => {
   setSlotTypeProvider(null);
+  setContainerSchemas(null);
   setHostDiagnosticSink(null);
 });
 
@@ -20,12 +43,12 @@ type Sized = { size?: number; collapsed?: boolean };
 
 /** A container that honours two extras (sandwich / column). */
 const sized = makeSlotCodec<{ type: string }, Sized>({
-  slotType: 'sandwich-slot',
+  site: { type: 'sandwich', field: 'left' },
   extras: ['size', 'collapsed'], label: 'sandwich',
 });
 
 /** A container that honours none (tabs / dock / bento). */
-const plain = makeSlotCodec<{ type: string }>({ slotType: 'container-slot', label: 'tabs' });
+const plain = makeSlotCodec<{ type: string }>({ site: { type: 'tabs', field: 'tabs' }, label: 'tabs' });
 
 describe('the bare branch', () => {
   it('reads a bare projection as an occupant with no rules', () => {
@@ -67,7 +90,7 @@ describe('the slot branch', () => {
 
   it('reads every base field and every declared extra', () => {
     expect(sized.read(record).slot).toEqual({
-      id: 'pos-1', admits: ['[[editor-pane::editor]]'], fixed: true, label: 'Sidebar', size: 240, collapsed: true,
+      type: 'sandwich-slot', id: 'pos-1', admits: ['[[editor-pane::editor]]'], fixed: true, label: 'Sidebar', size: 240, collapsed: true,
     });
   });
 
@@ -101,11 +124,11 @@ describe('the no-wrapper guarantee, for every container that ships', () => {
   // lives in the pool), so "no wrapper" means the value is exactly that reference — not a slot record.
   // It has to hold for EVERY container, because the cost of breaking it is a diff on every composition.
   const codecs = {
-    sandwich: makeSlotCodec<{ type: string }, Sized>({ slotType: 'sandwich-slot', extras: ['size', 'collapsed'], label: 'sandwich' }),
-    column: makeSlotCodec<{ type: string }, Sized>({ slotType: 'column-slot', extras: ['size', 'collapsed'], label: 'column' }),
-    tabs: makeSlotCodec<{ type: string }>({ slotType: 'container-slot', label: 'tabs' }),
-    dock: makeSlotCodec<{ type: string }>({ slotType: 'container-slot', label: 'dock' }),
-    bento: makeSlotCodec<{ type: string }>({ slotType: 'bento-slot', label: 'bento' }),
+    sandwich: makeSlotCodec<{ type: string }, Sized>({ site: { type: 'sandwich', field: 'left' }, extras: ['size', 'collapsed'], label: 'sandwich' }),
+    column: makeSlotCodec<{ type: string }, Sized>({ site: { type: 'column', field: 'items' }, extras: ['size', 'collapsed'], label: 'column' }),
+    tabs: makeSlotCodec<{ type: string }>({ site: { type: 'tabs', field: 'tabs' }, label: 'tabs' }),
+    dock: makeSlotCodec<{ type: string }>({ site: { type: 'dock', field: 'top' }, label: 'dock' }),
+    bento: makeSlotCodec<{ type: string }>({ site: { type: 'bento', field: 'root' }, label: 'bento' }),
   };
 
   for (const [name, codec] of Object.entries(codecs)) {
@@ -155,7 +178,7 @@ describe('carrying what the container does not own', () => {
 
   it('adds nothing to a slot that carries only understood fields', () => {
     // The byte-identical guarantee: an ordinary slot must not grow an empty `carried` key.
-    expect(sized.read({ type: 'sandwich-slot', fixed: true }).slot).toEqual({ fixed: true });
+    expect(sized.read({ type: 'sandwich-slot', fixed: true }).slot).toEqual({ type: 'sandwich-slot', fixed: true });
   });
 });
 
@@ -203,7 +226,7 @@ describe('survivesEmpty — deliberately NOT the same question as speaks', () =>
 });
 
 describe('isSlotRecord — by closure, not by name', () => {
-  it('matches the container\'s own slot type without a provider', () => {
+  it('matches the field\'s own slot type without a provider', () => {
     expect(sized.isSlotRecord({ type: 'sandwich-slot' })).toBe(true);
     expect(sized.isSlotRecord({ type: 'sandwich-slot::sandwich' })).toBe(true);
     expect(sized.isSlotRecord({ type: 'editor-pane' })).toBe(false);
@@ -213,46 +236,62 @@ describe('isSlotRecord — by closure, not by name', () => {
   it('reads a SUBTYPE of the slot as a slot once the host installs the predicate', () => {
     // A slot subtype read as a CHILD would silently lose the position's rules.
     expect(sized.isSlotRecord({ type: 'my-slot' })).toBe(false);
-    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && a === 'sandwich-slot' });
+    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && ['sandwich-slot', 'container-slot'].includes(a) });
     expect(sized.isSlotRecord({ type: 'my-slot' })).toBe(true);
   });
 
   it('reads a subtype record\'s fields, not just its identity', () => {
-    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && a === 'sandwich-slot' });
-    expect(sized.read({ type: 'my-slot', fixed: true, size: 12 }).slot).toEqual({ fixed: true, size: 12 });
+    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && ['sandwich-slot', 'container-slot'].includes(a) });
+    expect(sized.read({ type: 'my-slot', fixed: true, size: 12 }).slot).toEqual({ type: 'my-slot', fixed: true, size: 12 });
   });
 });
 
-describe('footgun guard — a subtype is flattened on write, so warn at read', () => {
-  // write emits one fixed slot type per container. Reject additional slot subtypes at read time
-  // when serializing them as the base type would lose their identity.
-  it('warns when a slot record\'s type is not the codec\'s exact slot type', () => {
+describe('the slot type is the field\'s, never the codec\'s', () => {
+  const noteDiagnostics = (): HostDiagnostic[] => {
     const seen: HostDiagnostic[] = [];
     setHostDiagnosticSink((d) => seen.push(d));
-    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && a === 'sandwich-slot' });
-    // The read still succeeds — fields intact — it is the WRITE that would flatten, so the warning
-    // rides the read rather than blocking it.
-    expect(sized.read({ type: 'my-slot', fixed: true }).slot).toEqual({ fixed: true });
-    const flagged = seen.filter((d) => d.code === 'slot-subtype-flattened');
-    expect(flagged.length).toBe(1);
-    expect(flagged[0].severity).toBe('warning');
-    expect(flagged[0].subject).toBe('my-slot');
-    expect(flagged[0].detail).toMatchObject({ read: 'my-slot', willWrite: 'sandwich-slot' });
+    return seen;
+  };
+
+  it('writes a subtype record back under its OWN type, as authored', () => {
+    setSlotTypeProvider({ isA: (c, a) => c === 'my-slot' && ['sandwich-slot', 'container-slot'].includes(a) });
+    const rec = { type: 'my-slot::vendor', fixed: true, child: { '^': 'k', type: 'editor-pane' } };
+    expect(sized.write(sized.read(rec))).toEqual({ ...rec, child: '[[^^k]]' });
   });
 
-  it('does NOT warn for the codec\'s own exact type, qualified or bare', () => {
-    const seen: HostDiagnostic[] = [];
-    setHostDiagnosticSink((d) => seen.push(d));
-    sized.read({ type: 'sandwich-slot', fixed: true });
-    sized.read({ type: 'sandwich-slot::sandwich', fixed: true }); // exact by BARE name, qualifier aside
-    expect(seen.filter((d) => d.code === 'slot-subtype-flattened')).toEqual([]);
+  it('materializes a fresh record as the field\'s slot type, qualified by its owner', () => {
+    expect(sized.write({ slot: { fixed: true } })).toEqual({ type: 'sandwich-slot::sandwich', fixed: true });
+    const bento = makeSlotCodec<{ type: string }>({ site: { type: 'bento', field: 'root' }, label: 'bento' });
+    expect(bento.emptyRecord()).toEqual({ type: 'bento-slot::bento' });
   });
-});
 
-describe('the qualifier', () => {
-  it('writes the qualified type name a cross-repo composition needs', () => {
-    const q = makeSlotCodec<{ type: string }>({ slotType: 'bento-slot', qualifier: '::bento', label: 'bento' });
-    expect(q.write({ slot: { fixed: true } })).toEqual({ type: 'bento-slot::bento', fixed: true });
+  it('a field of bare children reads a slot record as its child alone, and says so', () => {
+    setSlotTypeProvider({ isA: (c, a) => c === a });
+    const seen = noteDiagnostics();
+    const edge = makeSlotCodec<{ type: string }>({ site: { type: 'dock', field: 'top' }, label: 'dock' });
+    const pos = edge.read({ type: 'container-slot', fixed: true, child: { '^': 'bar1', type: 'bar' } });
+    expect(pos.child?.id).toBe('bar1');
+    expect(pos.slot).toEqual({});
+    expect(edge.write(pos)).toBe('[[^^bar1]]');
+    expect(seen.map((d) => d.code)).toEqual(['slot-record-not-admitted']);
+    expect(seen[0].subject).toBe('dock.top');
+  });
+
+  it('a field of bare children never writes a rule; the dropped rule is named', () => {
+    const seen = noteDiagnostics();
+    const edge = makeSlotCodec<{ type: string }>({ site: { type: 'dock', field: 'top' }, label: 'dock' });
+    expect(edge.write({ child: { id: 'bar1', instance: { type: 'bar' } }, slot: { fixed: true } })).toBe('[[^^bar1]]');
+    expect(seen.map((d) => d.code)).toEqual(['slot-rule-inexpressible']);
+    expect(seen[0].detail).toMatchObject({ rules: ['fixed'] });
+    expect(() => edge.emptyRecord()).toThrow(/dock\.top' admits no slot record/);
+  });
+
+  it('with no schemas installed, nothing can be materialized', () => {
+    setContainerSchemas(null);
+    const seen = noteDiagnostics();
+    expect(sized.write({ child: { id: 'k', instance: { type: 'editor-pane' } }, slot: { fixed: true } })).toBe('[[^^k]]');
+    expect(seen.map((d) => d.code)).toEqual(['slot-rule-inexpressible']);
+    expect(() => sized.emptyRecord()).toThrow(/no derived shape/);
   });
 });
 

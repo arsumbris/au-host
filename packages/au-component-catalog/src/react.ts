@@ -84,7 +84,7 @@ export const AuCloseButton = makeAuWrapper<AuCloseButtonProps>('au-close-button'
 
 /** React wrapper for `<au-code-block>` — renders the tag; props → element properties; events → listeners. */
 export type AuCodeBlockProps = AuHostProps & Omit<AuCodeBlockShape, 'type'>
-export const AuCodeBlock = makeAuWrapper<AuCodeBlockProps>('au-code-block', ['code', 'language', 'copy', 'copyText'], {})
+export const AuCodeBlock = makeAuWrapper<AuCodeBlockProps>('au-code-block', ['code', 'language', 'copy', 'copyText', 'lineStart', 'markLine'], {})
 
 /** React wrapper for `<au-code-sample>` — renders the tag; props → element properties; events → listeners. */
 export type AuCodeSampleProps = AuHostProps & Omit<AuCodeSampleShape, 'type'>

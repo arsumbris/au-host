@@ -229,6 +229,20 @@ export class IntentTree {
   // its own subtree).
   private scopeOf: ((node: PublisherId) => string) | null = null
   private scopeChainOf: ((from: PublisherId) => string[]) | null = null
+  // THE AMBIENT PICKER HOOK — the CONSUME-stage CHOOSE strategy. On a routed AMBIENT dispatch with MORE THAN
+  // ONE genuine claimer, the tree defers the pick to the user instead of silently committing the MRU head: it
+  // calls this with the firer + the claiming candidates (authority order, head first) and commits the returned
+  // PublisherId, or nothing on null (Esc / cancel). The tree stays window- and DOM-OPAQUE — the runtime that
+  // injects this owns the candidate→{label, anchor} resolution AND the firer's-window chooser, so a
+  // floated-window firer's picker renders THERE without the tree holding a window. null (never injected) → the
+  // CHOOSE strategy is off, the walk stays the silent first-claimer commit. Applies to the DIRECT ambient path
+  // ONLY (`allowChoose`): a wire's fallback tail keeps first-claimer.
+  private chooseAmong: ((from: PublisherId, intentType: string, candidates: PublisherId[]) => Promise<PublisherId | null>) | null = null
+  // The per-firer CONSUME strategy the composition declares (`intent-routing.default-strategy`, read per
+  // scope by the runtime, which owns the config). `choose` (the default when not injected) uses the picker;
+  // `mru` opts back to the silent first-claimer. The tree stays config-OPAQUE — it consults this, the runtime
+  // resolves the firer's scope. Grows to a per-intent map later (the `intentType` arg is already threaded).
+  private ambientStrategy: ((from: PublisherId, intentType: string) => 'choose' | 'mru') | null = null
   constructor(private readonly parentOf: (id: PublisherId) => PublisherId | null) {}
 
   /** Inject the ordered focus ranker (most-recently-focused first). */
@@ -294,6 +308,21 @@ export class IntentTree {
   /** Inject the switchboard wire resolver (the composition's explicit `intent-wires` override). */
   setWireResolver(resolve: WireResolver): void {
     this.resolveWire = resolve
+  }
+
+  /** Inject the ambient PICKER hook — the CONSUME-stage CHOOSE strategy. On >1 genuine ambient claimer the
+   *  tree calls it to let the user pick (the runtime owns label/anchor resolution + the firer's-window
+   *  chooser); it commits the returned candidate, or nothing on null. Not injected → the strategy is off
+   *  (silent first-claimer). See `chooseAmong` and `consumeClaims`. */
+  setChooser(choose: (from: PublisherId, intentType: string, candidates: PublisherId[]) => Promise<PublisherId | null>): void {
+    this.chooseAmong = choose
+  }
+
+  /** Inject the per-firer CONSUME strategy resolver (the composition's `intent-routing.default-strategy`,
+   *  read per the firer's scope by the runtime). `choose` uses the picker, `mru` opts back to the silent
+   *  first-claimer. Not injected → `choose` (the picker is the default). See `ambientStrategy` and `consumeClaims`. */
+  setAmbientStrategy(strategy: (from: PublisherId, intentType: string) => 'choose' | 'mru'): void {
+    this.ambientStrategy = strategy
   }
 
   /**
@@ -650,7 +679,9 @@ export class IntentTree {
         .map((o) => ({ label: this.describeNode?.(o) ?? o, reason: this.ambientExclusionReason?.(o, intent.type) ?? 'filtered' }))
       event('intent', 'candidates', { type: intent.type, from, owners: ordered.map(([o]) => o), ownerLabels: ordered.map(([o]) => this.describeNode?.(o) ?? o), excluded })
     }
-    return this.resolveAndCommit(pass, from, intent, key, ordered)
+    // The DIRECT routed path enables the CHOOSE strategy for AMBIENT dispatch only (open / reveal / save);
+    // FIRER-RELATIVE (promote / split) never picks — it commits the firer's own ordered claim (Decision 4).
+    return this.resolveAndCommit(pass, from, intent, key, ordered, (intent.dispatch ?? 'ambient') === 'ambient')
   }
 
   /**
@@ -674,11 +705,82 @@ export class IntentTree {
   /** GATHER-THEN-COMMIT for a routed intent. The AUTHORITY keeps the order (`ordered`); it gathers every
    *  live candidate's pure `claim` (sync same-window, remote in parallel), then walks its OWN order and
    *  commits the FIRST claimer. Fully synchronous when every claim is sync; async only when one is a promise. */
-  private resolveAndCommit(pass: DispatchPass, from: PublisherId, intent: IntentPayload, key: string, ordered: Array<[PublisherId, Handler]>): boolean | Promise<boolean> {
+  private resolveAndCommit(pass: DispatchPass, from: PublisherId, intent: IntentPayload, key: string, ordered: Array<[PublisherId, Handler]>, allowChoose = false): boolean | Promise<boolean> {
     const live = ordered.filter(([o]) => !this.cyclesBack(pass, o, intent.type, key)) // skip nodes that already handled (loop breaker).
     const claims = this.gatherClaims(pass, from, intent, live)
-    if (Array.isArray(claims)) return this.commitFirstClaimer(pass, from, intent, key, live, claims)
-    return claims.then((c) => this.commitFirstClaimer(pass, from, intent, key, live, c))
+    const consume = (c: boolean[]): boolean | Promise<boolean> => this.consumeClaims(pass, from, intent, key, live, c, allowChoose)
+    return Array.isArray(claims) ? consume(claims) : claims.then(consume)
+  }
+
+  /**
+   * The CONSUME step over the gathered claims. When the CHOOSE strategy applies — the caller ALLOWS it (the
+   *  DIRECT ambient path, never a wire's fallback tail), a chooser is injected, and MORE THAN ONE candidate
+   *  genuinely CLAIMED — defer the pick to the user (`chooseAndCommit`). Otherwise commit the FIRST claimer in
+   *  the authority's order (0 → the `unhandled` hook, 1 → that one), today's silent behaviour. `live`/`claims`
+   *  are index-aligned; the genuine claimers are `live` filtered by `claims`, in authority (MRU-head-first)
+   *  order — so the picker's index-0 pre-highlight is the head an auto-pick would have committed.
+   */
+  private consumeClaims(pass: DispatchPass, from: PublisherId, intent: IntentPayload, key: string, live: Array<[PublisherId, Handler]>, claims: boolean[], allowChoose: boolean): boolean | Promise<boolean> {
+    // The composition opts out per scope with `intent-routing.default-strategy: mru`, restoring the silent
+    // first-claimer even on the direct ambient path. Absent / not injected → `choose`, the picker default.
+    const strategy = this.ambientStrategy?.(from, intent.type) ?? 'choose'
+    if (allowChoose && this.chooseAmong && strategy === 'choose') {
+      const claimers = live.filter((_, i) => claims[i])
+      if (claimers.length > 1) return this.chooseAndCommit(pass, from, intent, key, claimers)
+    }
+    return this.commitFirstClaimer(pass, from, intent, key, live, claims)
+  }
+
+  /**
+   * The CHOOSE strategy: >1 genuine ambient claimer, so ASK instead of silently committing the MRU head. Call
+   *  the injected picker with the claiming candidates (authority order, head first — the runtime pre-highlights
+   *  index 0, so a blind Enter reproduces the old silent pick), then commit the picked candidate. A null pick
+   *  (Esc / cancel) commits NOTHING.
+   *
+   *  RE-GATHER before commit (Decision 7): the claims were gathered BEFORE the picker await, so the pick may
+   *  have unmounted or changed state during it. Re-resolve the pick's CURRENT handler and re-run its PURE claim
+   *  against a fresh read; commit only if it STILL claims. NEVER re-home to an unpicked candidate (Decision 6):
+   *  a vanished / declining pick, or a failed commit, FAILS and surfaces the miss — it does not open elsewhere,
+   *  because the user picked THIS one. `wantAck: true` so a REMOTE pick's commit outcome is surfaced (not
+   *  re-homed).
+   */
+  private async chooseAndCommit(pass: DispatchPass, from: PublisherId, intent: IntentPayload, key: string, claimers: Array<[PublisherId, Handler]>): Promise<boolean> {
+    const candidates = claimers.map(([owner]) => owner)
+    this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose', { type: intent.type, from, fromLabel: this.describeNode?.(from), candidates, candidateLabels: candidates.map((o) => this.describeNode?.(o) ?? o) }) })
+    const picked = await this.chooseAmong!(from, intent.type, candidates)
+    if (picked === null) {
+      this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose-cancel', { type: intent.type, from }) })
+      return false
+    }
+    if (!candidates.includes(picked)) {
+      // The runtime maps the pick back from the very set passed in, so an off-set id should not happen; a
+      // defensive floor that never commits a candidate the picker did not offer.
+      this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose-cancel', { type: intent.type, from, reason: 'picked-not-a-candidate' }) })
+      return false
+    }
+    // Re-resolve the pick's CURRENT capability (a node may have re-registered a fresh handler, or dropped it)
+    // and re-run its pure claim. A pure claim is side-effect-free, so re-asking is safe; a remote claim is a
+    // promise, floored to a decline on reject.
+    const cap = [...(this.capabilities.get(intent.type) ?? [])].find((c) => c.owner === picked)
+    let stillClaims = false
+    if (cap && !this.cyclesBack(pass, picked, intent.type, key)) {
+      try { stillClaims = await Promise.resolve(this.runInPass(pass, () => cap.handler.claim(intent, from))) } catch { stillClaims = false }
+    }
+    if (!cap || !stillClaims) {
+      this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose-commit-failed', { type: intent.type, from, owner: picked, ownerLabel: this.describeNode?.(picked), reason: cap ? 'declined-on-revalidate' : 'vanished' }) })
+      return false
+    }
+    this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose-pick', { type: intent.type, from, owner: picked, ownerLabel: this.describeNode?.(picked) }) })
+    const committed = this.runInPass(pass, () => this.commitOne(pass, picked, cap.handler, intent, from, key, false, true))
+    if (isPromise(committed)) {
+      const outcome = await committed // a REMOTE pick: surface a decline / timeout, never re-home (Decision 6).
+      if (outcome !== 'acted') {
+        this.runInPass(pass, () => { if (on('intent')) event('intent', 'choose-commit-failed', { type: intent.type, from, owner: picked, ownerLabel: this.describeNode?.(picked), reason: outcome }) })
+        return false
+      }
+      return true
+    }
+    return committed
   }
 
   /**
@@ -805,6 +907,8 @@ export class IntentTree {
       // `unhandled` when the rest all decline). Strict → fail CLOSED here.
       if (wire.mode === 'fallback' && caps) {
         const rest = this.orderedHandlers(from, intent, caps).filter(([o]) => !tried.has(o))
+        // A wire's fallback tail keeps the silent first-claimer (`allowChoose` stays false): the wire is
+        // already an explicit routing choice, so it is never second-guessed with the picker.
         return this.resolveAndCommit(pass, from, intent, key, rest)
       }
       this.unhandled?.(intent, from) // strict: fail CLOSED; no capable recipients: the same report.

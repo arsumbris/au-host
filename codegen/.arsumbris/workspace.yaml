@@ -1,0 +1,20 @@
+# The codegen resolution workspace (au.engine.workspace).
+#
+# Mounts the shipped vocabulary closure via the two aggregator bundles, so a daemon over this entry
+# has every first-party + agent type-def in its graph. `gen:types` (attach-only) reads that graph to
+# resolve each package's references and emit `generated.ts`.
+#
+# WHY just the bundles (no per-package `edit:` enumeration):
+#   - each bundle dep resolves to its LOCAL source tree (the sibling checkout), so codegen sees the
+#     type-defs as they are on disk, not a pinned cache copy.
+#   - codegen only READS the graph (it writes `generated.ts` locally via `--out`), so a read-only
+#     discover mount is sufficient; `edit:` (live authoring) is not needed here.
+#   The bundles' `deps` are the one member list; nothing here mirrors it.
+#
+# `codegen` MUST be listed in `edit:` (a workspace omitting its containing repo is a hard error).
+type: au.engine.workspace::au-engine
+edit:
+  - codegen # the containing repo — REQUIRED
+discover:
+  - host-bundle # the host UI closure (its deps ARE the first-party vocabulary)
+  - mcp-bundle # the agent / mcp closure (its deps own the mcp vocabulary)

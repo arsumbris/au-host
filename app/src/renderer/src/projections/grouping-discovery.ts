@@ -1,61 +1,106 @@
-// Discover containers that can group multiple children into one node.
-// The host resolves grouping metadata and installs a synchronous lookup for the container substrate,
-// which has no engine connection or loader. The composition's group-into choice selects its default.
-
-
-
+// Discover the WRAP TARGETS: the concrete subtypes of the three wrap-target kinds (grouping, spatial,
+// frame), each with its build and its type-declared arity. The host resolves them from the type graph and
+// installs synchronous lookups for the container substrate, which has no engine connection or loader. The
+// composition's group-into choice selects the default.
 
 import { readSubtypes, type WireReader, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
-import { reportHostDiagnostic, isDefinedProjection } from '@arsumbris/au-host-sdk'
+import { ARITY_META, bareTypeName, codeMetaBlock, descriptorTitle, frameBuildGroup, keyOf, metaTypeKeys, PROJECTION_RUNTIME_META, reportHostDiagnostic, isDefinedProjection } from '@arsumbris/au-host-sdk'
 import type { ProjectionSource } from '@arsumbris/au-host-sdk'
 import { chooseGrouping, setGroupingProvider, setWrapTargets, type GroupingCapability, type WrapTarget } from '@arsumbris/container-core'
 import { refName } from '@arsumbris/type-query'
 
-import { packageRootOf } from './discovery'
+import { metaMap, packageRootOf } from './discovery'
 import { loadProjection, sourceKey, sourceLocation } from './loader'
 
-/** The KIND whose subtypes ARE the grouping containers. Every subtype declares the capability by being one. */
-const BASE_TYPE = 'grouping-container'
-/** The SIBLING kind whose subtypes are the SPATIAL containers (bento, canvas). Same `buildGroup` module
- *  contract; a WRAP target but NOT a grouping-container, so the drop's `isGroupingKind` is untouched. */
-const SPATIAL_BASE_TYPE = 'spatial-container'
-/** The `grouping-container` module contract's build export — a conventional name, like `mount` is the
- *  default mount export. `(children) => instance` mints a group holding the children. */
+/** The three WRAP-TARGET kinds, each with its family. Only `grouping-container` is also the drop's
+ *  stack-group set (`installGroupingProvider`). */
+const WRAP_KINDS = [
+  { base: 'grouping-container', family: 'grouping' },
+  { base: 'spatial-container', family: 'spatial' },
+  { base: 'frame-container', family: 'frame' },
+] as const
+/** The kind module contract's build export — a conventional name, like `mount` is the default mount
+ *  export. `(children) => instance` mints a group holding the children. Optional for a frame. */
 const BUILD_EXPORT = 'buildGroup'
-/** A conventional optional module export: the dissolve floor ("always >=N children"). The container owns
- *  its own invariant, so it rides the module, not the type system. Absent = never dissolves. */
-const MIN_CHILDREN_EXPORT = 'minChildren'
-/** The CODE locator that names the module entry the build export lives in. */
-const RUNTIME_META_TYPE = 'projection-runtime-meta'
+
+/** Every discovered wrap target, by family. `grouping` doubles as the drop's stack-group set. */
+export interface ContainerCapabilities {
+  grouping: GroupingCapability[]
+  spatial: GroupingCapability[]
+  frame: GroupingCapability[]
+}
 
 function fieldOf(block: { body: { name: string; value: unknown }[] }, name: string): unknown {
   return block.body.find((f) => f.name === name)?.value
 }
 
+/** A container's declared arity, from the engine's EFFECTIVE meta (its own `arity-meta`, else the one it
+ *  inherits — a frame inherits `max: 1` from `frame-container`). More than one surviving block is a
+ *  conflict the host cannot settle, so it is reported and read as undeclared. */
+function arityOf(def: WireSubtype): { minChildren?: number; maxChildren?: number } {
+  const name = def.name
+  const blocks = def.effective_meta.find((m) => metaTypeKeys(m.meta_type).includes(ARITY_META))?.blocks ?? []
+  if (blocks.length > 1) {
+    reportHostDiagnostic({
+      code: 'arity-meta-conflict',
+      severity: 'warning',
+      subject: name,
+      message: `inherits different \`arity-meta\` from ${blocks.map((b) => keyOf(b.from)).join(' and ')}, so its arity is undeclared; declare its own \`arity-meta\` to settle it`,
+    })
+    return {}
+  }
+  const block = blocks[0]
+  if (!block) return {}
+  const min = fieldOf(block, 'min')
+  const max = fieldOf(block, 'max')
+  const out = {
+    ...(typeof min === 'number' ? { minChildren: min } : {}),
+    ...(typeof max === 'number' ? { maxChildren: max } : {}),
+  }
+  if (out.minChildren !== undefined && out.maxChildren !== undefined && out.minChildren > out.maxChildren) {
+    reportHostDiagnostic({
+      code: 'arity-meta-inverted',
+      severity: 'warning',
+      subject: name,
+      message: `declares \`arity-meta\` with min ${out.minChildren} > max ${out.maxChildren}, so it admits no child count and is never offered as a wrap target`,
+    })
+  }
+  return out
+}
+
 /**
- * Discover + eager-load every `grouping-container` (every subtype of the kind).
+ * Discover + eager-load every concrete subtype of one wrap-target kind.
  *
- * A grouping-container whose module lacks the `buildGroup` export is REPORTED, not skipped silently:
- * that is a declared-vs-implemented mismatch (the kind's module contract unmet), and a silent skip would
- * present as "grouping just doesn't work here" with nothing to grep.
+ * A grouping or spatial container whose module lacks `buildGroup` is REPORTED, not skipped silently: that
+ * is a declared-vs-implemented mismatch (the kind's module contract unmet), and a silent skip would present
+ * as "grouping just doesn't work here" with nothing to grep. A FRAME needs no export: its build is the
+ * synthesized `frameBuildGroup`, and a module `buildGroup` overrides it.
  */
-async function discoverBuildContainers(reader: WireReader, baseType: string): Promise<GroupingCapability[]> {
+async function discoverKind(
+  reader: WireReader,
+  baseType: string,
+  family: WrapTarget['family'],
+): Promise<GroupingCapability[]> {
   const out: GroupingCapability[] = []
   const result = await readSubtypes(reader, baseType)
   if (!('ready' in result) || !result.ready || !result.result) return out
 
   for (const def of result.result.subtypes as WireSubtype[]) {
-    // Every subtype of the KIND declares the capability by being one — the same `buildGroup` module
-    // contract for grouping-container and spatial-container. Only the module entry (to locate `buildGroup`)
-    // must be present.
-    const runtime = def.meta_blocks?.find((b) => refName(b.type_name) === RUNTIME_META_TYPE)
-    const entry = runtime ? fieldOf(runtime, 'entry') : undefined
+    // An abstract subtype (an intermediate kind) is never instantiated, so it is never a wrap target.
+    if (def.abstract) continue
+    // The CODE locator, the type's OWN block: the module entry the build export lives in.
+    const code = codeMetaBlock(def, PROJECTION_RUNTIME_META)
+    if (code.kind === 'not-own') {
+      reportHostDiagnostic({ code: 'grouping-container-code-not-own', severity: 'warning', subject: def.name, message: `is a \`${baseType}\` that cannot load: ${code.reason}` })
+      continue
+    }
+    const entry = code.kind === 'own' ? fieldOf(code.block, 'entry') : undefined
     if (typeof entry !== 'string') {
       reportHostDiagnostic({
         code: 'grouping-container-without-runtime-meta',
         severity: 'warning',
         subject: def.name,
-        message: `is a \`${baseType}\` but declares no \`projection-runtime-meta.entry\`, so its \`buildGroup\` export cannot be located`,
+        message: `is a \`${baseType}\` but declares no \`projection-runtime-meta.entry\`, so its module cannot be located`,
       })
       continue
     }
@@ -65,22 +110,23 @@ async function discoverBuildContainers(reader: WireReader, baseType: string): Pr
     try {
       const loaded = await loadProjection(registration)
       const raw = loaded.module as unknown as Record<string, unknown>
-      // A grouping container MUST register through `defineProjection`; `buildGroup` rides the branded
-      // default. An unregistered module is REPORTED (not silently skipped) — the same declared-vs-built
-      // mismatch class as a missing `buildGroup`.
+      // A container MUST register through `defineProjection`; `buildGroup` rides the branded default. An
+      // unregistered module is REPORTED (not silently skipped) — the same declared-vs-built mismatch class.
       if (!isDefinedProjection(raw.default)) {
         reportHostDiagnostic({
           code: 'grouping-container-not-registered',
           severity: 'warning',
           subject: def.name,
-          message: `is a \`${baseType}\` but its module is not registered through \`defineProjection\` (its default export must be \`defineProjection({ mount, buildGroup })\`)`,
+          message: `is a \`${baseType}\` but its module is not registered through \`defineProjection\``,
           detail: { entry },
         })
         continue
       }
-      const mod = raw.default as Record<string, unknown>
-      const fn = mod[BUILD_EXPORT]
-      if (typeof fn !== 'function') {
+      const exported = (raw.default as Record<string, unknown>)[BUILD_EXPORT]
+      let build: GroupingCapability['build']
+      if (typeof exported === 'function') build = exported as GroupingCapability['build']
+      else if (family === 'frame') build = frameBuildGroup(bareTypeName(def.name))
+      else {
         reportHostDiagnostic({
           code: 'grouping-build-export-missing',
           severity: 'warning',
@@ -90,13 +136,8 @@ async function discoverBuildContainers(reader: WireReader, baseType: string): Pr
         })
         continue
       }
-      const rawMin = mod[MIN_CHILDREN_EXPORT]
-      const minChildren = typeof rawMin === 'number' ? rawMin : undefined
-      out.push({
-        typeName: def.name,
-        build: fn as GroupingCapability['build'],
-        ...(minChildren === undefined ? {} : { minChildren }),
-      })
+      const label = descriptorTitle({ meta: metaMap(def) })
+      out.push({ typeName: def.name, build, ...arityOf(def), ...(label ? { label } : {}) })
     } catch (err) {
       reportHostDiagnostic({
         code: 'grouping-container-load-failed',
@@ -110,32 +151,23 @@ async function discoverBuildContainers(reader: WireReader, baseType: string): Pr
   return out
 }
 
-/** The GROUPING containers (the drop's stack-group set): subtypes of `grouping-container`. */
-export function discoverGroupingContainers(reader: WireReader): Promise<GroupingCapability[]> {
-  return discoverBuildContainers(reader, BASE_TYPE)
-}
-
-/** The SPATIAL containers (bento, canvas): subtypes of `spatial-container`. Same `buildGroup` contract;
- *  a wrap target but NOT a grouping-container, so the drop path never sees them. */
-export function discoverSpatialContainers(reader: WireReader): Promise<GroupingCapability[]> {
-  return discoverBuildContainers(reader, SPATIAL_BASE_TYPE)
+/** Discover every wrap target, by family, with its build and its declared arity. */
+export async function discoverContainerCapabilities(reader: WireReader): Promise<ContainerCapabilities> {
+  const [grouping, spatial, frame] = await Promise.all(WRAP_KINDS.map((k) => discoverKind(reader, k.base, k.family)))
+  return { grouping: grouping!, spatial: spatial!, frame: frame! }
 }
 
 /**
- * Install the WRAP-TARGET registry — the family-tagged UNION the wrap action offers, DECOUPLED from the
- * grouping provider (the drop's stack-group set). `grouping` and `spatial` are the two discovered capability
- * lists; `groupInto` is the composition's `grouping.group-into` (grouping-only), so the outcome respects the
- * composition's stack default while the picker still offers the spatial "Arrange" family. Re-call whenever
- * the type graph OR the composition changes, exactly like `installGroupingProvider`.
+ * Install the WRAP-TARGET registry — the family-tagged UNION every wrap flow resolves through
+ * `wrapChoice`, DECOUPLED from the grouping provider (the drop's stack-group set). `groupInto` is the
+ * composition's `grouping.group-into`; `wrapChoice` honours it for a wrap whose child count it admits.
+ * Re-call whenever the type graph OR the composition changes, exactly like `installGroupingProvider`.
  */
-export function installWrapTargets(
-  grouping: GroupingCapability[],
-  spatial: GroupingCapability[],
-  groupInto?: string,
-): void {
+export function installWrapTargets(caps: ContainerCapabilities, groupInto?: string): void {
   const targets: WrapTarget[] = [
-    ...grouping.map((c) => ({ ...c, family: 'grouping' as const })),
-    ...spatial.map((c) => ({ ...c, family: 'spatial' as const })),
+    ...caps.grouping.map((c) => ({ ...c, family: 'grouping' as const })),
+    ...caps.spatial.map((c) => ({ ...c, family: 'spatial' as const })),
+    ...caps.frame.map((c) => ({ ...c, family: 'frame' as const })),
   ]
   setWrapTargets(targets, groupInto)
 }

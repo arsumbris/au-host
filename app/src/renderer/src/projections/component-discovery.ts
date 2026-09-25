@@ -13,16 +13,15 @@
 
 
 import { readSubtypes, type WireField, type WireMetaBlock, type WireReader, type WireSubtype } from '@arsumbris/au-host-sdk/engine-reads'
-import { refName } from '@arsumbris/type-query'
 import { checkComponentSetMeta, componentRefName } from '@arsumbris/component-contract'
-import { reportHostDiagnostic } from '@arsumbris/au-host-sdk'
+import { codeMetaBlock, keyOf, reportHostDiagnostic } from '@arsumbris/au-host-sdk'
 
 import { packageRootOf } from '../../../shared/package-root'
 
 /** The open base every implementation SET subtype extends. */
 const SET_BASE_TYPE = 'component-set'
 /** The meta record a set subtype carries to declare its loadable code. */
-const SET_RUNTIME_META_TYPE = 'component-set-runtime-meta'
+const SET_RUNTIME_META = keyOf({ name: 'component-set-runtime-meta', repo: 'component-contract' })
 /** The open base every single-component INTERFACE subtype extends. */
 const COMPONENT_BASE_TYPE = 'ui-component'
 
@@ -68,10 +67,9 @@ function metaRecord(block: WireMetaBlock): Record<string, unknown> {
   return out
 }
 
-/** The bare tag names in a set's `provides` def-ref list. Empty when the field is absent/ill-shaped. */
-function providesOf(def: WireSubtype): string[] {
-  const block = def.meta_blocks?.find((b) => refName(b.type_name) === SET_RUNTIME_META_TYPE)
-  if (!block) return []
+/** The bare tag names in a set's `provides` def-ref list, from its own runtime block. Empty when the field
+ *  is absent/ill-shaped. */
+function providesOf(block: WireMetaBlock): string[] {
   const value = metaRecord(block).provides
   if (!Array.isArray(value)) return []
   return value
@@ -92,8 +90,15 @@ export async function discoverComponentSets(reader: WireReader): Promise<Discove
 
   const found: DiscoveredComponentSet[] = []
   for (const def of all) {
-    const block = def.meta_blocks?.find((b) => refName(b.type_name) === SET_RUNTIME_META_TYPE)
-    if (!block) continue // a set subtype without runtime meta is not loadable
+    if (def.abstract) continue
+    // Its runtime meta is its OWN block, never an ancestor's: a set loads only code it declares itself.
+    const code = codeMetaBlock(def, SET_RUNTIME_META)
+    if (code.kind === 'absent') continue // declares no code and none is required: not a loadable set
+    if (code.kind === 'not-own') {
+      reportHostDiagnostic({ code: 'component-set-code-not-own', severity: 'warning', subject: def.name, message: `component set is not loadable: ${code.reason}`, detail: { source: def.source.file } })
+      continue
+    }
+    const block = code.block
     const check = checkComponentSetMeta(metaRecord(block))
     if (!check.ok) {
       reportHostDiagnostic({
@@ -112,7 +117,7 @@ export async function discoverComponentSets(reader: WireReader): Promise<Discove
       export: check.meta.export,
       contractVersion: check.meta.contractVersion,
       packageRoot: packageRootOf(def.source.file),
-      provides: providesOf(def),
+      provides: providesOf(block),
       ...(check.meta.customTokenEntry ? { customTokenEntry: check.meta.customTokenEntry } : {}),
     })
   }
@@ -132,7 +137,7 @@ export async function discoverComponents(reader: WireReader): Promise<Discovered
   const found = all.map((def) => ({
     typeName: def.name,
     repo: def.repo,
-    fields: def.fields ?? [],
+    fields: def.effective_fields,
   }))
   found.sort((a, b) => a.typeName.localeCompare(b.typeName))
   return found

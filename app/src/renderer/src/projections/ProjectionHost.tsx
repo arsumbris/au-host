@@ -1,5 +1,6 @@
 import { reloadPaneRows } from '@arsumbris/container-kit'
 import {readWorkspaceStartup, selectStartupPath} from './workspace-startup'
+import { UNSAVED_COMPOSITION } from '@arsumbris/au-host-sdk'
 import { makeOverlayMovable } from '@arsumbris/au-component-catalog/chooser-presentation'
 import { KeySequenceHints } from './KeySequenceHints'
 import type { PendingKeySequence } from '@arsumbris/au-host-sdk'
@@ -10,12 +11,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import type { ContextMenuItem, IntentPayload, MountHost, PopoverHandle, ProjectionSource, ProjectionDescriptor, DragSource, PaneInstance } from '@arsumbris/au-host-sdk'
-import { isWritableMember, reportHostDiagnostic, deriveContainerSchemas, descriptorTitle, bareTypeName } from '@arsumbris/au-host-sdk'
+import { isWritableMember, memberOfPath, reportHostDiagnostic, descriptorTitle, bareTypeName, event, on } from '@arsumbris/au-host-sdk'
 import type { ContainerSchemas } from '@arsumbris/au-host-sdk'
-import { readDiagnostics, readFiles, readInstancesOf, readResolveTarget, readSubtypes, subscribeTypes, subscribeChanges, type WireDiagnostic, type WireReader, type TypedSubscriber } from '@arsumbris/au-host-sdk/engine-reads'
-import { resolveTargetsAll, resolveViewer, viewerPickOptions, setGroupingChooser, setContentResolver, placeContentDrop, isContentDropHit } from '@arsumbris/container-core'
+import { readDiagnostics, readFiles, readInstancesOf, readResolveTarget, subscribeTypes, subscribeChanges, type WireDiagnostic, type WireReader, type TypedSubscriber } from '@arsumbris/au-host-sdk/engine-reads'
+import { resolveTargetsAll, resolveViewer, viewerPickOptions, setGroupingChooser, setContentResolver, setContentHostable, placeContentDrop, isContentDropHit, placementForPane } from '@arsumbris/container-core'
 import { getChooserSurface } from './chooser-surface'
-import { installSelectionDrop, PanePortalLayer, usePaneAnchor, wrapPaneInteractive } from '@arsumbris/container-kit'
+import { installSelectionDrop, PanePortalLayer, slotBounds, usePaneAnchor, wrapPaneInteractive } from '@arsumbris/container-kit'
 // JSX types for the raw <au-*> root chrome (side-effect), plus the React WRAPPERS the composition
 // popover uses (props → element properties, typed `onAuXxx` events; the set-independent React seam).
 import { AuIconButton, AuIcon, AuPopover, AuScrollArea, AuListRow, AuButton, AuInput, AuSelect, AuTypedValueEditor } from '@arsumbris/au-component-catalog/react'
@@ -25,10 +26,14 @@ import { isFileSelection, isLinkSelection, type Selection } from '@arsumbris/sel
 import { matchesTypeIdentity, refName } from '@arsumbris/type-query'
 
 import { CompositionRuntime, stableStringify } from './composition'
+import { getConfirmSurface } from './confirm-surface'
 import { installCompositionReadBridge } from './event-read-bridge'
 import { installKeybindGate } from './keybind-gate'
-import { overlaySiteHasBlockingLayer } from './overlay-site'
+import { overlaySiteHasBlockingLayer, getOverlaySite } from './overlay-site'
+import { getContextMenuSurface } from './context-menu-surface'
 import {
+  cloneComposition,
+  workingAfterSave,
   deleteComposition,
   discoverCompositions,
   loadCrossFileClosure,
@@ -47,12 +52,10 @@ import { discoverComponentSets, discoverComponents } from './component-discovery
 import { registerComponentSets } from './component-registry'
 import { getActiveLook, setDiscoveredSets } from './active-set-store'
 import { discoverNotificationRenderers } from './notification-renderers'
-import { discoverGroupingContainers, discoverSpatialContainers, groupingChoiceOf, groupNewPanesOf, installGroupingProvider, installWrapTargets } from './grouping-discovery'
+import { discoverContainerCapabilities, groupingChoiceOf, groupNewPanesOf, installGroupingProvider, installWrapTargets, type ContainerCapabilities } from './grouping-discovery'
 import { installConfigOwnership } from './config-ownership'
 import { discoverAgentIntents, installAgentIntents } from './agent-intent-gate'
-import { installSlotTypeProvider } from './slot-types'
-import { readNodeClosures } from './container-nodes'
-import type { GroupingCapability } from '@arsumbris/container-core'
+import { discoverSubstrateFacts, installSubstrateFacts } from './substrate-facts'
 import { getNotificationSurface, setNotificationRenderers } from './notification-surface'
 import { loadTokenSheets } from './token-sheets'
 import type { DiscoveredProjection, RejectedProjection } from './discovery'
@@ -65,7 +68,7 @@ import { collectNodeIds, dropComposition, pruneToNodes } from './view-store'
 import { applyStoredTheme } from './theme-store'
 import type { ProjectionRegistration } from './loader'
 import { createDaemonControl, createMcpControl, createFilesControl } from './mount-host'
-import type { DaemonConfig } from '../../../shared/daemon-api'
+import type { CompositionDraft, DaemonConfig } from '../../../shared/daemon-api'
 
 
 /** Resolve a projection TYPE NAME to a loadable registration from a discovery snapshot. */
@@ -190,13 +193,24 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   const [componentsRegistered, setComponentsRegistered] = useState(false)
   const [compositions, setCompositions] = useState<DiscoveredComposition[]>([])
   const [selectedPath, setSelectedPath] = useState('')
+  // Bumped each time a composition is MOUNTED (a load, a New, a restored unsaved draft), and only then: it
+  // keys the portal, so a save that changes the path (Save as) never remounts what is on screen.
+  const [mountGeneration, setMountGeneration] = useState(0)
   const [saveAsName, setSaveAsName] = useState('')
   // The workspace members, as render state (a dropdown target for `save as`). Mirrors
   // `membersRef` (which feeds minted hosts); this copy re-renders the chrome. `saveAsMember`
   // is the user's explicit member pick for the next save-as ('' = auto-derive the default).
   const [members, setMembers] = useState<WorkspaceMember[]>([])
   const [saveAsMember, setSaveAsMember] = useState('')
-  const [compositionError, setCompositionError] = useState('')
+  // The composition banner: a message plus any engine-authored applicable fixes for it (the
+  // `type-repo-not-a-dependency` "Add <repo> to deps" case). The fixes ride WITH the message so a new
+  // error can never leave stale buttons — `setCompositionError` clears them, and only `validateLoaded`
+  // (the diagnostic path) sets them.
+  const [banner, setBanner] = useState<{ message: string; fixes: AppliableFixRef[] }>({ message: '', fixes: [] })
+  const compositionError = banner.message
+  const setCompositionError = useCallback((message: string) => setBanner({ message, fixes: [] }), [])
+  // The fix currently being applied (its title), driving the button's pending state; null when idle.
+  const [applyingFix, setApplyingFix] = useState<string | null>(null)
   // Saving is explicit. `dirty` tracks structural divergence from the saved state, and `savedHashRef`
   // holds the loaded file's content hash for guarded writes. `baselineKeyRef` stores the stable-stringified
   // settled composition. Repeated identical load echoes do not mark it dirty. A null baseline captures
@@ -204,13 +218,22 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   const [dirty, setDirty] = useState(false)
   const savedHashRef = useRef<string | undefined>(undefined)
   const baselineKeyRef = useRef<string | null>(null)
-  // The grouping capabilities discovered from the type graph. Held because installing the
-  // substrate's lookup depends on TWO inputs that change independently: this, and the mounted
-  // composition's `group-into` choice.
-  const groupingCapsRef = useRef<GroupingCapability[]>([])
-  // The SPATIAL containers (bento, canvas), discovered in the same pass. They join the grouping caps in
-  // the WRAP-TARGET registry (a UNION), but NEVER the grouping provider — so the drop path is untouched.
-  const spatialCapsRef = useRef<GroupingCapability[]>([])
+  // Unsaved-composition drafts: `loadedFileRawRef` is the raw key of the currently-loaded FILE composition
+  // (the staleness base a draft records); `mountClaimRef` guards the async auto-mount against a double-fire
+  // (StrictMode / the engine-ready edge) now that mounting resolves a draft asynchronously.
+  const loadedFileRawRef = useRef<string>('')
+  const mountClaimRef = useRef(false)
+  // The draft write is DEBOUNCED on the renderer side: a continuous drag emits many echoes, and
+  // structured-cloning the whole composition over IPC on each one stutters the drag. Coalesce to the
+  // LATEST intent (a `set` payload, or a `clear`) and flush after a pause — main debounces the disk write
+  // on top. Flushed synchronously on unload so a quick edit-then-reload still persists.
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingDraftRef = useRef<{ compKey: string; draft: CompositionDraft | null } | null>(null)
+  // The wrap targets discovered from the type graph, by family. Held because installing the substrate's
+  // lookups depends on TWO inputs that change independently: this, and the mounted composition's
+  // `group-into` choice. Only `grouping` feeds the drop's grouping provider; all three families join the
+  // WRAP-TARGET registry, so the drop path is untouched by spatial and frame containers.
+  const containerCapsRef = useRef<ContainerCapabilities>({ grouping: [], spatial: [], frame: [] })
   // The derived container-slot graph identifies child fields for pool normalization and resolution.
   // `rediscover` populates it from container-projection and container-node subtype reads. A ref lets
   // the runtime use updates without remounting. The inline path handles an unavailable graph.
@@ -227,8 +250,8 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   // graph, and a type-graph change can add a declarer without touching the composition.
   useEffect(() => {
     const groupInto = mounted ? groupingChoiceOf(mounted) : undefined
-    installGroupingProvider(groupingCapsRef.current, groupInto, mounted ? groupNewPanesOf(mounted) : undefined)
-    installWrapTargets(groupingCapsRef.current, spatialCapsRef.current, groupInto)
+    installGroupingProvider(containerCapsRef.current.grouping, groupInto, mounted ? groupNewPanesOf(mounted) : undefined)
+    installWrapTargets(containerCapsRef.current, groupInto)
   }, [mounted])
 
   // Read compositions + discover projection types THROUGH the engine; write/delete
@@ -247,6 +270,34 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   // The runtime's live-mounted-pane node ids, read at reconcile time. A ref because `saveRootConfig`
   // is defined before the runtime and must stay `[]`-stable; bound just after the runtime memo below.
   const liveNodeIdsRef = useRef<() => string[]>(() => [])
+  // Flush the pending draft write to main NOW (the debounce's trailing edge, and the unload path).
+  const flushDraft = useCallback((): void => {
+    if (draftTimerRef.current) { clearTimeout(draftTimerRef.current); draftTimerRef.current = null }
+    const p = pendingDraftRef.current
+    if (!p) return
+    pendingDraftRef.current = null
+    if (p.draft) window.main.compositionDraft.set(p.compKey, p.draft)
+    else window.main.compositionDraft.clear(p.compKey)
+  }, [entryPath])
+  // Coalesce draft writes to the latest intent; flush after a pause so a continuous drag pays one write.
+  const scheduleDraft = useCallback((compKey: string, draft: CompositionDraft | null): void => {
+    pendingDraftRef.current = { compKey, draft }
+    if (draftTimerRef.current) return
+    draftTimerRef.current = setTimeout(() => { draftTimerRef.current = null; flushDraft() }, 400)
+  }, [flushDraft])
+  // Clear a draft NOW, cancelling any pending debounced write, so a save/delete cannot be undone by a
+  // late `set` landing after the `clear`.
+  const clearDraftNow = useCallback((compKey: string): void => {
+    if (draftTimerRef.current) { clearTimeout(draftTimerRef.current); draftTimerRef.current = null }
+    pendingDraftRef.current = null
+    window.main.compositionDraft.clear(compKey)
+  }, [entryPath])
+  // Flush a pending draft on window unload (reload / close) so a quick edit-then-reload still persists it.
+  useEffect(() => {
+    const onUnload = (): void => flushDraft()
+    window.addEventListener('beforeunload', onUnload)
+    return () => { window.removeEventListener('beforeunload', onUnload); flushDraft() }
+  }, [flushDraft])
   const saveRootConfig = useCallback((next: OpaqueConfig): void => {
     workingRef.current = next as RootComposition
     // Reconcile terminal sessions to the LIVE layout: a pane removed from the working
@@ -270,8 +321,14 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       baselineKeyRef.current = key
       return
     }
-    setDirty(key !== baselineKeyRef.current)
-  }, [])
+    const isDirty = key !== baselineKeyRef.current
+    setDirty(isDirty)
+    // Persist / drop the unsaved working layout locally (per entry + composition), so a reopen restores it.
+    // Keyed by the loaded path, or UNSAVED_COMPOSITION for a composition with no file yet. DEBOUNCED (below): a
+    // drag emits many echoes and cloning the config per echo stutters; coalesce to the latest intent.
+    const compKey = selectedPathRef.current || UNSAVED_COMPOSITION
+    scheduleDraft(compKey, isDirty ? { working: next, baselineKey: baselineKeyRef.current, fileRaw: loadedFileRawRef.current } : null)
+  }, [entryPath, scheduleDraft])
 
   // Validate a loaded composition through the engine: a composition is a `composition` instance, so the
   // engine emits diagnostics on it (a bad `root` ref, a pool record with an unknown type, a bad `role`
@@ -282,10 +339,38 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
     const d = await readDiagnostics(reader, { path })
     if (!('ready' in d) || !d.ready) return
     const errs = (d.result as WireDiagnostic[]).filter((x) => x.severity === 'error')
-    if (errs.length) {
-      setCompositionError(`⚠ this composition has ${errs.length} validation error${errs.length > 1 ? 's' : ''} — it may not display correctly: ${errs[0].message}`)
+    if (!errs.length) {
+      // The file validates now — clear any prior banner (this is how an applied fix clears its own error).
+      setBanner({ message: '', fixes: [] })
+      return
     }
-  }, [reader])
+    // Gather the engine-authored applicable fixes per error. `appliableFix` is node-only, so main runs
+    // it and returns the titles; each ties back to its diagnostic + index for the stateless apply.
+    const fixes: AppliableFixRef[] = []
+    for (const err of errs) {
+      const titles = await window.main.daemon.appliableFixes(entryPath, err)
+      titles.forEach((t, i) => fixes.push({ title: t.title, diag: err, index: i }))
+    }
+    setBanner({
+      message: `⚠ this composition has ${errs.length} validation error${errs.length > 1 ? 's' : ''} — it may not display correctly: ${errs[0].message}`,
+      fixes,
+    })
+  }, [reader, entryPath])
+
+  // Apply an engine-authored fix from the composition banner (e.g. "Add <repo> to deps"). Main
+  // re-resolves the fix from the same diagnostic and runs it; on success we re-validate, so the
+  // now-fixed error clears and any remaining diagnostics resurface. On failure the reason replaces
+  // the banner message.
+  const applyFix = useCallback(async (ref: AppliableFixRef): Promise<void> => {
+    setApplyingFix(ref.title)
+    try {
+      const r = await window.main.daemon.applyFix(entryPath, ref.diag, ref.index)
+      if (r.ok) await validateLoaded(selectedPathRef.current)
+      else setCompositionError(r.error ?? 'could not apply the fix')
+    } finally {
+      setApplyingFix(null)
+    }
+  }, [entryPath, validateLoaded, setCompositionError])
 
   // Discover saved compositions across the workspace (each is a projection instance, anywhere),
   // ORDERED by the local recents overlay: most-recently-opened first, then discovery order. So the
@@ -299,51 +384,179 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
     return ordered
   }, [reader, entryPath])
 
+  // A save wrote `next` to `path` (as `written`, its qualified on-disk form): that file IS the loaded
+  // composition now, exactly as if it had been opened. Every save path lands here, so the post-save state
+  // is set once:
+  // - the outgoing composition's draft is dropped (its edits are in the file);
+  // - the saved form is the clean dirty-baseline, and the saved hash guards the next overwrite;
+  // - the draft staleness base is the file's DISCOVERED form, the one a later load compares a draft to.
+  //   `written` stands in until re-discovery returns it, so a draft never records the previous file.
+  // - an edit that landed while the save awaited its write is kept: `startWorking` is the working buffer
+  //   the save began from, and a newer one stays, dirty against the saved form and drafted as such.
+  const adoptSavedFile = useCallback((path: string, next: RootComposition, written: RootComposition, hash: string | undefined, outgoing: string, startWorking: RootComposition | null): void => {
+    const { working, baseline, dirty: dirtyNow } = workingAfterSave(workingRef.current, startWorking, next, stableStringify)
+    workingRef.current = working
+    savedHashRef.current = hash
+    clearDraftNow(outgoing)
+    loadedFileRawRef.current = stableStringify(written)
+    baselineKeyRef.current = baseline
+    setSelectedPath(path)
+    setDirty(dirtyNow)
+    if (dirtyNow) scheduleDraft(path, { working, baselineKey: baseline, fileRaw: loadedFileRawRef.current })
+    void window.main.recents.touchComposition(entryPath, path)
+    void refreshCompositions().then((found) => {
+      const saved = found.find((c) => c.path === path)
+      if (saved && selectedPathRef.current === path) loadedFileRawRef.current = stableStringify(saved.composition)
+    })
+  }, [clearDraftNow, scheduleDraft, entryPath, refreshCompositions])
+
+  // Mount the composition that has no file yet (the UNSAVED_COMPOSITION). Its clean baseline is the fresh
+  // New form itself, set up front: a file composition's baseline is captured from its first load echo, but a
+  // new composition's root may never echo until the user's first edit, which would then read as clean and
+  // never be drafted. A restored draft passes its own `restoredBaseline`, so it mounts already-dirty. It is
+  // recorded as the open composition, so a reload restores it from its draft like a file composition's.
+  const mountUnsaved = useCallback((value: RootComposition, restoredBaseline?: string): void => {
+    loadedFileRawRef.current = '' // no backing file yet
+    workingRef.current = value
+    baselineKeyRef.current = restoredBaseline ?? stableStringify(value)
+    savedHashRef.current = undefined
+    setMounted(value)
+    setMountGeneration((g) => g + 1)
+    setSelectedPath('')
+    setDirty(restoredBaseline !== undefined)
+    setCompositionError('')
+    setStartupStopped(false)
+    void window.main.recents.touchComposition(entryPath, UNSAVED_COMPOSITION)
+  }, [entryPath])
+
+  // Mount a composition, restoring its LOCAL unsaved draft when one exists. The single mount path for
+  // both auto-mount (reopen) and an explicit switch, so draft restore + staleness are handled once.
+  // - no draft, or a draft equal to its file → mount the file, capture the baseline from the first echo.
+  // - a draft against an UNCHANGED file → restore it and mount already-dirty (the reopen-shows-unsaved case).
+  // - a draft against a CHANGED file → ASK (keep the draft, or load the updated file), the user's ruling.
+  // `forceFile` (the discard path): mount the saved file UNCONDITIONALLY, without reading the draft back.
+  // The caller cleared the draft just before; re-reading it here would make correctness depend on that
+  // `clear` (a fire-and-forget send) landing before this `get` (an invoke) on the main side — an invisible
+  // ordering assumption. Skipping the read removes it: nothing this path reads can restore the draft.
+  const applyComposition = useCallback(async (comp: DiscoveredComposition, opts?: { forceFile?: boolean }): Promise<void> => {
+    flushDraft() // persist the OUTGOING composition's pending draft before switching (switching is non-destructive)
+    const compKey = comp.path || UNSAVED_COMPOSITION
+    const fileRaw = stableStringify(comp.composition)
+    // Always a FRESH copy: the portal remounts on a new `config` identity, and an edit never changes the
+    // mounted identity (edits flow through the pool). Re-applying the same discovered object would be a
+    // no-op, so a Discard back to an unchanged file would leave the edited layout on screen. A copy also
+    // keeps the runtime from ever holding the discovered list's own objects.
+    let config: RootComposition = cloneComposition(comp.composition)
+    let baseline: string | null = null // null → capture from the echo (clean); set → mount already-dirty vs the file
+    if (opts?.forceFile) {
+      window.main.compositionDraft.clear(compKey) // drop any lingering draft; nothing reads it back here
+    } else {
+      const draft = await window.main.compositionDraft.get(compKey).catch(() => null)
+      if (draft && stableStringify(draft.working) !== draft.baselineKey) {
+        if (draft.fileRaw === fileRaw) {
+          config = draft.working as RootComposition
+          baseline = draft.baselineKey // file unchanged → restore silently, dirty against the file
+        } else {
+          const keep = await getConfirmSurface().confirm({
+            title: 'Unsaved layout — saved file changed',
+            message: `“${comp.name}” has unsaved layout changes from before, but its saved file changed since. Keep your unsaved changes, or load the updated file?`,
+            confirmLabel: 'Keep my changes',
+          }).catch(() => ({ confirmed: false }))
+          if (keep.confirmed) { config = draft.working as RootComposition; baseline = draft.baselineKey }
+          else window.main.compositionDraft.clear(compKey)
+        }
+      } else if (draft) {
+        window.main.compositionDraft.clear(compKey) // a stale no-op draft (equal to its file)
+      }
+    }
+    loadedFileRawRef.current = fileRaw
+    workingRef.current = config
+    baselineKeyRef.current = baseline
+    setMounted(config)
+    setMountGeneration((g) => g + 1)
+    setSelectedPath(comp.path)
+    setDirty(baseline !== null) // a restored draft mounts dirty; a fresh file mounts clean
+    void window.main.recents.touchComposition(entryPath, comp.path) // record the open
+    void validateLoaded(comp.path) // surface any engine diagnostics on the loaded file
+  }, [entryPath, validateLoaded, flushDraft])
+
   // Discover compositions; if none is loaded yet, mount the MOST-RECENT (recents overlay; else the
   // first discovered). Idempotent: re-running once a composition is selected is a no-op, so it's
-  // safe to fire on both entry and the engine-ready edge.
+  // safe to fire on both entry and the engine-ready edge. `mountClaimRef` guards the async apply.
   const discoverAndMaybeMount = useCallback(async (): Promise<void> => {
+    // Already mounted → nothing to do, and skip the reads (this fires on every type-graph change, see the
+    // self-heal below). "Mounted" is `workingRef`, never the selected path: an unsaved NEW composition has
+    // no path yet and must not be replaced. A settled EMPTY workspace has nothing mounted, so it re-runs
+    // cheaply — correct, since a composition could still be created into it.
+    if (workingRef.current || mountClaimRef.current) return
     const found = await refreshCompositions()
     const [startup, recent] = await Promise.all([
       readWorkspaceStartup(reader, entryPath).catch(error => ({kind: 'error' as const, message: String(error)})), window.main.recents.listCompositions(entryPath),
     ])
-    const choice = selectStartupPath(found.map(item => item.path), recent.map(item => item.path), startup)
+    const unsavedDraft = recent[0]?.path === UNSAVED_COMPOSITION
+      ? await window.main.compositionDraft.get(UNSAVED_COMPOSITION).catch(() => null)
+      : null
+    const choice = selectStartupPath(found.map(item => item.path), recent.map(item => item.path), startup, unsavedDraft !== null)
+    if (on('boot')) event('boot', 'mount-choice', { kind: choice.kind })
+    // PENDING = a required read (files / instances / resolve) has not delivered its first value yet.
+    // `engineReady` flipping does NOT guarantee every read's subscription has populated, so the ready-edge
+    // call can land here transiently. Return WITHOUT settling (`compositionsLoaded` stays false, so the
+    // curtain does not lift as "empty") and rely on the type-graph-change self-heal to RETRY once the reads
+    // populate — the same signal `rediscover` already rides. Without that retry the mount hangs forever
+    // (the "stuck at Workspace ready" bug): `mounted` never sets, `portalLive` never flips, `onReady` never fires.
     if (choice.kind === 'pending') return
     setCompositionsLoaded(true)
     setStartupStopped(choice.kind === 'empty' || choice.kind === 'error')
     if (choice.kind === 'error') { setCompositionError(choice.message); return }
-    setSelectedPath((current) => {
-      if (current) return current
-      const first = choice.kind === 'composition' ? found.find(item => item.path === choice.path) : undefined
-      if (!first) return ''
-      workingRef.current = first.composition
-      baselineKeyRef.current = null // recapture the baseline from the first settled load echo
-      setMounted(first.composition)
-      void window.main.recents.touchComposition(entryPath, first.path) // record the open
-      void validateLoaded(first.path) // surface any engine diagnostics on the auto-mounted file
-      return first.path
-    })
-  }, [refreshCompositions, entryPath, reader, validateLoaded])
+    if (workingRef.current || mountClaimRef.current) return // already mounted / mounting
+    if (choice.kind === 'unsaved' && unsavedDraft) { mountUnsaved(unsavedDraft.working as RootComposition, unsavedDraft.baselineKey); return }
+    const first = choice.kind === 'composition' ? found.find(item => item.path === choice.path) : undefined
+    if (!first) { setSelectedPath(''); return }
+    mountClaimRef.current = true
+    try { await applyComposition(first) } finally { mountClaimRef.current = false }
+  }, [refreshCompositions, entryPath, reader, applyComposition, mountUnsaved])
 
   // On entry (and engine-root change): discover + maybe mount.
   useEffect(() => {
     void discoverAndMaybeMount()
   }, [discoverAndMaybeMount])
 
-  // Load a discovered composition INTO the working buffer and remount. Edits
-  // afterward diverge from the file (it stays frozen until re-saved).
+  // A SECOND retry trigger for a mount that bailed on `pending`: the moment `schemasReady` flips (the type
+  // graph has populated), the workspace-startup reads are almost certainly ready too. Distinct in timing
+  // from the type-graph-change self-heal, so if one misses the other catches — robustness for the recurring
+  // "stuck at Workspace ready" race. Idempotent + guarded, so a no-op once mounted.
+  useEffect(() => {
+    if (schemasReady) void discoverAndMaybeMount()
+  }, [schemasReady, discoverAndMaybeMount])
+
+  // Load a discovered composition INTO the working buffer and remount. Switching is NON-DESTRUCTIVE now:
+  // the current layout's unsaved draft persists (written on every dirty echo), so switching away and back
+  // restores it — no discard prompt, and the target's own draft is restored by `applyComposition`.
   const loadComposition = (comp: DiscoveredComposition): void => {
-    if (dirty && !window.confirm('Discard unsaved layout changes?')) return
     setCompositionError('')
     setStartupStopped(false)
-    workingRef.current = comp.composition
-    setMounted(comp.composition)
-    setSelectedPath(comp.path)
-    baselineKeyRef.current = null // recapture the baseline from the first settled load echo
-    setDirty(false)
-    void window.main.recents.touchComposition(entryPath, comp.path) // record the open (bumps recency)
-    void validateLoaded(comp.path) // surface any engine diagnostics on the loaded file
+    void applyComposition(comp)
   }
+
+  // Deliberately drop the current composition's unsaved layout and revert to its saved file. Guarded by a
+  // confirm (it is destructive). Since switching is non-destructive, this is the ONLY way to lose a draft
+  // on purpose. Resolves true when the user confirmed (so the popover can close). Only meaningful when the
+  // composition is on disk and dirty (the Discard button is disabled otherwise).
+  const discardChanges = useCallback(async (): Promise<boolean> => {
+    if (!selectedPath) return false
+    const comp = compositions.find((cc) => cc.path === selectedPath)
+    if (!comp) return false
+    const ok = await getConfirmSurface().confirm({
+      title: 'Discard unsaved changes',
+      message: `Revert “${comp.name}” to its saved layout? Your unsaved changes will be lost.`,
+      danger: true,
+      confirmLabel: 'Discard',
+    }).catch(() => ({ confirmed: false }))
+    if (!ok.confirmed) return false
+    clearDraftNow(selectedPath || UNSAVED_COMPOSITION) // cancel any pending renderer-side write + drop the draft
+    await applyComposition(comp, { forceFile: true }) // mount the saved file unconditionally (no draft read-back)
+    return true
+  }, [selectedPath, compositions, clearDraftNow, applyComposition])
 
   // Only members writable IN PLACE are valid save targets — never write a composition into a
   // dependency, nor into an `edit` member that resolved read-only from the package cache.
@@ -352,9 +565,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   // Is the LOADED composition consumed (in a non-writable member)? Then a save copies it into the
   // user's vault rather than overwriting the template — surfaced on the save button so it is not a
   // surprise. Most-specific owner wins (member roots can nest). See `saveConsumedAsCopy`.
-  const loadedOwner = selectedPath
-    ? members.filter((m) => selectedPath.startsWith(m.root)).sort((a, b) => b.root.length - a.root.length)[0]
-    : undefined
+  const loadedOwner = selectedPath ? memberOfPath(members, selectedPath, entryPath) : undefined
   const loadedConsumed = !!loadedOwner && !isWritableMember(loadedOwner)
 
   // Save the working arrangement to a NEW file, next to the currently-loaded
@@ -365,7 +576,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   const memberForSave = (): WorkspaceMember | undefined => {
     if (saveAsMember) return savableMembers.find((m) => m.name === saveAsMember)
     if (selectedPath) {
-      const owner = savableMembers.find((m) => selectedPath.startsWith(m.root))
+      const owner = memberOfPath(savableMembers, selectedPath, entryPath)
       if (owner) return owner
     }
     return savableMembers[0]
@@ -406,7 +617,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       return
     }
     setSaveAsName('')
-    setSelectedPath(path)
+    adoptSavedFile(path, working, qualified, result.hash, selectedPath || UNSAVED_COMPOSITION, working)
     // The save succeeded, but any bare type with no known owner won't type the file → the composition
     // won't re-surface in discovery. Warn instead of degrading silently.
     if (unresolved.length) {
@@ -414,19 +625,29 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       setCompositionError(msg)
       warnToast(msg)
     }
-    void refreshCompositions()
   }
 
-  const deleteSelected = async (): Promise<void> => {
-    if (!selectedPath) return // nothing loaded
+  const deleteSelected = async (): Promise<boolean> => {
+    if (!selectedPath) return false // nothing loaded
+    const name = compositions.find((cc) => cc.path === selectedPath)?.name ?? selectedPath.split('/').pop() ?? 'composition'
+    // Deleting removes the composition's file — guard it with a confirm, like Discard. Resolves true when
+    // the user confirmed (so the popover closes), false on cancel (it stays open).
+    const ok = await getConfirmSurface().confirm({
+      title: 'Delete composition',
+      message: `Delete “${name}”? This removes its file. You can recover it from version control.`,
+      danger: true,
+      confirmLabel: 'Delete',
+    }).catch(() => ({ confirmed: false }))
+    if (!ok.confirmed) return false
     setCompositionError('')
     const result = await deleteComposition(files, selectedPath)
     if (!result.ok) {
       setCompositionError(result.error ?? 'could not delete composition')
       warnToast(`Couldn’t delete “${selectedPath.split('/').pop() ?? 'composition'}”: ${result.error ?? 'delete failed'}`)
-      return
+      return false
     }
     dropComposition(selectedPath) // drop its view-state auto-store entries
+    clearDraftNow(selectedPath) // and its unsaved draft, if any
     const remaining = compositions.filter((c) => c.path !== selectedPath)
     setCompositions(remaining)
     if (remaining[0]) loadComposition(remaining[0])
@@ -441,6 +662,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       setDirty(false)
     }
     void refreshCompositions()
+    return true
   }
 
   // Save the working layout back to the loaded composition file (overwrite, guarded
@@ -453,6 +675,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   // Saving a consumed composition creates a copy in a writable member and switches editing to it.
   const saveConsumedAsCopy = useCallback(
     async (next: RootComposition, sourcePath: string): Promise<CompositionCommit> => {
+      const startWorking = workingRef.current
       // The user's vault: the entry folder-repo (always writable), else any writable member.
       const target =
         members.find((m) => m.role === 'entry' && isWritableMember(m)) ?? members.find(isWritableMember)
@@ -476,28 +699,22 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
         warnToast(`Couldn’t save a copy of “${stem}”: ${result.error ?? 'write failed'}`)
         return { ok: false, error: result.error ?? 'could not save a copy of the template' }
       }
-      workingRef.current = next
-      savedHashRef.current = result.hash
-      baselineKeyRef.current = stableStringify(next) // the saved form is the new baseline; a later edit diverges from it
-      setSelectedPath(path) // further edits save the copy, in place
-      setDirty(false)
-      void window.main.recents.touchComposition(entryPath, path)
-      void refreshCompositions()
+      adoptSavedFile(path, next, qualified, result.hash, sourcePath || UNSAVED_COMPOSITION, startWorking) // further edits save the copy, in place
       // Display this informational result through the strip's `compositionError` message surface.
       setCompositionError(`“${stem}” is a shipped template — saved a copy to ${target.name}/${name}.yaml; further edits save there`)
       return { ok: true }
     },
-    [members, files, reader, entryPath, refreshCompositions],
+    [members, files, reader, adoptSavedFile],
   )
 
   const persistComposition = useCallback(
     async (next: RootComposition): Promise<CompositionCommit> => {
       if (!selectedPath) return { ok: false, error: 'composition is not on disk yet — use “save as” first' }
+      // `next` is the working buffer from here; an echo during the awaits below replaces it and survives.
+      workingRef.current = next
       // Never overwrite a consumed (non-writable) composition in place — redirect to a copy in the
       // user's vault. The MOST-SPECIFIC owning member wins (a member root can nest under another).
-      const owner = members
-        .filter((m) => selectedPath.startsWith(m.root))
-        .sort((a, b) => b.root.length - a.root.length)[0]
+      const owner = memberOfPath(members, selectedPath, entryPath)
       if (owner && !isWritableMember(owner)) return saveConsumedAsCopy(next, selectedPath)
 
       // The qualify chokepoint for THIS save: the parent qualifies its bare `type:` claims (incl. leaf
@@ -505,7 +722,6 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       const owners = await readTypeOwners(reader)
       const unresolved = new Set<string>() // bare types no member owns
 
-      workingRef.current = next
       const { composition: qNext, unresolved: uNext } = qualifyComposition(next, owners)
       uNext.forEach((x) => unresolved.add(x))
       const result = await writeComposition(files, selectedPath, qNext, savedHashRef.current)
@@ -523,12 +739,10 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
         warnToast(`Couldn’t save “${name}”: ${result.error ?? 'could not save composition'}`)
         return { ok: false, error: result.error ?? 'could not save composition' }
       }
-      savedHashRef.current = result.hash
       // Prune the view-state auto-store to the panes that survived this save: a closed
       // pane (and any transient preview, never in the saved layout) has dead view-state.
-      if (selectedPath) pruneToNodes(selectedPath, collectNodeIds(next))
-      baselineKeyRef.current = stableStringify(next) // the saved form is the new baseline; a later edit diverges from it
-      setDirty(false)
+      pruneToNodes(selectedPath, collectNodeIds(next))
+      adoptSavedFile(selectedPath, next, qNext, result.hash, selectedPath, next)
       // Saved OK, but any bare type with no known owner won't type its file → surface a warning
       // rather than let the composition quietly become undiscoverable.
       if (unresolved.size) {
@@ -538,7 +752,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       }
       return { ok: true }
     },
-    [selectedPath, files, reader, members, saveConsumedAsCopy],
+    [selectedPath, files, reader, members, saveConsumedAsCopy, adoptSavedFile],
   )
 
   const saveComposition = async (): Promise<void> => {
@@ -602,6 +816,45 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       discoveredRef.current.map((d) => ({ type: d.typeName, repo: d.repo, kinds: d.kinds, meta: d.meta })),
     [],
   )
+
+  // Create a fresh EMPTY composition: a primary window whose content is the default placeholder projection
+  // (the sole installed `placeholder-projection`, resolved by kind-closure — the SAME ladder an empty slot
+  // uses, so nothing is hardcoded). It renders "Pick content", and since the placeholder handles
+  // open-intent, opening a file fills the root in place. Mounts as an UNSAVED working buffer (path ''); the
+  // user names it via Save as. There is one unsaved composition, so a New replaces an earlier one's draft:
+  // when that draft holds changes, the user confirms first, as for Discard.
+  const newComposition = useCallback(async (): Promise<void> => {
+    const placeholder = describeProjectionSet().find((d) => d.kinds.includes('placeholder-projection'))
+    if (!placeholder) {
+      warnToast('No placeholder projection is installed, so a fresh composition has nothing to show.')
+      return
+    }
+    const value = {
+      type: 'composition::au-host-sdk',
+      windows: ['[[^^w]]'],
+      projections: [
+        { type: 'window::au-host-sdk', primary: true, content: '[[^^ph]]', '^': 'w' },
+        { type: `${placeholder.type}::${placeholder.repo}`, '^': 'ph' },
+      ],
+    } as unknown as RootComposition
+    // The unsaved composition on screen answers from its live dirty flag; one switched away from answers from
+    // its stored draft (its pending write was flushed on the switch).
+    const onScreen = workingRef.current !== null && !selectedPathRef.current
+    const draft = onScreen ? null : await window.main.compositionDraft.get(UNSAVED_COMPOSITION).catch(() => null)
+    const unsavedWork = onScreen ? dirty : draft !== null && stableStringify(draft.working) !== draft.baselineKey
+    if (unsavedWork) {
+      const ok = await getConfirmSurface().confirm({
+        title: 'Discard the unsaved layout',
+        message: 'A new composition replaces the current unsaved layout. Its changes will be lost; use Save as first to keep them.',
+        danger: true,
+        confirmLabel: 'Discard',
+      }).catch(() => ({ confirmed: false }))
+      if (!ok.confirmed) return
+    }
+    flushDraft() // persist the OUTGOING composition's pending draft before switching (switching is non-destructive)
+    clearDraftNow(UNSAVED_COMPOSITION) // start the new one from a clean unsaved slate
+    mountUnsaved(value)
+  }, [describeProjectionSet, dirty, flushDraft, clearDraftNow, mountUnsaved])
 
   // The current composition's viewer-defaults (per file kind → viewer), bare-normalized, for the viewer
   // ladder on the drop path. Read off the working composition, the same field the CompositionRuntime
@@ -688,6 +941,8 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
 
     // The POINTER path awaits this (the file-tree drag, `ctx.content`).
     setContentResolver(resolveContent)
+    // Only a file or a wikilink resolves to a viewer, so only those light a pane's drop zones.
+    setContentHostable((content) => isFileSelection(content as Selection) || isLinkSelection(content as Selection))
 
     // The NATIVE bridge: resolve, then place through the UNIFIED path. A synthetic content source carries
     // the viewer `type` so a slot's `admits` can still veto; `__external__` never matches a real container.
@@ -714,6 +969,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
     })
     return () => {
       setContentResolver(null)
+      setContentHostable(null)
       detach()
     }
   }, [reader, describeProjectionSet])
@@ -1003,31 +1259,27 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
   // Discover projection types + workspace members through the engine.
   // Re-runnable. Members feed every minted host's multi-root content surface.
   const rediscover = useCallback(async (): Promise<void> => {
+    // BOOT TRACE: a `rediscover-start` with no matching `rediscover-done` ⇒ a discovery read hung (the
+    // `Promise.all` below never settles), which leaves `schemasReady` / `componentsRegistered` stuck.
+    if (on('boot')) event('boot', 'rediscover-start', {})
     try {
-      const [discovery, members, nodeClosures, containerSubs, nodeSubs, mountableSubs, cmds] = await Promise.all([
+      const [discovery, members, facts, cmds] = await Promise.all([
         discoverProjections(reader),
         discoverMembers(reader),
-        readNodeClosures(reader),
-        readSubtypes(reader, 'container-projection'),
-        readSubtypes(reader, 'container-node'),
-        readSubtypes(reader, 'mountable'),
+        discoverSubstrateFacts(reader),
         discoverCommands(reader),
       ])
       membersRef.current = members
-      // THE COMPOSITION POOL's slot graph: which fields of each container hold children. Derived from
-      // the same subtype reads the rest of this pass uses, then handed to the runtime (live, via a
-      // ref) so `normalizeToPool` / `resolvePoolToTree` know where a container's children live. A
-      // WireSubtype IS a WireTypeDef, which satisfies the derivation's narrow view structurally. The
-      // `mountable` subtypes let the derivation resolve a slot typed to a narrower mountable subtype
-      // (a projection subtype / `composition*`) is-a `mountable`; a bare `mountable*` needs no family.
-      if ('ready' in containerSubs && containerSubs.ready && 'ready' in nodeSubs && nodeSubs.ready) {
-        const mountableDefs = 'ready' in mountableSubs && mountableSubs.ready ? mountableSubs.result.subtypes : []
-        // The `window` branch of `mountable` holds a child (`content`) but is NOT a container-projection,
-        // so it is enumerated separately or `window.content` is never walked and a window's view reaps.
-        // `window` (+ any future subtype) sits in the mountable set already; filter it out here.
-        const windowDefs = mountableDefs.filter((d) => bareTypeName(d.name) === 'window')
-        schemasRef.current = deriveContainerSchemas(containerSubs.result.subtypes, nodeSubs.result.subtypes, mountableDefs, windowDefs)
+      // THE COMPOSITION POOL's slot graph: which fields of each container hold children, handed to the
+      // runtime (live, via a ref) so `normalizeToPool` / `resolvePoolToTree` know where a container's
+      // children live. The same facts go to container-core below, for the slot codecs.
+      if (facts.schemas) {
+        schemasRef.current = facts.schemas
         setSchemasReady(true) // gate the portal render: the pool normalize/resolve walk can now run
+        if (on('boot')) event('boot', 'schemas-ready', { containers: facts.schemas.containers.size, nodes: facts.schemas.nodes.size })
+      } else if (on('boot')) {
+        // The reads settled but the graph was not ready: schemasReady stays false FOREVER (no retry), a hard stall.
+        event('boot', 'schemas-not-ready', {})
       }
       setMembers(members)
       setDiscovered(discovery.projections)
@@ -1036,14 +1288,10 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       // having vanished. Surfaced in the strip rather than as a toast: it is a standing condition
       // until someone edits the type-def, not an event.
       setRejectedProjections(discovery.rejected)
-      // SLOT RULES: the type-closure predicate the substrate checks a slot's `admits` with. Same
-      // shape and same reason as the grouping install below — the substrate is a library with no
-      // engine access, and `routeDrop` is synchronous — but it needs no loader, because the answer
-      // is already in the `kinds` closure this pass just computed. See slot-types.ts.
-      // The CONTAINER-NODE closures ride in the same predicate: the union normalizer asks the same
-      // is-a question about slot types that `admits` asks about projections. Without them a SUBTYPE
-      // of a container's slot reads as a bare child and silently loses the position's rules.
-      installSlotTypeProvider(discovery.projections, nodeClosures)
+      // THE SUBSTRATE'S TYPE FACTS: the closure predicate a slot's `admits` and slot-record recognition
+      // are checked with, and the container schemas a slot codec reads its field's slot type from. The
+      // floated-window renderer installs the same facts through the same function. See substrate-facts.ts.
+      installSubstrateFacts(discovery.projections, facts)
       // Install each projection's effective-shape field ownership so `saveConfig` preserves other fields.
       // Refresh alongside discovery: synchronous saves require the ownership lookup to be ready.
       // See config-ownership.ts.
@@ -1065,10 +1313,9 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       // Resolve declared grouping capabilities eagerly and install a synchronous lookup for the substrate.
       // `routeDrop` cannot await discovery. Cache the type graph and composition's `group-into` separately,
       // since either can change independently. See grouping-discovery.ts.
-      groupingCapsRef.current = await discoverGroupingContainers(reader)
-      spatialCapsRef.current = await discoverSpatialContainers(reader)
-      installGroupingProvider(groupingCapsRef.current, groupingChoiceOf(workingRef.current), groupNewPanesOf(workingRef.current))
-      installWrapTargets(groupingCapsRef.current, spatialCapsRef.current, groupingChoiceOf(workingRef.current))
+      containerCapsRef.current = await discoverContainerCapabilities(reader)
+      installGroupingProvider(containerCapsRef.current.grouping, groupingChoiceOf(workingRef.current), groupNewPanesOf(workingRef.current))
+      installWrapTargets(containerCapsRef.current, groupingChoiceOf(workingRef.current))
       // Component layer: discover the `component-set` +
       // `ui-component` subtypes, then register the resolved per-tag winners into the GLOBAL
       // custom-element registry (boot-swap). Idempotent — a tag defined this session stays, so a
@@ -1097,6 +1344,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       // FAILURE degrades to the pre-gate behaviour (curtain lifts on `portalLive` alone) rather than
       // hanging the curtain forever. A latch: re-runs never drop it, an empty set still resolves here.
       setComponentsRegistered(true)
+      if (on('boot')) event('boot', 'rediscover-done', {})
     }
   }, [reader, files, runtime])
 
@@ -1135,7 +1383,13 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
 
     const scheduleRediscover = (): void => {
       if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => void rediscover(), 200)
+      debounce = setTimeout(() => {
+        void rediscover()
+        // Composition-mount is the OTHER half of discovery, and it must self-heal on the same signal: a
+        // mount that bailed on `pending` (a read not-ready at the ready edge) retries here once the graph
+        // populates. Idempotent + guarded (a no-op once mounted), so re-running on every change is cheap.
+        void discoverAndMaybeMount()
+      }, 200)
     }
 
     const open = (): void => {
@@ -1160,7 +1414,7 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       offReady()
       detach?.()
     }
-  }, [engineSubscriber, engineReady, rediscover])
+  }, [engineSubscriber, engineReady, rediscover, discoverAndMaybeMount])
 
   // Keep the boot curtain until the engine can establish a truly empty workspace or the portal has
   // mounted its composition content. A discovery result from an unready engine can be transiently empty;
@@ -1181,6 +1435,13 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       onReadyRef.current?.()
     }
   }, [curtainLifted])
+
+  // BOOT TRACE — the single most valuable probe for a "stuck at Workspace ready" hang: which of the four
+  // `compositionLive` gates never flipped. Emit on every change of any gate, so the LAST `curtain-eval`
+  // line before the stall names the culprit (`AU_HOST_EVENTS=boot`). Gated so an off category costs nothing.
+  useEffect(() => {
+    if (on('boot')) event('boot', 'curtain-eval', { curtainLifted, mounted: mounted !== null, schemasReady, portalLive, componentsRegistered, genuinelyEmpty })
+  }, [curtainLifted, mounted, schemasReady, portalLive, componentsRegistered, genuinelyEmpty])
 
   // HOST-GLOBAL COMMANDS as intents the host handles. The palette FIRES a command
   // intent; the host claims it here and runs the composition op. Registered once per runtime on a synthetic
@@ -1215,6 +1476,18 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       'save-intent': () => void commandOpsRef.current.saveComposition(),
       // Toggle the command palette through the operation it registers with the runtime.
       'toggle-command-palette-intent': () => runtime.togglePalette(),
+      // Open the FOCUSED pane's actions menu — the same ⋯ menu its header offers, so a header-hidden pane
+      // (hideHeader) still reaches every action (incl. "Layout rules…", to un-hide). Resolves the pane's
+      // container placement, asks it for the rows, and opens the host context-menu anchored at the pane.
+      'open-pane-actions-intent': () => {
+        const id = runtime.focusedPaneId()
+        if (!id) { warnToast('Click a pane before opening its actions.'); return }
+        const rows = placementForPane(id)?.paneActions?.(id)
+        if (!rows || rows.length === 0) return
+        const rect = slotBounds(id)
+        const anchor = rect ? new DOMRect(rect.right - 8, rect.top + 8, 0, 0) : new DOMRect(120, 80, 0, 0)
+        getContextMenuSurface(getOverlaySite()).open(anchor, rows as ContextMenuItem[])
+      },
       // Close the focused view (⌘W). The host resolves the focused pane and requests its removal; the
       // close-guard runs at the reap (the shared commit core). No editor coupling — any focused pane closes.
       'close-view-intent': () => runtime.closeFocusedView(),
@@ -1228,9 +1501,12 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
     compositions,
     selectedPath,
     loadComposition,
+    openAsFile: (comp) => runtime.fireCommand({ type: 'open-intent', kind: 'routed', dispatch: 'ambient', target: { type: 'file-selection', path: comp.path } } as IntentPayload),
+    newComposition,
     dirty,
     loadedConsumed,
     saveComposition,
+    discardChanges,
     deleteSelected,
     saveAsName,
     setSaveAsName,
@@ -1240,6 +1516,9 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
     setSaveAsMember,
     saveCompositionAs,
     compositionError,
+    compositionFixes: banner.fixes,
+    applyFix,
+    applyingFix,
     rejectedProjections,
   }
 
@@ -1249,12 +1528,12 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
       <div className="host-body">
         {mounted && schemasReady ? (
           // THE PORTAL PATH: the kernel drives the FLAT mount — one `PaneHost` per pool record, each
-          // portaled into its container's anchor, so a re-parent never unmounts a pane. Keyed by the
-          // composition so a switch is a clean remount; a structural edit re-derives via `onPoolChange`,
-          // NOT a config change, so it never remounts here. The boot curtain below covers it until it
+          // portaled into its container's anchor, so a re-parent never unmounts a pane. Keyed by the mount
+          // generation so a switch is a clean remount and a save (even one that changes the path) is not; a
+          // structural edit re-derives via `onPoolChange`, NOT a config change, so it never remounts here. The boot curtain below covers it until it
           // reports live, so the async portal mount never shows a bare frame.
           <KernelRootPortal
-            key={selectedPath || 'unsaved'}
+            key={mountGeneration}
             config={mounted}
             onSaveConfig={saveRootConfig}
             primeForeign={primeForeign}
@@ -1269,10 +1548,22 @@ export function ProjectionHost({ config, onConfigChange, onReady }: ProjectionHo
         ) : genuinelyEmpty ? (
           <div className="host-empty">
             <p>{compositionError ? 'Could not open the initial layout' : 'No composition selected'}</p>
-            <p role={compositionError ? 'alert' : undefined}>{compositionError || 'This workspace starts without a layout. Choose an available composition, or add a composition file to your workspace.'}</p>
-            <AuScrollArea axis="y">
-              {compositions.map(comp => <AuListRow key={comp.path} interactive primary={comp.name} onClick={() => loadComposition(comp)} />)}
-            </AuScrollArea>
+            <p role={compositionError ? 'alert' : undefined}>{compositionError || 'This workspace does not have any layout compositions yet. Please create a new one to start.'}</p>
+            {banner.fixes.length > 0 && (
+              <div className="host-empty__fixes">
+                {banner.fixes.map((fix, i) => (
+                  <AuButton key={i} size="sm" variant="cta" disabled={applyingFix !== null} onAuActivate={() => applyFix(fix)}>
+                    {applyingFix === fix.title ? 'Applying…' : fix.title}
+                  </AuButton>
+                ))}
+              </div>
+            )}
+            <CreateCompositionRow c={compositionControl} />
+            {compositions.length > 0 && (
+              <AuScrollArea axis="y">
+                {compositions.map(comp => <AuListRow key={comp.path} interactive primary={comp.name} onClick={() => loadComposition(comp)} />)}
+              </AuScrollArea>
+            )}
           </div>
         ) : null}
         {/* THE BOOT CURTAIN. One opaque overlay across the whole cold start — the transient-empty
@@ -1354,9 +1645,15 @@ function KernelRootPortal({
     let disposed = false
     let teardown: (() => void) | undefined
     void (async () => {
+      // BOOT TRACE: `prime-foreign-start` with no `prime-foreign-done` ⇒ a nested-composition read hung
+      // (its `.catch` cannot rescue a never-settling promise) — the mount stalls here and `portalLive`
+      // never flips. `mount-portal started:false` ⇒ `mountRootPortal` refused (no retry). See `AU_HOST_EVENTS=boot`.
+      if (on('boot')) event('boot', 'prime-foreign-start', {})
       await primeForeign(config)
+      if (on('boot')) event('boot', 'prime-foreign-done', {})
       if (disposed) return
       const started = runtime.mountRootPortal(config, onSaveConfig)
+      if (on('boot')) event('boot', 'mount-portal', { started: !!started })
       if (!started) return
       setPanePortalParkingHost(portalRegistry, parkingRef.current) // Park panes inside the composition root during a move.
 // The host observer derives pane anchors from `data-pane-id` elements under `.kernel-root`,
@@ -1372,6 +1669,7 @@ function KernelRootPortal({
       setRecords(runtime.poolRecords())
       setRootId(runtime.currentRootId())
       onLive(true) // the composition now has content — the host may lift the boot curtain
+      if (on('boot')) event('boot', 'portal-live', {})
       const unsub = runtime.onPoolChange(() => {
         setRecords(runtime.poolRecords())
         setRootId(runtime.currentRootId()) // a root-position restructure moves the root content id
@@ -1420,10 +1718,21 @@ interface CompositionControl {
   compositions: DiscoveredComposition[]
   selectedPath: string
   loadComposition: (comp: DiscoveredComposition) => void
+  /** Open the composition's backing FILE in a pane via a regular open-intent (the host resolves the viewer;
+   *  no editor is hardcoded), so it can be hand-edited. Distinct from `loadComposition`, which mounts it as
+   *  the root. */
+  openAsFile: (comp: DiscoveredComposition) => void
+  /** Create a fresh EMPTY composition (a root showing the default placeholder projection) as an unsaved
+   *  working buffer; the user names it via Save as. */
+  newComposition: () => Promise<void>
   dirty: boolean
   loadedConsumed: boolean
   saveComposition: () => void | Promise<void>
-  deleteSelected: () => void | Promise<void>
+  /** Revert the current composition to its saved file, dropping the unsaved draft (confirmed). Resolves
+   *  true when the user confirmed the discard. */
+  discardChanges: () => Promise<boolean>
+  /** Delete the current composition's file (confirmed). Resolves true when the user confirmed. */
+  deleteSelected: () => Promise<boolean>
   saveAsName: string
   setSaveAsName: (s: string) => void
   savableMembers: WorkspaceMember[]
@@ -1432,7 +1741,47 @@ interface CompositionControl {
   setSaveAsMember: (s: string) => void
   saveCompositionAs: (name?: string) => void | Promise<void>
   compositionError: string
+  /** Engine-authored applicable fixes for the current banner error (the "Add <repo> to deps" case). */
+  compositionFixes: AppliableFixRef[]
+  /** Apply one banner fix; main re-resolves it from its diagnostic and runs the mutation. */
+  applyFix: (ref: AppliableFixRef) => void
+  /** The title of the fix currently applying (its button's pending state), or null when idle. */
+  applyingFix: string | null
   rejectedProjections: RejectedProjection[]
+}
+
+/** One runnable banner fix: the engine-authored caption plus the diagnostic + index that resolves it.
+ *  `apply()` is a node-only closure that cannot cross IPC, so the renderer carries the diagnostic and
+ *  its index instead, and main re-resolves the fix on demand. */
+interface AppliableFixRef {
+  title: string
+  diag: WireDiagnostic
+  index: number
+}
+
+/** The "no composition" empty-screen affordance: name and create a fresh composition, so a workspace
+ *  with no saved layout is not a dead end. Captures the name (pre-filling Save as) and mounts the same
+ *  empty placeholder-root `newComposition` builds — the user then picks content and saves. */
+function CreateCompositionRow({ c }: { c: CompositionControl }): React.JSX.Element {
+  const [name, setName] = useState('')
+  const create = (): void => {
+    const trimmed = name.trim()
+    if (trimmed) c.setSaveAsName(trimmed) // remember the name so Save as is pre-filled
+    void c.newComposition() // mounts the empty placeholder root, leaving the empty screen
+  }
+  return (
+    <div className="host-empty__create">
+      <AuInput
+        size="sm"
+        value={name}
+        placeholder="composition name…"
+        spellcheck={false}
+        onAuInput={(e) => setName((e.target as HTMLElement & { value: string }).value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') create() }}
+      />
+      <AuButton size="sm" variant="cta" onAuActivate={create}>Create</AuButton>
+    </div>
+  )
 }
 
 /** The header's composition picker: switch, save, copy or delete a saved composition. */
@@ -1445,36 +1794,46 @@ function CompositionMenu({ c, host }: { c: CompositionControl; host: MountHost }
   const handleRef = useRef<PopoverHandle | null>(null)
   const current = c.compositions.find((x) => x.path === c.selectedPath)
 
+  // Whichever side closes it, the popover is gone: drop the portal + un-press.
+  const settleClosed = useCallback(() => {
+    handleRef.current = null
+    setPortalEl(null)
+  }, [])
+  const closeMenu = useCallback(() => {
+    handleRef.current?.close()
+    settleClosed()
+  }, [settleClosed])
   const openMenu = useCallback(() => {
     if (handleRef.current) {
-      handleRef.current.close() // toggle: a second trigger click closes it
+      closeMenu() // toggle: a second trigger click closes it
       return
     }
     const rect = triggerRef.current?.getBoundingClientRect()
     if (!rect || !host.popover) return
-    handleRef.current = host.popover.open(
-      rect,
-      (el) => setPortalEl(el),
-      () => {
-        // Dismissed for any reason (Esc / outside / blur / close()) — drop the portal + un-press.
-        handleRef.current = null
-        setPortalEl(null)
-      },
-    )
-  }, [host])
+    handleRef.current = host.popover.open(rect, (el) => setPortalEl(el), settleClosed)
+  }, [host, closeMenu, settleClosed])
 
   return (
-    <span className="no-drag" style={{ display: 'inline-flex' }}>
+    <span className="no-drag" style={{ display: 'inline-flex', position: 'relative' }}>
       <AuIconButton
         ref={triggerRef}
-        label={`Compositions${current ? ` — ${current.name}` : ''}`}
+        label={`Compositions${current ? ` — ${current.name}` : ''}${c.dirty ? ' (unsaved changes)' : ''}`}
         aria-expanded={!!portalEl}
         onAuActivate={openMenu}
       >
         <AuIcon name="folder-open" />
       </AuIconButton>
+      {/* Always-visible unsaved marker: the switcher's only pre-open cue that the current layout diverges
+          from the saved file. A small accent dot on the trigger, mirrored on the current row + Save action. */}
+      {c.dirty && (
+        <span
+          aria-hidden="true"
+          title="Unsaved layout changes"
+          style={{ position: 'absolute', top: '2px', insetInlineEnd: '2px', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--au-color-accent)', boxShadow: '0 0 0 2px var(--au-color-bg)', pointerEvents: 'none' }}
+        />
+      )}
       {portalEl &&
-        createPortal(<CompositionPopoverBody c={c} onClose={() => handleRef.current?.close()} />, portalEl)}
+        createPortal(<CompositionPopoverBody c={c} onClose={closeMenu} />, portalEl)}
     </span>
   )
 }
@@ -1493,26 +1852,55 @@ function CompositionPopoverBody({ c, onClose }: { c: CompositionControl; onClose
               interactive
               selected={comp.path === c.selectedPath}
               primary={comp.name}
+              secondary={comp.path === c.selectedPath && c.dirty ? 'unsaved changes' : undefined}
               className="composition-popover__row"
               onClick={() => {
                 c.loadComposition(comp)
                 onClose()
               }}
-            />
+            >
+              {/* Open the composition's FILE in a pane (hand-edit), not load it as root. stopPropagation so the
+                  row's load-on-click never also fires. */}
+              <AuIconButton
+                slot="trailing"
+                label={`Open ${comp.name} as a file`}
+                onClick={(e) => e.stopPropagation()}
+                onAuActivate={() => {
+                  c.openAsFile(comp)
+                  onClose()
+                }}
+              >
+                <AuIcon name="file-text" />
+              </AuIconButton>
+            </AuListRow>
           ))}
         </div>
       </AuScrollArea>
       <div className="composition-popover__actions">
+        {/* Create a fresh EMPTY composition (a root showing the placeholder projection). Closes so the user
+            sees the new composition; they name + persist it via Save as. */}
+        <AuButton size="sm" variant="ghost" onAuActivate={() => { void c.newComposition(); onClose() }}>
+          New
+        </AuButton>
         <AuButton size="sm" variant="ghost" disabled={!c.dirty || !c.selectedPath} onAuActivate={() => void c.saveComposition()}>
           {c.dirty ? (c.loadedConsumed ? 'Save copy' : 'Save') : 'Saved'}
         </AuButton>
         <AuButton
           size="sm"
           variant="ghost"
+          disabled={!c.dirty || !c.selectedPath}
+          onAuActivate={() => {
+            void c.discardChanges().then((discarded) => { if (discarded) onClose() })
+          }}
+        >
+          Discard
+        </AuButton>
+        <AuButton
+          size="sm"
+          variant="ghost"
           disabled={!c.selectedPath}
           onAuActivate={() => {
-            void c.deleteSelected()
-            onClose()
+            void c.deleteSelected().then((deleted) => { if (deleted) onClose() })
           }}
         >
           Delete
@@ -1542,6 +1930,15 @@ function CompositionPopoverBody({ c, onClose }: { c: CompositionControl; onClose
         </AuButton>
       </div>
       {c.compositionError && <div className="composition-popover__error">{c.compositionError}</div>}
+      {c.compositionFixes.length > 0 && (
+        <div className="composition-popover__fixes">
+          {c.compositionFixes.map((fix, i) => (
+            <AuButton key={i} size="sm" variant="cta" disabled={c.applyingFix !== null} onAuActivate={() => c.applyFix(fix)}>
+              {c.applyingFix === fix.title ? 'Applying…' : fix.title}
+            </AuButton>
+          ))}
+        </div>
+      )}
       {c.rejectedProjections.length > 0 && (
         <div
           className="composition-popover__error"
@@ -1916,6 +2313,147 @@ function CommandValueFiller({
   )
 }
 
+/**
+ * The composition config-edit FORM host — opens the generic slot-rule form for a pane when its
+ * "Layout rules…" pane-action fires `au-open-slot-config`. That row lives in every container's ⋯ menu AND
+ * in the focused-pane menu `open-pane-actions-intent` opens, so a slot's rules are reachable from the
+ * pane's header and, when its header is hidden, from the keybind — no bespoke edit-mode overlay. Claims a
+ * `host.overlay` layer while the form is open (stacking + chord-block) and portals the form in.
+ * Main-window host chrome, like the palette.
+ */
+function SlotConfigHost({
+  host,
+  runtime,
+  reader,
+}: {
+  host: MountHost
+  runtime: CompositionRuntime
+  reader: WireReader
+}): React.JSX.Element | null {
+  const [editing, setEditing] = useState<{ childId: string; slotType: string; anchor: DOMRect } | null>(null)
+
+  // The "Layout rules…" row (any container's menu) fires this with the occupant's `^:`. Resolve its slot
+  // type (the record the form renders) and its on-screen anchor, then open the form.
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const childId = (e as CustomEvent).detail
+      if (typeof childId !== 'string') return
+      const info = runtime.slotRuleOf(childId)
+      if (!info.found || !info.slotType) return
+      setEditing({ childId, slotType: info.slotType, anchor: slotBounds(childId) ?? new DOMRect(120, 80, 0, 0) })
+    }
+    window.addEventListener('au-open-slot-config', onOpen)
+    return () => window.removeEventListener('au-open-slot-config', onOpen)
+  }, [runtime])
+
+  // The form rides the host POPOVER seam: the host owns the layer, the anchoring + viewport clamp, and
+  // dismissal (Esc / outside pointerdown / blur), so this draws NO position of its own. Anchor at the pane's
+  // top-right corner (where the ⋯ trigger sits); the seam clamps the panel fully on-screen at any size.
+  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!editing || !host.popover) {
+      setPortalEl(null)
+      return
+    }
+    const a = editing.anchor
+    // The popover's life follows `editing`: the cleanup closes it (an owner close, so no dismiss
+    // re-enters here), and a dismissal out from under it clears `editing`.
+    const handle = host.popover.open(new DOMRect(a.right, a.top, 0, 0), (el) => setPortalEl(el), () => setEditing(null))
+    return () => {
+      handle.close()
+      setPortalEl(null)
+    }
+  }, [editing, host])
+
+  if (!editing || !portalEl) return null
+  return createPortal(
+    <ConfigSlotForm
+      key={editing.childId}
+      reader={reader}
+      runtime={runtime}
+      childId={editing.childId}
+      slotType={editing.slotType}
+      onClose={() => setEditing(null)}
+    />,
+    portalEl,
+  )
+}
+
+/**
+ * The per-position rule form: the generic `<au-typed-value-editor>` over the slot subtype's schema
+ * (`resolve({kind:'record', name: slotType})`), seeded from the position's current rules and written back
+ * through `runtime.editSlotRule` on every change. Reused VERBATIM from `CommandValueFiller`'s editor
+ * wiring. The `child` occupant field is dropped from the schema — it is the position's contents, managed
+ * by drag/close, not a rule (and `editSlotRule` strips it anyway).
+ */
+function ConfigSlotForm({
+  reader,
+  runtime,
+  childId,
+  slotType,
+  onClose,
+}: {
+  reader: WireReader
+  runtime: CompositionRuntime
+  childId: string
+  slotType: string
+  onClose: () => void
+}): React.JSX.Element {
+  const [schema, setSchema] = useState<ResolvedShape | null>(null)
+  const [value, setValue] = useState<Record<string, unknown>>(() => runtime.slotRuleOf(childId).rules)
+  const [diagnostics, setDiagnostics] = useState<ValueDiagnostic[]>([])
+
+  useEffect(() => {
+    let alive = true
+    void resolveValue({ kind: 'record', name: slotType }, makeReaderPort(reader)).then((s) => {
+      // Drop the `child` occupant field: it is the position's contents (managed by drag / close), not a
+      // rule, and `editSlotRule` ignores it regardless.
+      if (alive) setSchema(s.kind === 'record' ? { ...s, fields: s.fields.filter((f) => f.name !== 'child') } : s)
+    })
+    return () => {
+      alive = false
+    }
+  }, [slotType, reader])
+
+  const onChange = useCallback(
+    (next: Record<string, unknown>) => {
+      setValue(next)
+      if (schema) setDiagnostics(validate(next, schema))
+      // Merge onto the CURRENT rules so a carried extra the form does not render survives, then commit
+      // through the single-writer seam. Live write: each edit re-proposes, the composition reflects at once.
+      const current = runtime.slotRuleOf(childId).rules
+      runtime.editSlotRule(childId, { ...current, ...next })
+    },
+    [schema, childId, runtime],
+  )
+
+  // No positioning or dismissal here: the host popover seam (SlotConfigHost) owns the layer, the anchoring +
+  // viewport clamp, and Esc / outside-pointerdown / blur dismissal. This renders only the CONTENT card.
+  return (
+    <AuPopover arrow={false} className="cmd-value-filler" role="dialog" aria-label="Layout rules" data-child-id={childId}>
+      <div className="cmd-value-filler__crumb">
+        <button className="cmd-value-filler__back no-drag" onClick={onClose} title="Close">
+          ←
+        </button>
+        <span className="cmd-value-filler__cmd">Layout rules</span>
+      </div>
+      {schema ? (
+        <AuScrollArea className="cmd-value-filler__scroll" axis="y">
+          <AuTypedValueEditor
+            className="cmd-value-filler__editor"
+            schema={schema}
+            value={value}
+            diagnostics={diagnostics}
+            onAuValueChange={(e) => onChange(((e as CustomEvent).detail as { value: Record<string, unknown> }).value)}
+          />
+        </AuScrollArea>
+      ) : (
+        <span className="cmd-value-filler--loading">Resolving…</span>
+      )}
+    </AuPopover>
+  )
+}
+
 /** Walk a resolved schema to the shape at a value path, then map that shape to picker candidates via the
  *  engine reads. Non-terminal path segments are record field-names or list indices; the terminal
  *  reference / inline-or-reference / pinned / compound-reference shape names the ceiling type(s) whose
@@ -2107,6 +2645,7 @@ function WindowRootHeader({
       center={
         <>
           <CommandPalette host={host} runtime={runtime} commands={commands} reader={reader} />
+          <SlotConfigHost host={host} runtime={runtime} reader={reader} />
           <CompositionMenu c={composition} host={host} />
         </>
       }

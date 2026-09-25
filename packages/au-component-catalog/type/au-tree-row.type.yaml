@@ -9,7 +9,10 @@
 # sits at the TRAILING edge, after the label, so a label's left edge stays flush with the rows below it
 # instead of being pushed right by a chevron gutter. `level` drives the indent via `--au-tree-level`
 # against the public `--au-tree-indent` step, and nesting GUIDES (a vertical line per ancestor level,
-# shown on tree hover via the inherited `--au-tree-guide-opacity`) make depth legible. Emphasis is
+# shown on tree hover via the inherited `--au-tree-guide-opacity`, bridging the container's row gap read
+# from the inherited `--au-tree-row-gap`) make depth legible. The row contains itself
+# (`content-visibility: auto`) with a clip margin covering that overhang, so a long tree costs O(visible
+# rows) with no container rule. Emphasis is
 # SURFACE + ink weight + a hairline ring, never a left accent bar. The ROW is the single roving tab stop
 # (the parent sets the host `tabindex`); the chevron is a non-focusable glyph. Emits `au-activate` (row
 # press) and `au-toggle` (disclosure press, folders only), both composed + bubbling.

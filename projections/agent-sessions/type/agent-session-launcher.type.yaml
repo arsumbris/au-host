@@ -8,7 +8,7 @@ meta:
     icon: terminal
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
   - type: fires-intent-meta::au-host-sdk
     fires:
       - "[[open-pane-intent::intent]]"

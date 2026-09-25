@@ -7,13 +7,40 @@ export type Ref<T extends string> = string & { readonly __ref: T }
 /** A branded wikilink to a type-def (the def axis of `T*`), distinct from an instance `Ref`. The brand records the def-axis bound. */
 export type DefRef<T extends string> = string & { readonly __defRef: T }
 
-export interface BarProjection extends Omit<Projection, 'type'> {
+/** How many children a container takes. Every field is optional; an absent bound is no bound. */
+export interface ArityMeta {
   type?: string
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
+  /**
+   * The dissolve floor: below this many children the container dissolves to its lone child.
+   * Absent = it never dissolves.
+   * Refined Number, >= 1, integer
+   */
+  min?: number
+  /**
+   * The most children one wrap may put into it. Absent = unbounded.
+   * Refined Number, >= 1, integer
+   */
+  max?: number
+}
+
+export interface BarItemProjection extends Omit<Projection, 'type'> {
+  type: 'bar-item-projection'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
+  /** Ordering hint within a bar region (first-come-first-served when unset). */
   order?: number
+  /** Minimum size along the bar's main axis; a bar may clamp to it. */
   minSize?: number
+  /** Whether the bar may bunch this item into its "+N more" overflow. Absent = eligible; `false` pins it visible. */
   overflowEligible?: boolean
+}
+
+export interface BarProjection extends Omit<Projection, 'type'> {
+  type: 'bar-projection'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
 }
 
 /** One compact render size, in px. Owned by au-host-sdk. Generates the exported `Breakpoint` interface. */
@@ -225,6 +252,19 @@ export interface FiresIntentMeta {
   fires: DefRef<'intent'>[]
 }
 
+/** A container with one fill position, `center`, framed by peripheral chrome its subtypes declare. */
+export interface FrameContainer extends Omit<ContainerProjection, 'type'> {
+  type: 'frame-container'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
+  /**
+   * The fill. BY REFERENCE (`[[^^id]]`), or a ruled slot. Absent = an empty center, which shows the
+   * empty-slot placeholder. The frame never sizes or collapses its center; per-position sizing lives on
+   * the peripherals.
+   */
+  center?: Ref<'mountable'> | ContainerSlot
+}
+
 export interface Grouping extends Omit<CompositionConfig, 'type'> {
   type: 'grouping'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
@@ -340,6 +380,15 @@ export interface IntentRouting extends Omit<CompositionConfig, 'type'> {
    * focus channel.
    */
   'initial-focus'?: DefRef<'projection'>
+  /**
+   * The CONSUME strategy for a >1-claimer AMBIENT routed dispatch (open / reveal / save-family):
+   * `choose` (the default when absent) shows the spatial picker so the user picks, with the
+   * focus/MRU head pre-highlighted for a one-keystroke Enter; `mru` restores the old silent
+   * auto-pick of the focus/MRU head. Distinct from `defaults` above (per-intent TARGET rules) —
+   * this selects HOW a resolved multiplicity is consumed, not WHICH nodes are candidates. Shaped
+   * to grow to a per-intent map later; a single value now applies to every ambient intent.
+   */
+  'default-strategy'?: 'choose' | 'mru'
 }
 
 /**
@@ -568,12 +617,6 @@ export interface SlotDefaults extends Omit<CompositionConfig, 'type'> {
  */
 export interface SpatialContainer extends Omit<ContainerProjection, 'type'> {
   type: 'spatial-container'
-  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
-  '^'?: string
-}
-
-export interface StatusProjection extends Omit<BarProjection, 'type'> {
-  type: 'status-projection'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
 }

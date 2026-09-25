@@ -1,7 +1,6 @@
 import { test, expect, floatedWindow } from '../fixtures/app'
 import { writeFile, rm } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
-import { VAULT } from '../support/paths'
 
 test.use({ composition: 'close-guard-floated', projectionDevelopment: true })
 
@@ -103,7 +102,7 @@ test.describe('floated container', () => {
 test.describe('live discovery', () => {
   test.use({ composition: 'reload-discovery' })
   for (const floated of [false, true]) {
-    test(`an already-open ${floated ? 'floated' : 'main'} picker discovers a new type`, async ({ page, electronApp }) => {
+    test(`an already-open ${floated ? 'floated' : 'main'} picker discovers a new type`, async ({ page, electronApp, vault }) => {
       let target = page
       if (floated) {
         await page.getByRole('button', { name: 'Pane actions', exact: true }).first().click()
@@ -118,9 +117,9 @@ test.describe('live discovery', () => {
       const errors: string[] = []
       target.on('pageerror', error => errors.push(error.message))
       await expect(search).toBeVisible()
-      const typeFile = join(dirname(VAULT), 'hello/type/reload-created.type.yaml')
+      const typeFile = join(dirname(vault), 'hello/type/reload-created.type.yaml')
       try {
-        await writeFile(typeFile, `extends: pane-projection::au-host-sdk\nfields: {}\nmeta:\n  - type: projection-runtime-meta::au-host-sdk\n    entry: ./dist/index.js\n    contractVersion: 7\n  - type: projection-presentation-meta::au-host-sdk\n    title: Reload Created\n`)
+        await writeFile(typeFile, `extends: pane-projection::au-host-sdk\nfields: {}\nmeta:\n  - type: projection-runtime-meta::au-host-sdk\n    entry: ./dist/index.js\n    contractVersion: 8\n  - type: projection-presentation-meta::au-host-sdk\n    title: Reload Created\n`)
         await search.fill('Reload Created')
         await expect(picker.getByRole('option', { name: /Reload Created/ })).toBeVisible({ timeout: 20_000 })
         await search.press('Enter')

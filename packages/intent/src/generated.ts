@@ -58,28 +58,28 @@ export interface FocusDownIntent extends Omit<Intent, 'type'> {
   type: 'focus-down-intent'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
-  target?: String
+  target?: string
 }
 
 export interface FocusLeftIntent extends Omit<Intent, 'type'> {
   type: 'focus-left-intent'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
-  target?: String
+  target?: string
 }
 
 export interface FocusRightIntent extends Omit<Intent, 'type'> {
   type: 'focus-right-intent'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
-  target?: String
+  target?: string
 }
 
 export interface FocusUpIntent extends Omit<Intent, 'type'> {
   type: 'focus-up-intent'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
-  target?: String
+  target?: string
 }
 
 /**
@@ -169,6 +169,13 @@ export interface OpenIntent extends Omit<Intent, 'type'> {
    * are never persisted; and a POINTER, not a config, so the socket gate leaves open-intent firable.
    */
   with?: DefRef<'projection'>
+}
+
+/** Open the focused pane's actions menu. */
+export interface OpenPaneActionsIntent extends Omit<Intent, 'type'> {
+  type: 'open-pane-actions-intent'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
 }
 
 /**
@@ -264,7 +271,7 @@ export interface SelectTabIntent extends Omit<Intent, 'type'> {
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
   /** Visible tab number 1–8; 9 selects the last tab. */
-  key: String
+  key: string
 }
 
 /**
@@ -291,6 +298,20 @@ export interface SplitDownIntent extends Omit<Intent, 'type'> {
 
 export interface SplitRightIntent extends Omit<Intent, 'type'> {
   type: 'split-right-intent'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
+}
+
+/** Swap the focused pane's content via the holding container's swap picker. Routed + ambient. */
+export interface SwapPaneIntent extends Omit<Intent, 'type'> {
+  type: 'swap-pane-intent'
+  /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
+  '^'?: string
+}
+
+/** Switch the focused pane to another declared viewer for its file. Routed + ambient; the focused file-viewer claims it. */
+export interface SwapViewerIntent extends Omit<Intent, 'type'> {
+  type: 'swap-viewer-intent'
   /** The record's engine-assigned `^:` block id, present once addressed. Advisory, never validated. */
   '^'?: string
 }
@@ -410,6 +431,8 @@ export const OPEN_FILE_DIALOG_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambi
 
 export const OPEN_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
 
+export const OPEN_PANE_ACTIONS_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
+
 export const OPEN_PANE_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
 
 export const PREVIOUS_TAB_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
@@ -437,6 +460,10 @@ export const SHOW_PANE_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } 
 export const SPLIT_DOWN_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
 
 export const SPLIT_RIGHT_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
+
+export const SWAP_PANE_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
+
+export const SWAP_VIEWER_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
 
 export const TOGGLE_COMMAND_PALETTE_INTENT_ROUTING = { kind: 'routed', dispatch: 'ambient' } as const satisfies Omit<IntentRoutingMeta, 'type'>
 

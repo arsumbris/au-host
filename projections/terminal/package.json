@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../dogfood --repo terminal --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts"
+    "gen:types": "node --experimental-transform-types ../../../au-type-codegen/src/cli.ts --entry ../../codegen --repo terminal --module au-host-sdk=@arsumbris/au-host-sdk --out src/generated.ts"
   },
   "dependencies": {
     "@arsumbris/au-host-sdk": "workspace:*",

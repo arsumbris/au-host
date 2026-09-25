@@ -1,0 +1,17 @@
+# Owned by the `intent` package.
+# "Switch the focused pane to another VIEWER of its file." Generic over the declared file-viewers, not a
+# fixed editor/reader pair: the focused file-viewer pane claims it and switches to the other eligible viewer
+# for its file (the set folded from `opens-meta`), reusing the same `runViewerSwitch` the toolbar button
+# drives. Exactly two viewers → toggles directly, no picker; more → the host picker. A non-viewer focused
+# pane declines, so the routed walk reaches the nearest file-viewer. Each viewer registers the handler (like
+# it renders the switch button) so it can run its OWN save-before-switch first. Fired by the keymap; command-
+# only, like close-view — no constructor helper.
+#: Switch the focused pane to another declared viewer for its file. Routed + ambient; the focused file-viewer claims it.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Swap file viewer
+    category: View

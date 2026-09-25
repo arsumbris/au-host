@@ -18,7 +18,7 @@ test('the window root header wraps a bare root, then the resulting container', a
   // Root ⋯ → Wrap → tabs: the bare editor is wrapped in a tabs container; the header persists.
   await rootMenu(page).click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'tabs', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Tabs( [a-z])?$/ }).click()
   await expect(page.locator('[data-container-kind="tabs"]').first()).toBeVisible()
   await expect(page.locator('.cm-content').first()).toBeVisible()
   await expect(page.locator('.window-root-header').first()).toBeVisible()
@@ -27,7 +27,7 @@ test('the window root header wraps a bare root, then the resulting container', a
   // survive, not vanish). Both the tabs and the editor must remain.
   await rootMenu(page).click()
   await page.getByRole('menuitem', { name: 'Wrap in a container' }).click()
-  await page.getByRole('menuitem', { name: 'bento', exact: true }).click()
+  await page.getByRole('menuitem', { name: /^Bento( [a-z])?$/ }).click()
   await expect(page.locator('[data-container-kind="bento"]').first()).toBeVisible()
   await expect(page.locator('[data-container-kind="tabs"]').first()).toBeVisible()
   await expect(page.locator('.cm-content').first()).toBeVisible()

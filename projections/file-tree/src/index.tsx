@@ -4,6 +4,7 @@ import { displayFilePath } from '@arsumbris/au-host-sdk'
 // actions, and opens selected content through the intent channel.
 
 import { createRoot } from 'react-dom/client'
+import { currentPath, followMove, moveRefusal, moveVerdict, nameProblem } from './move-refusal'
 import { stableOpenSurfaces } from './stable-open-surfaces'
 import {
   useCallback,
@@ -19,6 +20,8 @@ import {
   viewersFor,
   descriptorTitle,
   bareTypeName,
+  memberOfPath,
+  type AffectedRef,
   type ContextMenuItem,
   type MountHost,
   type OpenSurface,
@@ -27,6 +30,8 @@ import {
 import {
   readDirEntries,
   readReferencesIn,
+  readContent,
+  readPreviewMutation,
   readDiagnostics,
   subscribeDiagnostics,
   subscribeFiles,
@@ -36,13 +41,13 @@ import {
   type WireDiagnosticSeverity,
   type WireDirEntry,
 } from '@arsumbris/au-host-sdk/engine-reads'
-import { fileSelection, isFileSelection, type Selection } from '@arsumbris/selection'
+import { fileSelection, folderSelection, isFileSelection, isFolderSelection, type Selection } from '@arsumbris/selection'
 import { notificationIntent, openIntent, openPaneIntent, showPaneIntent, highlightIntent, revealPaneIntent, type OpenIntent } from '@arsumbris/intent'
 import { makeHoverContent } from '@arsumbris/preview-content'
 import { useDragStart, CONTENT_SOURCE_KIND, registerDropTarget, isContentDropHit, dragStore } from '@arsumbris/container-kit'
 // The generated React wrappers (set-independent — render the tag, import no set class) + the JSX-type
 // augmentation for the still-intrinsic <au-*> elements (the import runs the augmentation as a side effect).
-import { AuSectionHeader, AuNavGroup, AuTreeRow, AuBadge, AuButton, AuInput, AuScrollArea, type AuTreeRowProps } from '@arsumbris/au-component-catalog/react'
+import { AuSectionHeader, AuNavGroup, AuTreeRow, AuBadge, AuButton, AuInput, AuIcon, AuScrollArea, type AuTreeRowProps } from '@arsumbris/au-component-catalog/react'
 import type { FileTree } from './generated.ts'
 
 // Worst-first severity order (mirrors the diagnostics projection); index 0 = worst.
@@ -146,7 +151,11 @@ const STYLE = `
    eases to its TRUE content height with no magic constant. */
 .au-ft-subtree { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--au-m-base,220ms) var(--au-e-std,cubic-bezier(0.2, 0, 0, 1)); }
 .au-ft-subtree[data-open] { grid-template-rows: 1fr; }
-.au-ft-subtree__inner { display: flex; flex-direction: column; gap: var(--au-space-0-5, 2px); overflow: hidden; min-height: 0; opacity: 0; transition: opacity var(--au-m-fast,160ms) var(--au-e-std,cubic-bezier(0.2, 0, 0, 1)); }
+/* The row gap is declared once as the tree's --au-tree-row-gap, so each row's guide bridges exactly it.
+   The subtree clips for the height animation, but lets its last row's guide bridge through into the gap
+   below it (a plain length: Chromium drops calc / max here). A closed subtree is transparent, so the
+   margin never shows a sliver. */
+.au-ft-subtree__inner { --au-tree-row-gap: var(--au-space-0-5, 2px); display: flex; flex-direction: column; gap: var(--au-tree-row-gap); overflow: clip; overflow-clip-margin: var(--au-tree-row-gap); min-height: 0; opacity: 0; transition: opacity var(--au-m-fast,160ms) var(--au-e-std,cubic-bezier(0.2, 0, 0, 1)); }
 .au-ft-subtree[data-open] .au-ft-subtree__inner { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .au-ft-subtree, .au-ft-subtree__inner { transition: none; } }
 /* The folder a content drag is hovering over (a file will move here). Set imperatively on the au-tree-row
@@ -212,10 +221,14 @@ function Subtree({ open, snap, animateEntry, children }: { open: boolean; snap: 
 /** The <au-tree-row> via its set-independent wrapper. The disclosure chevron's `au-toggle` is wired
  *  through `onAuToggle` (the chevron `stopPropagation`s its own click; native click / dblclick /
  *  contextmenu / focus reach React directly). The forwarded ref anchors the content-drop registration. */
+// The engine's per-repo config dir. Hidden from a parent's dir_entries (dot-prefixed), so the tree
+// surfaces it as a synthetic per-member entry with a gear icon; its children come from browsing into it.
+const CONFIG_DIR_NAME = '.arsumbris'
+
 function TreeRowEl({
   onToggle,
   dropDir,
-  moveFileInto,
+  moveInto,
   children,
   ...props
 }: {
@@ -223,25 +236,23 @@ function TreeRowEl({
   /** When set (a FOLDER row), register this row as a content-DESTINATION: a file dropped here moves into
    *  `dropDir`. Absent (a file row) → not a destination. */
   dropDir?: string
-  moveFileInto?: (filePath: string, dir: string) => void
+  moveInto?: (selection: Selection, dir: string) => void
   children?: ReactNode
 } & Record<string, unknown>): ReactNode {
   const ref = useRef<HTMLElement>(null)
-  // A folder row is a content-drop DESTINATION while mounted: it accepts a FILE content drag and moves
-  // the file into its dir (through the blast-radius preview, owned by `moveFileInto`). The seam is
+  // A folder row is a content-drop DESTINATION while mounted: it accepts a FILE or FOLDER content drag
+  // and moves it into its dir (through the blast-radius preview, owned by `moveInto`). A move that cannot
+  // happen (into its own folder, or a folder into itself) is not offered at all. The seam is
   // framework-general — a projection registers exactly as any surface would.
   useEffect(() => {
     const el = ref.current
-    if (!el || dropDir === undefined || !moveFileInto) return
+    if (!el || dropDir === undefined || !moveInto) return
     return registerDropTarget(el, {
       previewLabel: 'Move',
-      accepts: (_src, content) => isFileSelection(content as Selection),
-      onDrop: (_src, content) => {
-        const sel = content as Selection
-        if (isFileSelection(sel)) moveFileInto(sel.path, dropDir)
-      },
+      consider: (_src, content) => moveVerdict(content as Selection, dropDir),
+      onDrop: (_src, content) => moveInto(content as Selection, dropDir),
     })
-  }, [dropDir, moveFileInto])
+  }, [dropDir, moveInto])
   const handleToggle = onToggle
     ? (e: CustomEvent): void => {
         e.stopPropagation()
@@ -382,9 +393,17 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
   const childEntries = useCallback(
     (dir: string): WireDirEntry[] => {
       if (filtering) return filterModel?.children.get(dir) ?? []
-      return (kids.get(dir) ?? []).slice().sort(dirsFirst)
+      const entries = (kids.get(dir) ?? []).slice().sort(dirsFirst)
+      // Surface the hidden `.arsumbris/` config dir as a synthetic first entry at each member root. The
+      // engine hides dot-dirs from a parent's dir_entries, but browsing INTO `.arsumbris` lists its
+      // (non-dot) config files (repo.yaml / workspace.yaml), so the normal expand / load / open path works
+      // unchanged — only the row’s icon (a gear) and its self-menu differ (see renderLevel, CONFIG_DIR_NAME).
+      if (members.some((m) => m.root === dir)) {
+        return [{ path: `${dir}/${CONFIG_DIR_NAME}`, name: CONFIG_DIR_NAME, kind: 'directory' }, ...entries]
+      }
+      return entries
     },
-    [filtering, filterModel, kids],
+    [filtering, filterModel, kids, members],
   )
   const isDirOpen = useCallback(
     (dir: string): boolean => {
@@ -662,7 +681,7 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
   const lastSeg = (p: string): string => p.slice(p.lastIndexOf('/') + 1)
   const plural = (n: number): string => `${n} reference${n === 1 ? '' : 's'}`
   const relativePath = (p: string): string => {
-    const m = members.find((mm) => p === mm.root || p.startsWith(mm.root + '/'))
+    const m = memberOfPath(members, p)
     return m ? p.slice(m.root.length + 1) || p : p
   }
 
@@ -674,6 +693,9 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
   )
 
   type Referrers = { paths: string[] } | { unavailable: string }
+  // A component-scope peek resolver for the confirm dialogs' cmd-hover (the surface supports it; the
+  // callers just have to pass it). Shared across rename / delete / move.
+  const hoverContent = useMemo(() => makeHoverContent(host.engine), [host.engine])
   const affectedBy = useCallback(
     async (path: string): Promise<Referrers> => {
       const bl = await readReferencesIn(host.engine, path)
@@ -687,19 +709,67 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
   )
   const radius = (r: Referrers): { affected?: string[]; unavailable?: string } => ('paths' in r ? { affected: r.paths } : { unavailable: r.unavailable })
 
+  // The move dialog's RICH blast radius: one row per referrer, each carrying how it addresses this file
+  // and the referencing line in context. Whether a referrer changes is the engine's answer: the rename
+  // preview lists exactly the referrers whose bytes the move rewrites (a path-bearing link, "by path"); a
+  // bare `[[name]]` re-emits unchanged and is absent ("by name"). One content read per referrer (the dialog
+  // is a deliberate action, so the fan-out is fine). A preview the engine rejects is the move's own refusal.
+  const detailedReferrers = useCallback(
+    async (path: string, to: string): Promise<{ refs: AffectedRef[]; untracked: string[] } | { unavailable: string } | { refused: string }> => {
+      const [bl, preview] = await Promise.all([readReferencesIn(host.engine, path), readPreviewMutation(host.engine, { op: 'rename', path, to })])
+      if (!('ready' in bl)) return { unavailable: `the reference read failed (${bl.error})` }
+      if (!bl.ready) return { unavailable: 'the engine is still loading the workspace' }
+      if (!('ready' in preview)) return { unavailable: `the move preview failed (${preview.error})` }
+      if (!preview.ready || !preview.result) return { unavailable: 'the engine is still loading the workspace' }
+      if ('reject' in preview.result) return { refused: preview.result.reject.message }
+      const rewritten = new Set((preview.result.rewrites ?? []).map((r) => r.path))
+      const firstBySource = new Map<string, WireReferenceIn>()
+      for (const b of bl.result as WireReferenceIn[]) if (b.source && b.source !== path && !firstBySource.has(b.source)) firstBySource.set(b.source, b)
+      const CONTEXT = 4
+      const refs = await Promise.all(
+        [...firstBySource].map(async ([source, edge]): Promise<AffectedRef> => {
+          const ref: AffectedRef = { path: source, form: rewritten.has(source) ? 'path' : 'name' }
+          const c = await readContent(host.engine, source)
+          if ('ready' in c && c.ready && c.result) {
+            const lines = c.result.text.split('\n')
+            const ln = edge.line_col?.start.line
+            if (ln && ln >= 1 && ln <= lines.length) {
+              const from = Math.max(0, ln - 1 - CONTEXT)
+              ref.line = ln
+              ref.contextStart = from + 1
+              ref.context = lines.slice(from, Math.min(lines.length, ln + CONTEXT))
+            }
+          }
+          return ref
+        }),
+      )
+      return { refs, untracked: preview.result.untracked_files }
+    },
+    [host],
+  )
+
   // Create a file/folder via an inline name-input. The engine has no mkdir, so a folder is a.gitkeep
   // write inside it (write creates parent dirs).
   const beginCreate = useCallback(
     (dir: string, kind: 'file' | 'directory') => {
-      setExpanded((s) => {
-        const n = new Set(s)
-        n.add(dir)
-        return n
-      })
+      // Reveal the target so the inline name-input is visible: clear any filter, open the owning
+      // cluster + member, and expand every ancestor down to `dir`. Creation may target a collapsed
+      // member root (the workspace-header menu) or a deep folder reached from a command.
+      setFilter('')
+      const member = memberOfPath(members, dir)
+      const cluster = member && clusters.find((c) => c.members.includes(member))
+      if (member && cluster) {
+        setMemberOpen((prev) => new Set([...prev, member.root]))
+        setRoleOpen((prev) => new Set([...prev, cluster.key]))
+        const ancestors: string[] = []
+        for (let p = dir; p.startsWith(member.root); p = parentOf(p)) { ancestors.push(p); if (p === member.root) break }
+        setExpanded((prev) => new Set([...prev, ...ancestors]))
+      }
+      setExpanded((prev) => new Set(prev).add(dir))
       if (!kids.has(dir)) void ensure(dir)
       setCreating({ dir, kind })
     },
-    [kids, ensure],
+    [members, clusters, kids, ensure],
   )
   const commitCreate = useCallback(
     async (rawName: string) => {
@@ -735,17 +805,20 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
         title: 'Rename file',
         message: 'paths' in aff ? `Renaming “${entry.name}” will update ${plural(aff.paths.length)}.` : `Renaming “${entry.name}” will update any references to it.`,
         ...radius(aff),
+        previewContent: (p) => hoverContent.previewPath(p),
         input: { value: entry.name },
         confirmLabel: 'Rename',
       })
       if (!out.confirmed) return
-      const name = out.value?.trim()
-      if (!name || name === entry.name || name.includes('/')) return
+      const name = out.value?.trim() ?? ''
+      if (name === entry.name) return
+      const problem = nameProblem(name)
+      if (problem) return reportFailure(`Cannot rename “${entry.name}”: ${problem}.`)
       const res = await host.files.rename(entry.path, `${parent}/${name}`)
       if (!res.ok) reportFailure(res.error ?? `could not rename ${entry.name}`)
       else void ensure(parent)
     },
-    [host, affectedBy, ensure, reportFailure],
+    [host, affectedBy, ensure, reportFailure, hoverContent],
   )
 
   // MOVE a file into a folder (the content-destination drop outcome). A move IS an engine rename to a new
@@ -755,24 +828,33 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
     async (filePath: string, dir: string) => {
       const base = filePath.split('/').pop() ?? filePath
       const dest = `${dir}/${base}`
-      if (dest === filePath) return // dropped into its own folder → nothing to do
-      const owner = (path: string) => members.filter(m => path === m.root || path.startsWith(m.root + '/')).sort((a, b) => b.root.length - a.root.length)[0]
-      const fromMember = owner(filePath)
-      const toMember = owner(dir)
-      if (!fromMember || !toMember || fromMember.root !== toMember.root) {
+      if (moveRefusal(fileSelection(filePath), dir) === 'already-there') return
+      const fromMember = memberOfPath(members, filePath)
+      const toMember = memberOfPath(members, dir)
+      if (!toMember) return reportFailure(`“${dir}” is not inside this workspace. Nothing was moved.`)
+      if (!fromMember || fromMember.root !== toMember.root) {
         reportFailure('Moving files between repositories is not supported by the engine yet. Nothing was moved.')
         return
       }
       const confirmSurface = host.confirm
       if (!confirmSurface) return
-      const aff = await affectedBy(filePath)
+      const aff = await detailedReferrers(filePath, dest)
+      if ('refused' in aff) {
+        reportFailure(`Cannot move “${base}”: ${aff.refused}`)
+        return
+      }
+      const rewrites = 'refs' in aff ? aff.refs.filter((r) => r.form === 'path').length : 0
+      const untracked = 'refs' in aff && aff.untracked.length > 0 ? ` ${aff.untracked.length} ${aff.untracked.length === 1 ? 'file changes' : 'files change'} outside version control.` : ''
       const out = await confirmSurface.confirm({
         title: 'Move file',
         message:
-          'paths' in aff
-            ? `Move “${base}” to “${dir}”? This updates references in ${aff.paths.length} file(s), potentially in other repositories.`
-            : `Move “${base}” to “${dir}”? The reference impact could not be measured.`,
-        ...radius(aff),
+          'refs' in aff
+            ? aff.refs.length > 0
+              ? `Move “${base}” into “${dir}”? ${aff.refs.length} file(s) reference it, ${rewrites} will be rewritten:${untracked}`
+              : `Move “${base}” into “${dir}”?${untracked}`
+            : `Move “${base}” into “${dir}”? The reference impact could not be measured.`,
+        ...('refs' in aff ? { affectedDetail: aff.refs } : { unavailable: aff.unavailable }),
+        previewContent: (p) => hoverContent.previewPath(p),
         confirmLabel: 'Move',
       })
       if (!out.confirmed) return
@@ -783,13 +865,198 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
         void ensure(parentOf(filePath))
       }
     },
-    [host, affectedBy, ensure, reportFailure, members],
+    [host, detailedReferrers, ensure, reportFailure, members, hoverContent],
+  )
+
+  // FOLDER operations: each is ONE engine saga (`move_dir` / `delete_dir`), previewed first. The preview
+  // lists the referrers a move REWRITES (path-addressed links into the folder; a bare `[[name]]` keeps
+  // working and is not listed) or the links a delete leaves BROKEN, and refuses exactly where the saga
+  // would, so a refused preview is reported instead of offering a doomed confirm.
+  const referrerRows = useCallback(
+    async (refs: { path: string; needle?: string }[], form?: 'path'): Promise<AffectedRef[]> => {
+      const CONTEXT = 4
+      return Promise.all(
+        refs.map(async ({ path, needle }): Promise<AffectedRef> => {
+          const row: AffectedRef = form ? { path, form } : { path }
+          if (!needle) return row
+          const c = await readContent(host.engine, path)
+          if (!('ready' in c) || !c.ready || !c.result) return row
+          const lines = c.result.text.split('\n')
+          const i = lines.findIndex((line) => line.includes(needle))
+          if (i < 0) return row
+          const from = Math.max(0, i - CONTEXT)
+          return { ...row, line: i + 1, contextStart: from + 1, context: lines.slice(from, Math.min(lines.length, i + 1 + CONTEXT)) }
+        }),
+      )
+    },
+    [host],
+  )
+  const previewFolder = useCallback(
+    async (op: { op: 'move_dir'; path: string; to: string } | { op: 'delete_dir'; path: string }): Promise<{ rows: AffectedRef[]; untracked: number } | { refused: string } | { unavailable: string }> => {
+      const p = await readPreviewMutation(host.engine, op)
+      if (!('ready' in p)) return { unavailable: `the preview failed (${p.error})` }
+      if (!p.ready || !p.result) return { unavailable: 'the engine is still loading the workspace' }
+      if ('reject' in p.result) return { refused: p.result.reject.message }
+      const untracked = p.result.untracked_files.length + (p.result.untracked_dirs?.length ?? 0)
+      const rows =
+        op.op === 'move_dir'
+          ? await referrerRows((p.result.rewrites ?? []).map((r) => ({ path: currentPath(r.path, op.path, op.to), needle: r.links[0]?.from })), 'path')
+          : await referrerRows((p.result.stranded ?? []).map((r) => ({ path: r.path, needle: r.links[0]?.target })))
+      return { rows, untracked }
+    },
+    [host, referrerRows],
+  )
+  // After a folder moved, its open folders stay open at the new place, and their contents load there.
+  const followOpenFolders = useCallback(
+    (from: string, to: string) => {
+      const next = followMove(expanded, from, to)
+      setExpanded(next)
+      for (const p of next) if (p === to || p.startsWith(`${to}/`)) void ensure(p)
+    },
+    [expanded, ensure],
+  )
+  const untrackedNote = (n: number): string => (n > 0 ? ` ${n} ${n === 1 ? 'item changes' : 'items change'} outside version control.` : '')
+
+  const moveFolderInto = useCallback(
+    async (dirPath: string, destDir: string) => {
+      const base = dirPath.split('/').pop() ?? dirPath
+      const dest = `${destDir}/${base}`
+      const refusal = moveRefusal(folderSelection(dirPath), destDir)
+      if (refusal === 'already-there') return
+      if (refusal === 'into-itself') {
+        reportFailure(`Cannot move “${base}” into itself.`)
+        return
+      }
+      const fromMember = memberOfPath(members, dirPath)
+      const toMember = memberOfPath(members, destDir)
+      if (!toMember) return reportFailure(`“${destDir}” is not inside this workspace. Nothing was moved.`)
+      if (!fromMember || fromMember.root !== toMember.root) {
+        reportFailure('Moving folders between repositories is not supported by the engine yet. Nothing was moved.')
+        return
+      }
+      const confirmSurface = host.confirm
+      const moveDir = host.files.moveDir
+      if (!confirmSurface || !moveDir) return
+      const pv = await previewFolder({ op: 'move_dir', path: dirPath, to: dest })
+      if ('refused' in pv) {
+        reportFailure(`Cannot move “${base}”: ${pv.refused}`)
+        return
+      }
+      const out = await confirmSurface.confirm({
+        title: 'Move folder',
+        message:
+          'rows' in pv
+            ? (pv.rows.length > 0
+                ? `Move “${base}” into “${destDir}”? ${pv.rows.length} file(s) link into it by path, and those links will be rewritten:`
+                : `Move “${base}” into “${destDir}”?`) + untrackedNote(pv.untracked)
+            : `Move “${base}” into “${destDir}”? The reference impact could not be measured.`,
+        ...('rows' in pv ? { affectedDetail: pv.rows } : { unavailable: pv.unavailable }),
+        previewContent: (p) => hoverContent.previewPath(p),
+        confirmLabel: 'Move',
+      })
+      if (!out.confirmed) return
+      const res = await moveDir(dirPath, dest)
+      if (!res.ok) reportFailure(res.error ?? `could not move ${base}`)
+      else {
+        followOpenFolders(dirPath, dest)
+        void ensure(destDir)
+        void ensure(parentOf(dirPath))
+      }
+    },
+    [host, previewFolder, ensure, reportFailure, members, hoverContent, followOpenFolders],
+  )
+
+  const renameFolder = useCallback(
+    async (entry: WireDirEntry) => {
+      const confirmSurface = host.confirm
+      const moveDir = host.files.moveDir
+      if (!confirmSurface || !moveDir) return
+      const parent = parentOf(entry.path)
+      // The rewrite set does not depend on the new name (it is every path-addressed link into the folder),
+      // so it is previewed as a move to a free sibling before the name is chosen.
+      const pv = await previewFolder({ op: 'move_dir', path: entry.path, to: `${parent}/${entry.name}.rename-preview-${Date.now()}` })
+      if ('refused' in pv) {
+        reportFailure(`Cannot rename “${entry.name}”: ${pv.refused}`)
+        return
+      }
+      const out = await confirmSurface.confirm({
+        title: 'Rename folder',
+        message:
+          'rows' in pv
+            ? (pv.rows.length > 0
+                ? `Renaming “${entry.name}” rewrites ${pv.rows.length} file(s) that link into it by path:`
+                : `Rename “${entry.name}”.`) + untrackedNote(pv.untracked)
+            : `Rename “${entry.name}”. The reference impact could not be measured.`,
+        ...('rows' in pv ? { affectedDetail: pv.rows } : { unavailable: pv.unavailable }),
+        previewContent: (p) => hoverContent.previewPath(p),
+        input: { value: entry.name },
+        confirmLabel: 'Rename',
+      })
+      if (!out.confirmed) return
+      const name = out.value?.trim() ?? ''
+      if (name === entry.name) return
+      const problem = nameProblem(name)
+      if (problem) return reportFailure(`Cannot rename “${entry.name}”: ${problem}.`)
+      const res = await moveDir(entry.path, `${parent}/${name}`)
+      if (!res.ok) reportFailure(res.error ?? `could not rename ${entry.name}`)
+      else {
+        followOpenFolders(entry.path, `${parent}/${name}`)
+        void ensure(parent)
+      }
+    },
+    [host, previewFolder, ensure, reportFailure, hoverContent, followOpenFolders],
+  )
+
+  const deleteFolder = useCallback(
+    async (entry: WireDirEntry) => {
+      const deleteDir = host.files.deleteDir
+      if (!deleteDir) return
+      const parent = parentOf(entry.path)
+      if (confirmBeforeDelete()) {
+        const confirmSurface = host.confirm
+        if (!confirmSurface) return
+        const pv = await previewFolder({ op: 'delete_dir', path: entry.path })
+        if ('refused' in pv) {
+          reportFailure(`Cannot delete “${entry.name}”: ${pv.refused}`)
+          return
+        }
+        const out = await confirmSurface.confirm({
+          title: 'Delete folder',
+          message:
+            'rows' in pv
+              ? (pv.rows.length > 0
+                  ? `Deleting “${entry.name}” and everything in it will BREAK the links in ${pv.rows.length} file(s):`
+                  : `Delete “${entry.name}” and everything in it? This cannot be undone.`) + untrackedNote(pv.untracked)
+              : `Delete “${entry.name}” and everything in it? This cannot be undone, and may BREAK links into it.`,
+          danger: true,
+          ...('rows' in pv ? { affectedDetail: pv.rows } : { unavailable: pv.unavailable }),
+          previewContent: (p) => hoverContent.previewPath(p),
+          confirmLabel: 'Delete',
+        })
+        if (!out.confirmed) return
+      }
+      const res = await deleteDir(entry.path)
+      if (!res.ok) reportFailure(res.error ?? `could not delete ${entry.name}`)
+      else void ensure(parent)
+    },
+    [host, previewFolder, ensure, reportFailure, hoverContent],
+  )
+
+  // The one drop entry point for a folder destination: a dragged file or folder, each through its preview.
+  const moveInto = useCallback(
+    (selection: Selection, dir: string) => {
+      if (isFileSelection(selection)) void moveFileInto(selection.path, dir)
+      else if (isFolderSelection(selection)) void moveFolderInto(selection.path, dir)
+    },
+    [moveFileInto, moveFolderInto],
   )
 
   const chooseMove = useCallback(async (entry: WireDirEntry) => {
     const dir = await host.workspace.pickFolder?.()
-    if (dir) await moveFileInto(entry.path, dir)
-  }, [host, moveFileInto])
+    if (!dir) return
+    if (entry.kind === 'directory') await moveFolderInto(entry.path, dir)
+    else await moveFileInto(entry.path, dir)
+  }, [host, moveFileInto, moveFolderInto])
 
   // Claim file drops inside the tree before the enclosing pane can open them.
   useEffect(() => {
@@ -797,8 +1064,8 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
     if (!tree) return
     return registerDropTarget(tree, {
       previewLabel: 'Choose a folder',
-      accepts: (_source, content) => isFileSelection(content as Selection),
-      onDrop: () => reportFailure('Drop onto a folder or workspace member to move the file.'),
+      consider: (_source, content) => (isFileSelection(content as Selection) || isFolderSelection(content as Selection) ? 'accept' : 'pass'),
+      onDrop: () => reportFailure('Drop onto a folder or workspace member to move it.'),
     })
   }, [reportFailure, members.length])
 
@@ -905,6 +1172,7 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
               : `Delete “${entry.name}”? This cannot be undone, and may BREAK references to it.`,
           danger: true,
           ...radius(aff),
+          previewContent: (p) => hoverContent.previewPath(p),
           confirmLabel: 'Delete',
         })
         if (!out.confirmed) return
@@ -913,7 +1181,7 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
       if (!res.ok) reportFailure(res.error ?? `could not delete ${entry.name}`)
       else void ensure(parent)
     },
-    [host, affectedBy, ensure, reportFailure],
+    [host, affectedBy, ensure, reportFailure, hoverContent],
   )
 
   const entriesByPath = useMemo(() => {
@@ -978,6 +1246,10 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
       items.push({ id: 'file.new', label: 'New file…', enabled: true, run: () => beginCreate(dir, 'file') })
       if (isDir) items.push({ id: 'folder.new', label: 'New folder…', enabled: true, run: () => beginCreate(dir, 'directory') })
       if (!isDir) items.push({ id: 'file.rename', label: 'Rename…', enabled: !!host.confirm, reason: host.confirm ? undefined : 'Renaming needs the host confirm surface, which is unavailable.', run: () => void renameEntry(entry) })
+      const folderOps = !!host.confirm && !!host.files.moveDir
+      const folderOpsReason = folderOps ? undefined : 'Folder operations need the host confirm surface and folder moves, which are unavailable.'
+      if (isDir) items.push({ id: 'folder.rename', label: 'Rename…', enabled: folderOps, reason: folderOpsReason, run: () => void renameFolder(entry) })
+      if (isDir) items.push({ id: 'folder.move', label: 'Move…', enabled: folderOps && !!host.workspace.pickFolder, reason: folderOps && host.workspace.pickFolder ? undefined : 'Moving needs a folder picker and reference-impact confirmation.', run: () => void chooseMove(entry) })
       if (!isDir) items.push({ id: 'file.move', label: 'Move…', enabled: !!host.confirm && !!host.workspace.pickFolder, reason: host.confirm && host.workspace.pickFolder ? undefined : 'Moving needs a folder picker and reference-impact confirmation.', run: () => void chooseMove(entry) })
       items.push({ id: 'file.copyPath', label: 'Copy full path', enabled: true, run: () => void navigator.clipboard.writeText(entry.path) })
       items.push({ id: 'file.copyRelPath', label: 'Copy relative path', enabled: true, run: () => void navigator.clipboard.writeText(relativePath(entry.path)) })
@@ -1003,11 +1275,21 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
           destructive: true,
           run: () => void deleteEntry(entry),
         })
+      } else {
+        items.push({ separator: true })
+        items.push({
+          id: 'folder.delete',
+          label: 'Delete…',
+          enabled: !!host.files.deleteDir && (!confirmBeforeDelete() || !!host.confirm),
+          reason: host.files.deleteDir && (!confirmBeforeDelete() || host.confirm) ? undefined : 'Deleting a folder needs the host confirm surface and folder deletes, which are unavailable.',
+          destructive: true,
+          run: () => void deleteFolder(entry),
+        })
       }
       return items
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [host, beginCreate, renameEntry, chooseMove, deleteEntry, members],
+    [host, beginCreate, renameEntry, chooseMove, deleteEntry, renameFolder, deleteFolder, members],
   )
 
   // ── visible order (coordinate space) ──
@@ -1037,26 +1319,33 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
 
   const activePath = useMemo(() => (focusedPath && visibleOrder.includes(focusedPath) ? focusedPath : visibleOrder[0]), [focusedPath, visibleOrder])
 
+  // Begin creation at a WORKSPACE ROOT — the header/background menus, which name no directory. One
+  // member resolves directly; several go through the chooser (`beginCreate` reveals the pick).
+  const beginCreateAtRoot = useCallback(
+    async (kind: 'file' | 'directory') => {
+      const dir = members.length === 1
+        ? members[0].root
+        : (await host.chooser?.choose({ title: kind === 'directory' ? 'New folder in…' : 'New file in…', options: members.map((m) => ({ id: m.root, label: m.name })) })) ?? undefined
+      if (!dir) return
+      beginCreate(dir, kind)
+    },
+    [members, host, beginCreate],
+  )
+  // The New-file/New-folder pair for a location that names no directory (the background menu).
+  const rootCreateActions: ContextMenuItem[] = [
+    { id: 'root.file.new', label: 'New file…', enabled: true, run: () => void beginCreateAtRoot('file') },
+    { id: 'root.folder.new', label: 'New folder…', enabled: true, run: () => void beginCreateAtRoot('directory') },
+  ]
+
   // Keyboard creation uses the same named-file form as the context menu.
   useEffect(()=>host.intent.handle('create-file-intent', {
     claim:()=>true,
     commit:()=>{void (async()=>{
-      let dir=activePath ? (isDirPath(activePath)?activePath:parentOf(activePath)) : undefined
-      if(!dir) dir=await host.chooser?.choose({title:'Create file in…',options:members.map(member=>({id:member.root,label:member.name}))}) ?? undefined
-      if(!dir)return
-      setFilter('')
-      for(const cluster of clusters) for(const member of cluster.members) {
-        if(dir===member.root || dir.startsWith(member.root+'/')) {
-          setMemberOpen(previous=>new Set([...previous,member.root]))
-          setRoleOpen(previous=>new Set([...previous,cluster.key]))
-          const ancestors:string[]=[]
-          for(let path=dir;path.startsWith(member.root);path=parentOf(path)){ancestors.push(path);if(path===member.root)break}
-          setExpanded(previous=>new Set([...previous,...ancestors]))
-        }
-      }
-      beginCreate(dir,'file')
+      const dir=activePath ? (isDirPath(activePath)?activePath:parentOf(activePath)) : undefined
+      if(dir) beginCreate(dir,'file')
+      else void beginCreateAtRoot('file')
     })()},
-  }),[host,activePath,isDirPath,members,clusters,beginCreate])
+  }),[host,activePath,isDirPath,beginCreate,beginCreateAtRoot])
 
   // ── selection gestures ──
   const selectSingle = useCallback((path: string) => {
@@ -1096,7 +1385,11 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
     (ev: KeyboardEvent<HTMLElement>) => {
       if (ev.defaultPrevented || ev.metaKey || ev.ctrlKey || ev.altKey) return
       const target = ev.target as HTMLElement
-      if (target.closest('input, textarea')) return
+      // Don't hijack keys while the user is typing in a field. A shadow-DOM'd `<au-input>` (the create
+      // row + the filter) retargets its events to the host element, which matches neither `input` nor
+      // `textarea` — without naming the tag, Space would bubble here and hit `case ' '`, never reaching
+      // the field. Extend this selector when the tree hosts another editable au-* element.
+      if (target.closest('input, textarea, au-input')) return
       const order = visibleOrder
       const active = activePath
       if (!active || order.length === 0) return
@@ -1151,7 +1444,7 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
   // ── reveal-active-file ──
   const revealPath = useCallback(
     (path: string) => {
-      const member = members.find((m) => path === m.root || path.startsWith(m.root + '/'))
+      const member = memberOfPath(members, path)
       if (!member) return
       const roleKey = member.role === 'entry' || member.role === 'edit' ? 'edit' : member.role
       setRoleOpen((s) => (s.has(roleKey) ? s : new Set(s).add(roleKey)))
@@ -1316,6 +1609,9 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
     const out: ReactNode[] = []
     for (const e of entries) {
       const isDir = e.kind === 'directory'
+      // The synthetic `.arsumbris` config node: a gear instead of a folder icon, and no drop-target /
+      // create-menu (it is engine config, not a content folder). Its children open like any file.
+      const isConfig = isDir && e.name === CONFIG_DIR_NAME
       const isOpen = isDir && isDirOpen(e.path)
       const children = isOpen ? renderLevel(e.path, level + 1) : []
       const kidCount = kids.get(e.path)?.length ?? 0
@@ -1330,21 +1626,22 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
             data-path={e.path}
             data-kind={e.kind}
             tabIndex={e.path === activePath ? 0 : -1}
-            dropDir={isDir ? e.path : dir}
-            moveFileInto={moveFileInto}
+            dropDir={isConfig ? undefined : isDir ? e.path : dir}
+            moveInto={moveInto}
             onToggle={isDir ? () => { selectSingle(e.path); toggle(e.path) } : undefined}
             onFocus={() => setFocusedPath(e.path)}
-            // Drag files as content sources. Folders are not openable pane content.
-  // A 5px threshold keeps ordinary selection clicks from starting a drag.
+            // Drag files and folders as content sources. A folder rides a `folder-selection`, which only a
+            // folder destination accepts: it is not openable pane content.
+            // A 5px threshold keeps ordinary selection clicks from starting a drag.
             onPointerDown={(ev: React.PointerEvent) => {
               draggedRef.current = false
-              if (isDir || ev.button !== 0) return
+              if (ev.button !== 0 || isConfig) return
               startDrag(ev, {
                 containerKind: CONTENT_SOURCE_KIND,
                 localId: e.path,
                 role: 'pane',
                 label: e.name,
-                content: fileSelection(e.path),
+                content: isDir ? folderSelection(e.path) : fileSelection(e.path),
                 onDragStart: () => {
                   draggedRef.current = true
                 },
@@ -1377,10 +1674,12 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
             onContextMenu={(ev: React.MouseEvent) => {
               ev.preventDefault()
               ev.stopPropagation()
+              if (isConfig) return // config node offers no create/rename/delete menu
               if (!selected.has(e.path)) selectSingle(e.path)
               host.contextMenu?.open({ x: ev.clientX, y: ev.clientY }, actionsFor(e))
             }}
           >
+            {isConfig ? <AuIcon slot="icon" name="gear" size="xs" /> : null}
             {e.name}
             {badgeFor(e.path, isDir)}
           </TreeRowEl>
@@ -1451,7 +1750,7 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
       {openRows.length > 0 && (
         <div className="au-ft-open-editors">
           <AuSectionHeader collapsible chevronEnd open={openEditorsOpen} onAuToggle={() => setOpenEditorsOpen((o) => !o)}>
-            Open editors
+            Open panes
           </AuSectionHeader>
           {openEditorsOpen &&
             openRows.map((r) => (
@@ -1472,7 +1771,23 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
             ))}
         </div>
       )}
-      <AuScrollArea ref={treeRootRef} axis="y" role="tree" aria-label="File tree" aria-multiselectable="true" onKeyDown={onTreeKeyDown} className="au-ft-scroll">
+      <AuScrollArea
+        ref={treeRootRef}
+        axis="y"
+        role="tree"
+        aria-label="File tree"
+        aria-multiselectable="true"
+        onKeyDown={onTreeKeyDown}
+        className="au-ft-scroll"
+        // Right-clicking the empty BACKGROUND (below the last item) offers root-level creation. Rows,
+        // member headers, and cluster headers own their own menus, so skip when the click is on one.
+        onContextMenu={(ev: React.MouseEvent) => {
+          const t = ev.target as HTMLElement
+          if (t.closest?.('au-tree-row') || t.closest?.('au-nav-group') || t.closest?.('au-section-header')) return
+          ev.preventDefault()
+          host.contextMenu?.open({ x: ev.clientX, y: ev.clientY }, rootCreateActions)
+        }}
+      >
         <div className="au-ft-groups">
           {visibleClusters.map((c) => {
             // While filtering, force the matched cluster + its members open to REVEAL the matches (the
@@ -1486,7 +1801,21 @@ function FileTreeView({ host }: { host: MountHost }): ReactNode {
                   ? c.members.map((m) => {
                       const memberShown = filtering || memberOpen.has(m.root)
                       return (
-                        <MemberGroup key={m.root} dropDir={m.root} moveFileInto={moveFileInto} name={m.name} open={memberShown} onToggle={() => toggleMember(m.root)}>
+                        <MemberGroup
+                          key={m.root}
+                          dropDir={m.root}
+                          moveInto={moveInto}
+                          name={m.name}
+                          open={memberShown}
+                          onToggle={() => toggleMember(m.root)}
+                          // Right-clicking the member (workspace) header acts on the member ROOT — its
+                          // own dir menu (New file / New folder / reveal / terminal / copy path).
+                          onContextMenu={(ev) => {
+                            ev.preventDefault()
+                            ev.stopPropagation()
+                            host.contextMenu?.open({ x: ev.clientX, y: ev.clientY }, actionsFor({ path: m.root, name: m.name, kind: 'directory' }))
+                          }}
+                        >
                           {memberShown ? renderLevel(m.root, 0) : null}
                         </MemberGroup>
                       )
@@ -1516,21 +1845,19 @@ function ClusterHeader({ label, open, onToggle }: { label: string; open: boolean
  *  wrapper ergonomics as ClusterHeader — the property + event are set by AuNavGroup. `sans` is the
  *  NAMED-entity face: a member is a thing with a name, one rung above the mono caps eyebrow that
  *  labels the cluster it sits in, so the two never read as the same rank. */
-function MemberGroup({ name, open, onToggle, children, dropDir, moveFileInto }: { name: string; open: boolean; onToggle: () => void; children: ReactNode; dropDir: string; moveFileInto: (file: string, dir: string) => void }): ReactNode {
+function MemberGroup({ name, open, onToggle, children, dropDir, moveInto, onContextMenu }: { name: string; open: boolean; onToggle: () => void; children: ReactNode; dropDir: string; moveInto: (selection: Selection, dir: string) => void; onContextMenu?: (e: React.MouseEvent) => void }): ReactNode {
   const ref = useRef<HTMLElement>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
     return registerDropTarget(el, {
       previewLabel: 'Move',
-      accepts: (_source, content) => isFileSelection(content as Selection),
-      onDrop: (_source, content) => {
-        if (isFileSelection(content as Selection)) moveFileInto((content as {path: string}).path, dropDir)
-      },
+      consider: (_source, content) => moveVerdict(content as Selection, dropDir),
+      onDrop: (_source, content) => moveInto(content as Selection, dropDir),
     })
-  }, [dropDir, moveFileInto])
+  }, [dropDir, moveInto])
   return (
-    <AuNavGroup ref={ref} sans label={name} collapsible chevronEnd open={open} onAuToggle={onToggle}>
+    <AuNavGroup ref={ref} sans label={name} collapsible chevronEnd open={open} onAuToggle={onToggle} onContextMenu={onContextMenu}>
       {children}
     </AuNavGroup>
   )

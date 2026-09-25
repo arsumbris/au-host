@@ -1,0 +1,29 @@
+# The empty-slot-admits sandwich (a centre that admits only an editor) as a column item, so it can be
+# popped out into its own window: a floated window must evaluate the slot's `admits` like the main one.
+type: composition::au-host-sdk
+windows: ["[[^^w]]"]
+slot-defaults:
+  placeholder: "[[placeholder-picker::placeholder-picker]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - ^: w
+    type: window::au-host-sdk
+    primary: true
+    content: "[[^^col]]"
+  - ^: col
+    type: column::column
+    items:
+      - "[[^^sw]]"
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^treeL]]"
+    center:
+      ^: center-slot
+      type: container-slot::au-host-sdk
+      admits:
+        - "[[editor-pane::editor]]"
+  - ^: treeL
+    type: file-tree::file-tree

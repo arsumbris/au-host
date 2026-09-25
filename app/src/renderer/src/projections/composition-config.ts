@@ -14,7 +14,7 @@
 import { stringify } from 'yaml'
 
 import { readFrontmatter, readInstancesOf, readResolveTarget, readTypes, type WireInstanceMatch, type WireReader } from '@arsumbris/au-host-sdk/engine-reads'
-import { crossFileTargets, normalizeToPool } from '@arsumbris/au-host-sdk'
+import { crossFileTargets, normalizeToPool, event, on } from '@arsumbris/au-host-sdk'
 import type { ContainerSchemas, ForeignFile } from '@arsumbris/au-host-sdk'
 
 import type { FilesControl, FileWriteResult } from './host-config'
@@ -53,6 +53,18 @@ export interface DiscoveredComposition {
 /** Deep clone so a snapshot and the working buffer never share mutable substructure. */
 export function cloneComposition(composition: RootComposition): RootComposition {
   return JSON.parse(JSON.stringify(composition)) as RootComposition
+}
+
+/**
+ * The working buffer after a save wrote `next`. `startWorking` is the buffer the save began from. When an edit
+ * replaced it while the save awaited its write, that newer buffer stays, and is dirty unless it happens to
+ * equal the saved form; otherwise the saved form becomes the working buffer, clean. `key` is the structural
+ * comparison key the dirty check uses.
+ */
+export function workingAfterSave<T>(current: T | null, startWorking: T | null, next: T, key: (value: T) => string): { working: T; baseline: string; dirty: boolean } {
+  const baseline = key(next)
+  if (current === null || current === startWorking) return { working: next, baseline, dirty: false }
+  return { working: current, baseline, dirty: key(current) !== baseline }
 }
 
 /** A composition file's display name: its basename, `.yaml`/`.md` stripped. */
@@ -129,6 +141,10 @@ export async function loadCrossFileClosure(
   enqueueTargetsOf(rootRaw, entryPath)
   while (queue.length > 0) {
     const { target, origin } = queue.shift()!
+    // BOOT TRACE (the smoking gun for an intermittent boot hang): a `xfile-read resolve` with no
+    // following `xfile-read frontmatter` / `xfile-done` names the exact nested target whose engine read
+    // never settled. `.catch` below only rescues a REJECTION, never a non-settling promise. `AU_HOST_EVENTS=boot`.
+    if (on('boot')) event('boot', 'xfile-read', { target, phase: 'resolve' })
     const resolved = await readResolveTarget(reader, target, origin).catch(() => null)
     const path = resolved && 'ready' in resolved && resolved.ready && resolved.result ? resolved.result.path : undefined
     if (path === undefined) continue // unresolved → linker warns + empties the position
@@ -137,6 +153,7 @@ export async function loadCrossFileClosure(
       loaded.set(target, cached) // a different spelling of an already-loaded file
       continue
     }
+    if (on('boot')) event('boot', 'xfile-read', { target, phase: 'frontmatter', path })
     const fm = await readFrontmatter(reader, path).catch(() => null)
     const raw = fm && 'ready' in fm && fm.ready && fm.result ? fm.result : undefined
     if (raw === undefined) continue // unreadable → linker warns
@@ -178,9 +195,9 @@ export interface QualifyResult {
  * and it vanishes from discovery. Already-qualified (`::`) and unknown-owner types are left untouched.
  * This is the single serialization chokepoint (the picker/runtime name projections by bare identity).
  *
- * ALSO qualifies def-ref FIELD VALUES: a `[[name]]` wikilink to a KIND def (a bar's `role:
- * [[status-projection]]`) resolves repo-local too, so a bare one warns `reference-target-missing` and
- * the bar won't aggregate. Qualified ONLY when the inner name is a KNOWN TYPE — else the `[[...]]` is a
+ * ALSO qualifies def-ref FIELD VALUES: a `[[name]]` wikilink to a type def (an `intent-routing` rule's
+ * `[[save-intent]]`) resolves repo-local too, so a bare one warns `reference-target-missing` and the
+ * reference dangles. Qualified ONLY when the inner name is a KNOWN TYPE — else the `[[...]]` is a
  * value-level node/file reference (a bento `[[sub-layout]]` ref) that must stay bare.
  *
  * Returns the unresolved (unknown-owner) bare type names alongside the tree, so a caller can WARN

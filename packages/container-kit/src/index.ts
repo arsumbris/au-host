@@ -41,12 +41,12 @@ export { EmptySlot } from './EmptySlot'
 
 // Universal pane SWAP — replace a slot's projection in place, carrying its document. The affordance
 // + document-carry over the picker, so every container wires swap identically.
-export { usePaneSwap, type PaneSwap } from './use-swap'
+export { usePaneSwap, useSwapPaneIntent, type PaneSwap } from './use-swap'
 
 // Shared pane-action buttons: grip, swap and close. Containers compose their own layouts and handlers.
 export { PaneActions, type PaneAction, type PaneActionKind } from './PaneActions'
 // The shared ⋯ overflow menu — every container collapses its occupant-level actions behind one affordance.
-export { paneActionsMenu, floatPaneRow, moveToWindowRow, reloadPaneRows } from './PaneActionsMenu'
+export { paneActionsMenu, floatPaneRow, moveToWindowRow, reloadPaneRows, slotRulesRow } from './PaneActionsMenu'
 
 // The shared pointer-capture boilerplate for a resize sash — capture / follow / release / clean up,
 // with the per-dialect physics supplied by the consumer's `begin`. Used by every container's sash
@@ -79,6 +79,10 @@ export type { ContainerModel } from './use-container-model'
 // pane from an occupant's mount container (DOM-authoritative). See ./pane-header.tsx.
 export { useOfferedHeaderRegion, useHeaderContribution, useEnclosingPaneId } from './pane-header'
 export { paneIdForElement } from '@arsumbris/container-core'
+// The on-screen bounds of a node's slot (a container's several portaled regions unioned into one rect).
+export { slotBounds } from './slot-bounds'
+// The temporary reveal-all-pane-headers signal (`toggle-pane-headers-intent`), honoured by every container.
+export { useRevealPaneHeaders, revealPaneHeadersActive, subscribeRevealPaneHeaders } from './reveal-headers'
 // The poolEdit paved path: a container's pure model transforms → the atomic pool re-point seam.
 // Framework-agnostic, so it LIVES in container-core; re-exported here for the React containers.
 export { makePoolEdit, withCarry } from '@arsumbris/container-core'

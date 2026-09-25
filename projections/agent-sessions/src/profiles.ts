@@ -1,6 +1,7 @@
 import type { MountHost } from '@arsumbris/au-host-sdk'
 import type { AgentProfileData, DiscoveredAdapter, HostApp } from '@arsumbris/au-host-app'
 import { readSubtypes } from '@arsumbris/au-host-sdk/engine-reads'
+import { codeMetaBlock, keyOf, metaBlock } from '@arsumbris/au-host-sdk'
 import { openIntent, showPaneIntent } from '@arsumbris/intent'
 import { fileSelection } from '@arsumbris/selection'
 import { parse, stringify } from 'yaml'
@@ -8,6 +9,10 @@ import { button, select, text, type Input } from './controls'
 import { instanceRef, profileSummary } from './model'
 import { STYLE } from './style'
 import {prepareProfileTerminal, copyTerminalCommand} from './launch-command'
+
+/** The runtime meta an agent tool or hook carries (owned by au-mcp-sdk). */
+const PLUGIN_RUNTIME_META = keyOf({ name: 'plugin-runtime-meta', repo: 'au-mcp-sdk' })
+const TOOL_PRESENTATION_META = keyOf({ name: 'tool-presentation-meta', repo: 'au-mcp-sdk' })
 interface Option {
   ref: string
   name: string
@@ -622,28 +627,20 @@ export function mountProfiles(
       ] as const) {
         if (!('ready' in response) || !response.ready || !response.result)
           throw Error(`The ${axis} catalogue is not ready. Retry when the workspace engine is ready.`)
-        options[axis] = response.result.subtypes
-            .filter((t) =>
-              t.meta_blocks?.some((b) =>
-                b.type_name.startsWith('plugin-runtime-meta'),
-              ),
-            )
-            .map((t) => ({
+        options[axis] = response.result.subtypes.flatMap((t) => {
+            // A plugin is a concrete type with its OWN runtime block: its code is never an ancestor's.
+            const runtime = t.abstract ? undefined : codeMetaBlock(t, PLUGIN_RUNTIME_META)
+            if (runtime?.kind !== 'own') return []
+            const description = metaBlock(t, TOOL_PRESENTATION_META)?.body.find((f) => f.name === 'description')?.value
+            return [{
               ref: `[[${t.name}::${t.repo}]]`,
               owner: t.repo,
               name: t.name.replace(/^mcp\.(tool|hook)\./, ''),
-              description:
-                (t.meta_blocks
-                  ?.flatMap((b) => b.body)
-                  .find((f) => f.name === 'description')?.value as string) ??
-                t.repo,
+              description: typeof description === 'string' ? description : t.repo,
               path: t.source.file,
-              required:
-                axis === 'hooks' &&
-                t.meta_blocks
-                  ?.flatMap((b) => b.body)
-                  .some((f) => f.name === 'critical' && f.value === true),
-            }))
+              required: axis === 'hooks' && runtime.block.body.some((f) => f.name === 'critical' && f.value === true),
+            }]
+          })
       }
       capabilitiesReady = true
       render()

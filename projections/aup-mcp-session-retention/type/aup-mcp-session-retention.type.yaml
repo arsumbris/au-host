@@ -13,4 +13,4 @@ meta:
   # `entry` is relative to the owning package root; the built ESM is./dist/.
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8

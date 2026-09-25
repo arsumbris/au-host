@@ -6,7 +6,7 @@ meta:
     icon: terminal
   - type: projection-runtime-meta::au-host-sdk
     entry: ./dist/index.js
-    contractVersion: 7
+    contractVersion: 8
     export: profiles
   - type: fires-intent-meta::au-host-sdk
     fires:

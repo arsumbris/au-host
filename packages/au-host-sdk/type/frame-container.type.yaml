@@ -1,0 +1,21 @@
+# Owned by au-host-sdk. A KIND (an abstract subtype of container-projection), the third WRAP-TARGET class
+# beside `grouping-container` (Stack) and `spatial-container` (Arrange). A frame is a FILL `center` plus
+# peripheral chrome each subtype adds by width-only extension (sandwich: `left` / `right`; dock: its edges).
+#
+# A wrap into a frame fills `center` with the one wrapped child and leaves every peripheral absent. Its
+# build is SYNTHESIZED by the substrate (`{ type, center: child }`); a frame module MAY export its own
+# `buildGroup`, which then wins. A frame takes exactly one child per wrap (`arity-meta.max: 1`, inherited
+# by every frame), so it is never offered for a two-child wrap. It is not a stack-group: the drop path
+# never adds into a frame.
+
+#: A container with one fill position, `center`, framed by peripheral chrome its subtypes declare.
+abstract: true
+extends: container-projection
+fields:
+  #: The fill. BY REFERENCE (`[[^^id]]`), or a ruled slot. Absent = an empty center, which shows the
+  #: empty-slot placeholder. The frame never sizes or collapses its center; per-position sizing lives on
+  #: the peripherals.
+  center?: <mountable* | container-slot>
+meta:
+  - type: arity-meta
+    max: 1

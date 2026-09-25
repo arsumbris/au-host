@@ -2,6 +2,7 @@
 # <au-code-block> — a framed monospace code surface with a copy affordance.
 #: <au-code-block> — a framed monospace code surface with a copy affordance. `code` renders a plain
 #: <pre>; `language` shows a chip; `copy` (default true) shows the copy button. Slot composed rows instead of `code`.
+#: `lineStart` numbers the `code` lines in a gutter; `markLine` tints one of them.
 extends: ui-component::component-contract
 fields:
   #: The source to render as a plain <pre>. Omit and slot composed rows instead.
@@ -12,7 +13,15 @@ fields:
   copy?: Boolean
   #: Explicit text to copy. Defaults to `code`; required when slotting composed rows.
   copyText?: String
+  #: Number the `code` lines from this line number, in an unselectable gutter.
+  lineStart?: Number
+  #: The line number (in `lineStart` numbering) to emphasize with the accent wash.
+  markLine?: Number
 meta:
   - type: ui-component-meta::component-contract
-    parts: [head, body, pre]
-    preview: '<au-code-block language="ts" code="export const answer = 42;"></au-code-block>'
+    parts: [head, body, pre, line, gutter, mark]
+    preview: |
+      <au-code-block language="ts" code="export const answer = 42;"></au-code-block>
+      <au-code-block line-start="11" mark-line="12" code="See the notes in
+      the project brief for the scope.
+      Nothing else links here."></au-code-block>

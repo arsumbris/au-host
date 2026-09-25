@@ -1,0 +1,18 @@
+# PICKER-SAVE fixture — a bare editor at the window root with the default ⌘S → save-intent binding, and
+# NO `default-strategy` opt-out. ⌘S is claimed BOTH by the focused editor (save the file) and the host
+# commands node (save the composition) → >1 claimer → the CHOOSE picker offers both: the editor as a
+# spatial pane-target, save-composition as a list row. The worked ⌘S example of the design.
+# (`editor-save.yaml` is the same layout WITH `default-strategy: mru`, keeping its silent-save spec.)
+type: composition::au-host-sdk
+keymaps:
+  - "[[e2e-default.keymap]]"
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed]]"
+    ^: w
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

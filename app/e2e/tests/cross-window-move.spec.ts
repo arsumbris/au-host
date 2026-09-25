@@ -3,6 +3,12 @@
 // window B, then from A's root ⋯ "Move to other window" → pick B in A's OWN picker (the picker renders in
 // the invoking window). A empties and closes; B holds both (a group), main is untouched.
 import { test, expect, floatedWindow } from '../fixtures/app'
+import type { Page } from '@playwright/test'
+
+// The editor's own pane menu. A float leaves a placeholder in the slot it vacates, which carries a
+// Pane actions menu of its own, so "the first one" is not the editor's.
+const editorPaneActions = (page: Page) =>
+  page.locator('au-pane-frame').filter({ has: page.locator('.cm-content') }).last().getByRole('button', { name: 'Pane actions' })
 
 test.use({ composition: 'float-dock' }) // sandwich → left: file-tree, center: editor (two floatable leaves)
 
@@ -16,8 +22,8 @@ test('move a subtree between two popped-out windows, main untouched', async ({ p
   await winA.getByRole('button', { name: 'Root actions' }).waitFor({ timeout: 30_000 })
   await winA.locator('au-tree-row').first().waitFor({ timeout: 15_000 })
 
-  // Float the (now sole) region left in the main sandwich — the editor — into window B.
-  await page.getByRole('button', { name: 'Pane actions' }).first().click()
+  // Float the editor, still in the main sandwich, into window B.
+  await editorPaneActions(page).click()
   const [winB] = await Promise.all([
     floatedWindow(electronApp),
     page.getByRole('menuitem', { name: 'Open in a new window' }).click(),
@@ -34,7 +40,7 @@ test('move a subtree between two popped-out windows, main untouched', async ({ p
   await winA.getByRole('menuitem').filter({ hasNotText: 'Main window' }).first().click()
   // TWIN-PICK: the move into an OCCUPIED window (B) then asks WHICH container to wrap into —
   // and that chooser ALSO renders in the INVOKING window A (not the authority/main). Pick a container there.
-  await winA.getByRole('menuitem', { name: 'column' }).click()
+  await winA.getByRole('menuitem', { name: 'Column' }).click()
 
   // The move applied at the authority (secondary → secondary), main never touched.
   await events.waitFor((e) => e.category === 'move' && e.name === 'applied', { timeout: 15_000 })
@@ -62,7 +68,7 @@ test('move a NESTED pane from the main window into a floated window (the sourceE
   // From the CENTER editor's NESTED ⋯ (still in the main sandwich) → "Move to other window". The sole other
   // window is B, so it auto-picks. The extract runs in the MAIN window (the `sourceEdit` branch), and the
   // editor lands in B alongside the file-tree.
-  await page.getByRole('button', { name: 'Pane actions' }).first().click()
+  await editorPaneActions(page).click()
   await page.getByRole('menuitem', { name: 'Move to other window' }).click()
 
   // The move now ASKS which container to wrap the target's occupant with. This move is
@@ -73,7 +79,7 @@ test('move a NESTED pane from the main window into a floated window (the sourceE
   // B now holds BOTH the file-tree it had and the editor moved in.
   await expect(winB.locator('.cm-content').first()).toContainText('Sample content', { timeout: 15_000 })
   await expect(winB.locator('au-tree-row').first()).toBeVisible()
-  // The main window lost the editor (both sandwich regions are now empty).
+  // The main window lost the editor (both sandwich regions now hold placeholders).
   await expect(page.locator('.cm-content')).toHaveCount(0, { timeout: 10_000 })
 
   const errors = (await events.conditions()).filter((c) => c.severity === 'error')

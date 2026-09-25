@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react'
 import { defineProjection, type Intent, type MountHost, type ProjectionModule } from '@arsumbris/au-host-sdk'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 import {sourceLocations, closestSourceElement} from './source-locations'
 import { splitFrontmatter } from './frontmatter-source'
 import { fileSelection, isFileSelection, linkSelection, openContent, type Selection } from '@arsumbris/selection'
@@ -87,14 +88,20 @@ const WIKILINK_SCHEME = 'wikilink:'
  *  which a wikilink dropped on a pane resolves + opens exactly as a dragged file does. */
 const SELECTION_DRAG_MIME = 'application/x-au-selection+json'
 
-/** Minimal mdast node shape this plugin reads/writes — avoids a hard `@types/mdast` dependency for the
- *  four fields it touches. */
+/** Minimal mdast node shape these plugins read/write — avoids a hard `@types/mdast` dependency for the
+ *  fields they touch: the wikilink pass (`value`/`url`/`title`/`children`) and the bullet-grouping pass
+ *  (`ordered`/`spread` on lists, `position` line spans to spot a blank line between items). */
+interface MdPoint { line: number; column: number; offset?: number }
 interface MdNode {
   type: string
   value?: string
   url?: string
   title?: string | null
   children?: MdNode[]
+  ordered?: boolean
+  spread?: boolean | null
+  start?: number | null
+  position?: { start: MdPoint; end: MdPoint }
 }
 
 /** Split one `text` node on `[[…]]`, emitting `link` nodes (our `wikilink:` scheme) for the matches and
@@ -145,6 +152,69 @@ function transformWikilinks(node: MdNode): void {
 
 function remarkWikilinks() {
   return (tree: MdNode): void => transformWikilinks(tree)
+}
+
+// ── bullet grouping: a blank line between bullets is a NEW list, not a loose one ─────────────────────
+// CommonMark treats a blank line BETWEEN two list items as LOOSENING one list (every item wrapped in a
+// <p>, so the whole run reads as one padded block and the author's grouping is gone). Authors here mean
+// that blank line as a GROUP BREAK: `a,b,c` then a gap then `d,e,f` is two TIGHT lists with one line
+// between them. `remarkSplitBulletGroups` restores that reading — it splits an unordered list wherever a
+// blank line sits between two ITEMS (a position-line gap), emitting one tight sibling list per run.
+// A blank line WITHIN a single item (a multi-paragraph bullet) is not a between-items gap, so that item
+// stays whole and stays loose, its own paragraphs still rendering.
+
+/** Does this list item hold more than one PARAGRAPH — a genuinely multi-block bullet that must keep its
+ *  <p>s? Text plus a nested list is one paragraph, so it stays tight. */
+function itemIsMultiParagraph(item: MdNode): boolean {
+  return (item.children ?? []).filter((c) => c.type === 'paragraph').length > 1
+}
+
+/** Split one unordered list into sibling lists at every blank line between adjacent items. Returns the
+ *  list unchanged when it is ordered, has under two items, or has no such gap. */
+function splitBulletList(list: MdNode): MdNode[] {
+  const items = list.children ?? []
+  if (list.ordered || items.length < 2) return [list]
+  const runs: MdNode[][] = [[items[0]]]
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1]
+    const cur = items[i]
+    const gap = prev.position && cur.position ? cur.position.start.line - prev.position.end.line > 1 : false
+    if (gap) runs.push([cur])
+    else runs[runs.length - 1].push(cur)
+  }
+  if (runs.length < 2) return [list]
+  return runs.map((run) => {
+    // Force each run tight: a single-paragraph item drops its <p>; a genuine multi-paragraph item keeps
+    // it. The list is loose only if it carries such an item.
+    for (const item of run) item.spread = itemIsMultiParagraph(item)
+    const first = run[0].position
+    const last = run[run.length - 1].position
+    return {
+      type: 'list',
+      ordered: false,
+      start: null,
+      spread: run.some((item) => item.spread === true),
+      children: run,
+      position: first && last ? { start: first.start, end: last.end } : undefined,
+    }
+  })
+}
+
+/** Rewrite a node's children, splitting any unordered list at its blank-line group breaks. Recurses
+ *  first, so a nested bullet list inside an item is grouped the same way. */
+function transformBulletGroups(node: MdNode): void {
+  if (!node.children) return
+  const next: MdNode[] = []
+  for (const child of node.children) {
+    transformBulletGroups(child)
+    if (child.type === 'list') next.push(...splitBulletList(child))
+    else next.push(child)
+  }
+  node.children = next
+}
+
+function remarkSplitBulletGroups() {
+  return (tree: MdNode): void => transformBulletGroups(tree)
 }
 
 // ── link interactivity: Mod-hover peek + Mod-click navigate ────────────────────────────────────────
@@ -481,6 +551,13 @@ function ReaderKit({ host }: { host: MountHost }): ReactNode {
   const [state, setState] = useState<LoadState>({ status: 'idle' })
   const loadedPath = useRef<string | null>(null)
   const [reveal, setReveal] = useState<{path: string; from: number} | null>(null)
+  // Switch to another VIEWER of this file by keyboard (the ⌘E command / swap-viewer-intent): the SAME
+  // viewer-switch the toolbar button drives, generic over the declared file-viewers. Claim only when another
+  // file-viewer is available, so the routed-ambient walk reaches the focused viewer.
+  useEffect(() => host.intent?.handle('swap-viewer-intent', {
+    claim: () => switchSets.viewers.length > 0,
+    commit: () => runSwitch('viewers'),
+  }), [host, path, switchSets])
   useEffect(() => host.intent?.handle('ui-intent-highlight', {
     claim: () => true,
     commit: (event: Intent) => {
@@ -691,7 +768,7 @@ function ReaderKit({ host }: { host: MountHost }): ReactNode {
             <CodeBlock code={parsed.invalid.source} language="yaml" />
           </section>}
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkWikilinks]}
+            remarkPlugins={[remarkGfm, remarkBreaks, remarkWikilinks, remarkSplitBulletGroups]}
             rehypePlugins={[sourceLocations(state.content, state.content.length - (parsed?.body.length ?? 0))]}
             urlTransform={wikilinkUrlTransform}
             components={components}

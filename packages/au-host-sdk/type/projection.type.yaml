@@ -29,7 +29,7 @@ fields: {}
 # fact — an unmet obligation is `subtype-missing-required-meta` (advisory warning, never
 # blocking) and is exposed as a read, so it surfaces BEFORE anything mounts and it reaches
 # cross-repo projections this host may never load. Abstract kinds (pane-projection,
-# container-projection, bar-projection, status-projection) are exempt: not instance-claimable.
+# container-projection, bar-projection, bar-item-projection) are exempt: not instance-claimable.
 # Satisfaction is LITERAL — a subtype must declare its own block; an ancestor's surfaced
 # block does not count.
 meta:

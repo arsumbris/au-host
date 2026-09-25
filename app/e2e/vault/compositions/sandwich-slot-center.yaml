@@ -1,0 +1,26 @@
+# SANDWICH-SLOT CENTER fixture — the sandwich `center` field declares `container-slot`, and this wraps the
+# center pane in a `sandwich-slot`, a SUBTYPE of it. The engine validates that; the host must read it as
+# a slot wrapper and mount its child, not leave a blank window.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+viewer-defaults:
+  defaults:
+    - opens: md
+      viewer: "[[editor-pane::editor]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^sw]]"
+    ^: w
+  - ^: sw
+    type: sandwich::sandwich
+    left: "[[^^tree]]"
+    center:
+      type: sandwich-slot::sandwich
+      child: "[[^^ed]]"
+  - ^: tree
+    type: file-tree::file-tree
+  - ^: ed
+    type: editor-pane::editor
+    file: sample.md

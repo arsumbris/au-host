@@ -14,7 +14,7 @@ import type { ActiveKeybind, PendingKeySequence } from '@arsumbris/au-host-sdk'
 // its own second runtime.
 
 import type { ChildHandle, ContainerOp, ContainerOpOutcome, ContainerSchemas, ContainerPlacement, HostCommand, HostResult, MountHost, LoadedModule, Occupant, PaneInstance, PublisherId, SnapshotNode, WindowOptions, ProjectionDescriptor, CompositionPool, PoolRecord, RawKeymap, CanonicalKeystroke } from '@arsumbris/au-host-sdk'
-import { analyzePool, bareTypeName, blockRef, buildActiveKeybinds, detectGhostRefCollapse, ENTRY_SCOPE, formatChord, isDefinedProjection, KeybindDispatcher, linkPool, normalizeToPool, parentMap, parseBlockRef, primaryContentId, qualifyScopedId, reachableFromRoot, reachableRecordIds, recordMountType, reportHostDiagnostic, resolveLogicalParent, resolvePoolToTree, restoreCrossFileRefs, serializePoolToComposition } from '@arsumbris/au-host-sdk'
+import { analyzePool, bareTypeName, blockRef, buildActiveKeybinds, detectGhostRefCollapse, ENTRY_SCOPE, formatChord, isDefinedProjection, KeybindDispatcher, linkPool, normalizeToPool, parentMap, parseBlockRef, primaryContentId, qualifyScopedId, reachableFromRoot, reachableRecordIds, readSlotRules, recordMountType, reportHostDiagnostic, resolveLogicalParent, resolvePoolToTree, restoreCrossFileRefs, serializePoolToComposition, setSlotRules } from '@arsumbris/au-host-sdk'
 import type { ForeignFile, ScopeTable } from '@arsumbris/au-host-sdk'
 import { classifyWireDelivery, removeWire, toAuthoredWires, upsertWire, validateWires } from './intent-wires'
 import type { Wire, WireEndpoint } from './intent-wires'
@@ -24,14 +24,17 @@ import { activatePane, closePane, findPlacementByPane } from '@arsumbris/contain
 import { checkAgentIntent } from './agent-intent-gate'
 import { activeKeymapsFor } from './keymap-registry'
 import { paneIdOfActiveElement } from './pane-focus'
+import { focusPaneWhenReady, visiblePanes } from './pane-navigation'
 import type { ProjectionRegistration } from './loader'
 import type { ChromeContribution, CompositionCommit, CompositionEditControl, CompositionNode, CompositionWire, DaemonControl, DispatchEvent, EngineReadiness, IntentPayload, KeymapsControl, McpControl, OpaqueConfig, WorkspaceMember } from './host-config'
 import { createInProcessMountHost } from './mount-host'
+import { createMountLifetime, type MountLifetime } from './mount-lifetime'
 import { IdAllocator, IdRange, DEFAULT_WATERMARK } from './id-allocator'
 import { IpcSurfaceTransport } from './surface-transports'
 import type { SurfaceTransport } from './surface-protocol'
 import { Correlator, type CommitOutcome } from './surface-protocol'
-import type { SurfaceEvent, WindowSite } from '../../../shared/daemon-api'
+import type { GroupingPolicy, SurfaceEvent, WindowSite } from '../../../shared/daemon-api'
+import { groupingChoiceOf, groupNewPanesOf } from './grouping-discovery'
 import { pickTargetWindow } from './window-picker'
 import { getOpenSurfacesIndex, makeOpenSurfaces, LOCAL_WINDOW } from './open-surfaces'
 // The pure key + reflect-decision logic (no renderer deps, probe-drivable — see probe-leaf-reflect.ts).
@@ -46,7 +49,7 @@ import { getPreviewSurface } from './preview-surface'
 import { createTerminalChannel } from './terminal-channel'
 import { createViewStore, hydrate as hydrateViewState } from './view-store'
 import { IntentTree } from './intent-channel'
-import { setIntentCensusProvider, resolveViewer, viewerPickOptions, descriptorLabel, wrapPane, wrapPaneSolo, setPaneContent, wrapTargets, wrapTargetForKind, wrapTargetOutcome, placementForPane, resolveAddress, findContainerRoot, groupingForNewGroup, isGroupingKind, reparentSafeCenter, projectionLabel } from '@arsumbris/container-core'
+import { setIntentCensusProvider, resolveViewer, viewerPickOptions, descriptorLabel, wrapPane, wrapPaneSolo, wrapBuildFor, wrapOutcomeReason, setPaneContent, wrapTargetsFor, wrapTargetForKind, wrapChoice, placementForPane, resolveAddress, findContainerRoot, groupingForNewGroup, isGroupingKind, reparentSafeCenter, projectionLabel } from '@arsumbris/container-core'
 import { viewersFor, handlersFor, currentCause, resumeCause, event, on, record } from '@arsumbris/au-host-sdk'
 import { isFileSelection } from '@arsumbris/selection'
 import type { IntentCensus, WrapOutcome } from '@arsumbris/container-core'
@@ -80,6 +83,8 @@ interface Node {
   children: Set<PublisherId>
   onUnmount?: () => void
   unmountSelf: (() => void) | null
+  /** The lifetime of the host minted for this node; ended at unmount, closing the overlays it opened. */
+  lifetime?: MountLifetime
   /**
    * The projection TYPE name (a child's id IS its type; the root's is passed at
    *  mountRoot). Used to resolve an `intent-defaults` role to candidate owners by kind-closure.
@@ -128,6 +133,12 @@ function refBareName(ref: unknown): string | undefined {
 function routingOf(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   const r = meta?.['intent-routing']
   return r != null && typeof r === 'object' ? (r as Record<string, unknown>) : undefined
+}
+
+/** The CONSUME strategy a routing record declares (`default-strategy`). `mru` opts back to the silent
+ *  first-claimer; anything else (including absence) is `choose`, the picker default. */
+function parseStrategy(routing: Record<string, unknown> | undefined): 'choose' | 'mru' {
+  return routing?.['default-strategy'] === 'mru' ? 'mru' : 'choose'
 }
 
 /** A public `CompositionWire` (host DTO, `mode?` optional) → the runtime `Wire` (mode defaulted STRICT,
@@ -536,7 +547,7 @@ export class CompositionRuntime {
   // scope's wire/reach ids are QUALIFIED to match the mounted nodes. The scope-aware ambient walk resolves
   // a candidate's / firer's rules from HERE, so a nested composition governs its own subtree. Rebuilt per
   // installRouting; a no-nesting composition holds only ENTRY_SCOPE, so dispatch is unchanged.
-  private rulesByScope = new Map<string, { routingRules: RoutingRule[]; wires: Wire[]; reach: ReachRule[] }>()
+  private rulesByScope = new Map<string, { routingRules: RoutingRule[]; wires: Wire[]; reach: ReachRule[]; strategy: 'choose' | 'mru' }>()
   // Subscribers to the live intent-flow (the switchboard's cable animation). Fed by the delivery
   // observer (constructor), which translates each delivery to pool-ids. See `onDispatch`.
   private readonly dispatchListeners = new Set<(ev: DispatchEvent) => void>()
@@ -614,6 +625,14 @@ export class CompositionRuntime {
     // (firer, intent) to its recipient publishers. Reads `this.wires` LIVE, so a composition switch
     // only re-installs the wire table (installRouting), not the resolver.
     this.intentTree.setWireResolver((from, intentType) => this.resolveWire(from, intentType))
+
+    // THE AMBIENT PICKER (the CONSUME-stage CHOOSE strategy): on >1 genuine ambient claimer the tree defers
+    // the pick here. The runtime owns the candidate→label resolution and the firer's-window chooser, so the
+    // tree stays window/DOM-opaque. The chooser renders list rows and spatial anchors in the current
+    // window; the firer's window is not targeted yet. ON by default (the CHOOSE strategy); a routing
+    // record's `default-strategy: mru` opts out.
+    this.intentTree.setChooser((from, intentType, candidates) => this.chooseAmbient(from, intentType, candidates))
+    this.intentTree.setAmbientStrategy((from) => this.ambientStrategyFor(from))
 
     // The DELIVERY OBSERVER: translate each intent delivery (firer → recipient publishers) to POOL ids
     // and fan it out to `dispatchListeners` — the switchboard's live flow animation (a pulse travels the
@@ -747,6 +766,16 @@ export class CompositionRuntime {
     this.paletteToggle?.()
   }
 
+  /** The main window's FOCUSED pane `^:` — DOM focus if it sits in a pooled pane, else the window-scoped
+   *  retained head. For a host command that acts on "the focused pane" (`open-pane-actions-intent`, which
+   *  opens that pane's actions menu — the reach for a header-hidden pane). Undefined when nothing is focused.
+   *  Mirrors `closeFocusedView`'s main-window resolution. */
+  focusedPaneId(): string | undefined {
+    const dom = paneIdOfActiveElement()
+    if (dom && findPlacementByPane(dom)) return dom
+    return this.activePaneForWindow(undefined) ?? undefined
+  }
+
   /** Close the FOCUSED view (invoked by the `close-view-intent` host command — e.g. ⌘W). Resolves the
    *  most-recently-focused node (a container reports its active child's publisher, so this is the focused
    *  CONTENT, not the container chrome) to its pool `^:`, and requests its removal. The removal flows through
@@ -792,6 +821,38 @@ export class CompositionRuntime {
       resolved: paneId != null,
       outcome: outcome ? (outcome.done ? 'closed' : `refused: ${outcome.reason}`) : 'no-focused-pane',
     })
+  }
+
+  /** Read the CURRENT slot RULES governing a pooled pane (its position in its container), for the
+   *  config-overlay form to seed from. `rules` is every rule field the position carries today (empty for
+   *  a bare, unruled child), `parentId` its container's `^:`, and `found` whether the pane is a child of
+   *  a container this pool holds. A pure read (`readSlotRules`) over the RAW record — the authority owns
+   *  the pool, so the overlay asks it rather than re-deriving from the mounted tree. */
+  slotRuleOf(childId: string): { found: boolean; rules: Record<string, unknown>; slotType?: string; parentId: string | null } {
+    const parentId = this.poolParents.get(childId) ?? null
+    const schemas = this.opts.schemas?.() ?? { containers: new Map(), nodes: new Map() }
+    const parent = parentId && this.pool ? this.pool.records.get(parentId) : undefined
+    if (!parent) return { found: false, rules: {}, parentId }
+    return { ...readSlotRules(parent, childId, schemas), parentId }
+  }
+
+  /** Set the slot RULES on a pooled pane's position, materializing / collapsing the inline
+   *  `container-slot` wrapper in its container's RAW record and committing through the single-writer
+   *  `applyStructural`. `rules` is the COMPLETE desired rule set (the overlay merges the form's edits onto
+   *  `slotRuleOf`, so a carried extra survives); an empty / all-cleared set collapses the position back to a
+   *  bare `[[^^id]]` child. This is the config-overlay WRITE SEAM: the host edits a slot rule on ANY
+   *  container by reading + rewriting its record, no per-container cooperation. Returns true when a commit
+   *  was made. A no-op (false) when the pane is not a pooled child, or the edit changes nothing. */
+  editSlotRule(childId: string, rules: Record<string, unknown>): boolean {
+    if (!this.pool) return false
+    const parentId = this.poolParents.get(childId)
+    if (!parentId) return false
+    const parent = this.pool.records.get(parentId)
+    if (!parent) return false
+    const schemas = this.opts.schemas?.() ?? { containers: new Map(), nodes: new Map() }
+    const next = setSlotRules(parent, childId, rules, schemas)
+    if (next === parent) return false // childId is not a child of this record, or the edit was a no-op
+    return this.applyStructural([{ id: parentId, record: next as OpaqueConfig }])
   }
 
   /** Install the per-window DOM-focus tracker over `root` (the window's kernel root). On every `focusin`,
@@ -1432,6 +1493,55 @@ export class CompositionRuntime {
   }
 
   /**
+   * Close-routing: when the reap removed the pane holding real DOM focus, hand focus to its SIBLING — a
+   * surviving pane inside the SAME parent container (the closed tab's group, the closed split's grid). This is
+   * the user's "close goes to a sibling, not to some other region": the recency head is the most-recently-used
+   * pane ANYWHERE, so it jumps focus to an unrelated region (closing a center tab would focus a right-rail tab)
+   * — wrong. The recency head / any-visible are only fallbacks for when the parent is gone (a single-child
+   * container dissolved on close). Without any of this a close strands DOM focus in chrome, so
+   * `paneIdOfActiveElement` reads nothing and the next focus hotkey dead-ends ("click a pane…").
+   *
+   * Fires ONLY when the pre-reap focused pane is among the reaped `^:`s, so a plain remount (the focused pane
+   * survives) never yanks focus — the no-jump-on-remount guarantee. Main window only: `focusPane` drives this
+   * renderer's DOM; a floated window re-homes through its own mount-agent tracker + the container seam.
+   */
+  private refocusAfterReap(reaped: string[], focusedBefore: string | undefined, parentId: string | undefined): void {
+    if (focusedBefore == null || !reaped.includes(focusedBefore)) return
+    requestAnimationFrame(() => {
+      // Bail only when focus already sits on a SURVIVING pane (a click / the container seam re-homed it). A
+      // `curPane` that is itself being REAPED is the closing pane whose DOM element lingers one frame before
+      // React unmounts it — treating that as "focus is fine" strands focus when it unmounts, so proceed.
+      const curPane = paneIdOfActiveElement()
+      if (curPane != null && !reaped.includes(curPane)) return
+      // Prefer the sibling within the closed pane's parent; else recency head; else any visible pane.
+      const target = this.survivingSiblingWithin(parentId, reaped) ?? this.activePaneForWindow(undefined) ?? visiblePanes()[0]?.id
+      if (target == null) return
+      focusPaneWhenReady(target)
+    })
+  }
+
+  /**
+   * A surviving, visible pane whose pool-ancestry includes the container `parentId` (the closed pane's parent) —
+   * the container's clamped-to child after the close. Walks `poolParents` rather than DOM containment, because
+   * the flat portal mounts panes as siblings (a child's box is NOT a DOM descendant of its container's box), so
+   * a DOM `contains` check would miss them. A tabs group shows only its active tab, so its one visible descendant
+   * IS the survivor the container clamped to. Returns undefined when the parent is gone (a single-child container
+   * dissolved on the close) or has no visible descendant, so the caller falls back to the recency head.
+   */
+  private survivingSiblingWithin(parentId: string | undefined, reaped: string[]): string | undefined {
+    if (parentId == null) return undefined
+    const descendsFromParent = (id: string): boolean => {
+      let cur: string | undefined = id
+      for (let depth = 0; cur != null && depth < 64; depth++) {
+        cur = this.poolParents.get(cur) ?? undefined
+        if (cur === parentId) return true
+      }
+      return false
+    }
+    return visiblePanes().find((p) => !reaped.includes(p.id) && descendsFromParent(p.id))?.id
+  }
+
+  /**
    * Reap the records a commit made unreachable, GUARDED by the close-guard consensus. THE ONE PLACE the
    * guard runs — both commit seams (`applyStructural`, `mergeRecord`) route their reap through here.
    *
@@ -1476,11 +1586,19 @@ export class CompositionRuntime {
   }
 
   private reapOrHold(orphaned: string[], revert: () => void, finish: () => void): boolean {
+    // Capture the pane holding real DOM focus BEFORE the reap, plus its PARENT container: if the reap removes
+    // the focused pane, close-routing hands focus to a SIBLING (a surviving pane inside that same parent), not
+    // the window's recency head — the head is the most-recently-used pane ANYWHERE, so it jumps focus to an
+    // unrelated region (closing a center tab must not focus a right-rail tab). Read now — a held reap awaits a
+    // guard decision, and the pool + DOM are unchanged until then; `poolParents` still holds the closing pane.
+    const focusedBefore = paneIdOfActiveElement()
+    const parentOfFocused = focusedBefore != null ? (this.poolParents.get(focusedBefore) ?? undefined) : undefined
     const publishers = orphaned
       .map((id) => this.nodeIdToPublisher.get(id))
       .filter((p): p is PublisherId => p !== undefined)
     if (!this.closeGuardTree.hasGuardAmong(publishers)) {
       for (const id of orphaned) this.reapOrphan(id)
+      this.refocusAfterReap(orphaned, focusedBefore, parentOfFocused)
       return false
     }
     if (on('placement')) event('placement', 'close-hold', { records: orphaned, guarded: publishers.filter((p) => this.closeGuardTree.hasGuardAmong([p])) })
@@ -1491,8 +1609,10 @@ export class CompositionRuntime {
     void this.withGuardPending(async () => {
       const consent = await this.closeGuardTree.gatherAmong(publishers)
       if (on('placement')) event('placement', consent ? 'close-reap' : 'close-veto', { records: orphaned })
-      if (consent) for (const id of orphaned) this.reapOrphan(id)
-      else revert()
+      if (consent) {
+        for (const id of orphaned) this.reapOrphan(id)
+        this.refocusAfterReap(orphaned, focusedBefore, parentOfFocused)
+      } else revert()
     }).then(() => finish())
     return true
   }
@@ -1826,6 +1946,26 @@ export class CompositionRuntime {
     return out
   }
 
+  /** A copy of `value` with every reference to a placeholder record removed: a field holding one is
+   *  dropped, an array loses the element. A float vacates a slot and the empty slot materializes a
+   *  placeholder there, so this is the origin as the clean-inverse witness compares it. Restoring the
+   *  pre-float record re-points that slot and the placeholder is reaped as an orphan. */
+  private withoutPlaceholderRefs(value: unknown): unknown {
+    const isPlaceholderRef = (v: unknown): boolean => {
+      const id = parseBlockRef(v)
+      if (id === undefined) return false
+      const type = (this.pool?.records.get(id) as { type?: unknown } | undefined)?.type
+      return typeof type === 'string' && (this.opts.kindsOf?.(type) ?? []).some((k) => bareTypeName(k) === 'placeholder-projection')
+    }
+    if (Array.isArray(value)) return value.filter((v) => !isPlaceholderRef(v)).map((v) => this.withoutPlaceholderRefs(v))
+    if (value === null || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(value)) {
+      if (!isPlaceholderRef(v)) out[key] = this.withoutPlaceholderRefs(v)
+    }
+    return out
+  }
+
   /** Compute the record edit(s) that re-home a docking occupant, or null if no home is chosen. A clean
    *  inverse or an inject yields one; a WRAP onto an occupied slot yields several (the group + the slot
    *  re-point), all of which must be applied together — see `placeIntoMainLeaf`. */
@@ -1840,10 +1980,13 @@ export class CompositionRuntime {
     const origin = this.windowOrigins.get(windowId)
     if (origin && occupantId === origin.floatedOccupantId) {
       const current = this.pool.records.get(origin.originId)
-      if (current !== undefined && recordsEqualIgnoringId(current, origin.postExtract)) {
+      if (current !== undefined && recordsEqualIgnoringId(this.withoutPlaceholderRefs(current), this.withoutPlaceholderRefs(origin.postExtract))) {
         if (on('dock')) event('dock', 'clean-inverse', { window: windowId, origin: origin.originId, occupant: occupantId })
         return [{ id: origin.originId, record: origin.preFloat }]
       }
+      if (on('dock')) event('dock', 'clean-inverse-miss', { window: windowId, origin: origin.originId, reason: current === undefined ? 'origin-gone' : 'origin-changed', current, postExtract: origin.postExtract })
+    } else if (on('dock')) {
+      event('dock', 'clean-inverse-miss', { window: windowId, reason: origin ? 'content-replaced' : 'no-origin', occupant: occupantId })
     }
     // FALLBACK: place the occupant into a main-window LEAF via the shared spatial-pick + safe-wrap. ASK the
     // wrap container on an OCCUPIED non-grouping target (a real occupant is preserved, never replaced) — the
@@ -1902,7 +2045,7 @@ export class CompositionRuntime {
         // The wrap-pick suspends, so RE-RESOLVE the target FRESH after it (the re-resolve invariant) —
         // reparentSafeCenter then re-decides (add / wrap / inject) from the post-await occupant + container
         // kind, never a stale capture. The secondary-window twin is `injectOccupantIntoSecondaryRoot`.
-        const r = await pickThenResolve(() => this.pickWrapKind('pane'), resolveTarget)
+        const r = await pickThenResolve(() => this.pickWrapKind('pane', 2), resolveTarget)
         if (r === 'cancel') return null // user dismissed the container pick → abandon the move
         if (r === 'resolve-miss') {
           if (on(traceCat)) event(traceCat, 'abandoned', { window: subject, target: paneId, reason: 'target-changed-during-pick' })
@@ -1928,6 +2071,12 @@ export class CompositionRuntime {
     if (!placed.ok) {
       if (placed.reason === 'no-grouping-declared') {
         reportHostDiagnostic({ code: 'no-grouping-container-declared', severity: 'warning', subject, message: 'the move needs a grouping-container to wrap the pane with the target occupant; none is present, so the move is abandoned' })
+      } else if (placed.reason === 'arity-refused') {
+        if (on(traceCat)) event(traceCat, 'abandoned', { window: subject, target: paneId, reason: 'arity-refused', kind: grouping?.typeName })
+        getNotificationSurface().show(
+          { type: 'ui-notification', kind: 'broadcast', severity: 'warn', message: `Couldn't move the pane — ${wrapOutcomeReason('arity-refused', { kind: this.typeLabel(grouping?.typeName), n: 2 })}.` } as IntentPayload & { severity: 'warn'; message: string },
+          () => {},
+        )
       }
       return null
     }
@@ -1964,6 +2113,29 @@ export class CompositionRuntime {
     if (this.surfaceTransports.has(windowId)) this.reDriveContent(windowId, currentContentId)
   }
 
+  /** FILL the window-content root with a NEW projection instance: STAGE a fresh record for it and re-point
+   *  the holding window's `content` to it, reaping the old occupant — atomically, one `applyStructural`
+   *  batch (the same stage-then-apply the root wrap uses). The minting twin of `repointWindowContent`,
+   *  which re-points to an EXISTING record. This is how the ROOT placeholder's own pick fills the bare
+   *  window root: there is no container record to write the instance into, so the fill is a structural
+   *  content re-point, not an in-place slot swap. */
+  fillWindowContent(currentContentId: string, instance: OpaqueConfig): void {
+    if (!this.pool) return
+    const windowId = this.windowOfContent(currentContentId)
+    if (windowId === undefined) return
+    const win = this.pool.records.get(windowId)
+    if (!win) return
+    const mint = this.stageRecord(instance)
+    this.applyStructural([
+      ...mint.edits,
+      { id: windowId, record: { ...(win as Record<string, unknown>), content: blockRef(mint.rootId) } as OpaqueConfig },
+    ])
+    // A FLOATED window mirrors the pool but never re-mounts its content — re-drive so the picked content
+    // mounts (unmount the old placeholder, mount the new). The MAIN window's portal re-renders from the
+    // re-derived pool, so it correctly skips this, exactly as `repointWindowContent` does.
+    if (this.surfaceTransports.has(windowId)) this.reDriveContent(windowId, currentContentId)
+  }
+
   /** The FLOATED (surface-backed) window whose `content` ref is `contentId`, else undefined. Routes a
    *  chooser-floor wrap of a floated window's ROOT content to the authority: the DOM-keyed `wrapPane` cannot
    *  reach a record mounted on a secondary window, but the authority OWNS the window record. Only floated
@@ -1988,21 +2160,59 @@ export class CompositionRuntime {
     const win = this.pool.records.get(windowId)
     const existing = this.resolveRecord(contentId)
     if (!win || existing === undefined) return 'no-container'
-    const cap = (kind ? wrapTargetForKind(kind) : null) ?? groupingForNewGroup()
-    if (!cap) return 'no-grouping'
     const newChild = { type: viewer, file: path } as OpaqueConfig
     const newChildMint = this.stageRecord(newChild)
-    const group = cap.build([
+    return this.wrapWindowContentInGroup(windowId, win, contentId, [
       { id: contentId, instance: existing as unknown as PaneInstance },
       { id: newChildMint.rootId, instance: newChild as unknown as PaneInstance },
-    ]) as OpaqueConfig
+    ], newChildMint.edits, kind)
+  }
+
+  /** SOLO root wrap of a FLOATED window's content — the authority-side twin of the main window's
+   *  `wrapPaneSolo(rootContentPlacement())`, driven by the surface's `wrap-root` proxy (the surface holds no
+   *  pool, so it cannot do a local `poolEdit` wrap). Wraps the window's CURRENT content in a new single-child
+   *  group and re-points `content` to it. Re-reads the window's content FRESH (the re-resolve invariant — the
+   *  wrap-kind pick suspended in the surface, so the content could have moved). The content keeps its `^:`, so
+   *  its terminal / view-state survive the wrap. */
+  private wrapRemoteWindowContentSolo(windowId: string, kind?: string): WrapOutcome {
+    if (!this.pool) return 'no-container'
+    const win = this.pool.records.get(windowId) as { content?: unknown } | undefined
+    if (!win) return 'no-container'
+    const contentId = parseBlockRef(win.content)
+    if (contentId === undefined) return 'no-container'
+    const existing = this.resolveRecord(contentId)
+    if (existing === undefined) return 'no-container'
+    return this.wrapWindowContentInGroup(windowId, win, contentId, [
+      { id: contentId, instance: existing as unknown as PaneInstance },
+    ], [], kind)
+  }
+
+  /** Wrap a FLOATED window's content in a new grouping container, authority-side. The shared core of the
+   *  solo root wrap and the file-open remote wrap: resolve the grouping cap, mint the group over `children`,
+   *  re-point the window's `content` to it, and re-drive the surface — ATOMICALLY (`applyStructural`). No DOM
+   *  placement is consulted; the authority owns the window + content records. `extraEdits` carries any records
+   *  minted for the children (e.g. the file-open path's new viewer); the solo path has none. */
+  private wrapWindowContentInGroup(
+    windowId: string,
+    win: unknown,
+    oldContentId: string,
+    children: ReadonlyArray<{ id: string; instance: PaneInstance }>,
+    extraEdits: ReadonlyArray<{ id: string; record: OpaqueConfig }>,
+    kind?: string,
+  ): WrapOutcome {
+    const build = wrapBuildFor(kind, children.length)
+    if ('refused' in build) {
+      if (on('placement')) event('placement', 'wrap-build-refused', { windowId, ...build })
+      return build.refused
+    }
+    const group = build.cap.build([...children]) as OpaqueConfig
     const groupMint = this.stageGroup(group)
     this.applyStructural([
-      ...newChildMint.edits,
+      ...extraEdits,
       ...groupMint.edits,
       { id: windowId, record: { ...(win as Record<string, unknown>), content: blockRef(groupMint.rootId) } as OpaqueConfig },
     ])
-    this.reDriveContent(windowId, contentId)
+    this.reDriveContent(windowId, oldContentId)
     return 'wrapped'
   }
 
@@ -2229,7 +2439,7 @@ export class CompositionRuntime {
       // the group is built from the post-await content id, never the pre-await capture, so a concurrent
       // move that re-pointed this window during the pick is not clobbered.
       const r = await pickThenResolve(
-        () => this.pickWrapKind('pane'),
+        () => this.pickWrapKind('pane', 2),
         () => {
           const t = readTarget()
           return t !== null && t.currentContentId !== undefined ? { win: t.win, currentContentId: t.currentContentId } : null
@@ -2283,8 +2493,13 @@ export class CompositionRuntime {
         const rec = rt.pool?.records.get(slotId)
         return rec ? { instance: rec as unknown as PaneInstance, id: slotId } : null
       },
-      setSlotContent: (slotId, _instance, occupantId) => {
+      setSlotContent: (slotId, instance, occupantId) => {
+        // A RE-POINT names an EXISTING occupant (unwrap / dissolve / a moved subtree): point the window's
+        // content at it. A BARE FILL carries a NEW instance and no id (the root placeholder's own pick, or
+        // a swap into the bare root): mint a record for it and re-point. Without the fill branch the root
+        // placeholder's pick hit this seam and silently no-op'd, the empty composition staying empty.
         if (occupantId) rt.repointWindowContent(slotId, occupantId)
+        else rt.fillWindowContent(slotId, instance as unknown as OpaqueConfig)
       },
       moveWithin: () => false,
       extract: () => null,
@@ -2347,6 +2562,7 @@ export class CompositionRuntime {
       // read once at open — see SurfaceInit.
       viewerDefaults: this.readViewerDefaults(),
       slotDefaults: this.readSlotDefaults(),
+      grouping: this.initialGroupingPolicy(),
       // The open-window set, so this surface's "Move to other window" picker has the list immediately
       // (kept fresh by `windows-changed`).
       windows: this.windowSites(),
@@ -2393,6 +2609,8 @@ export class CompositionRuntime {
     const typeName = recordMountType(contentRecord)
     if (typeName === undefined) return // no mount type — nothing to resolve to a projection
     const config = this.resolveRecord(contentId) // the resolved subtree (references inlined)
+    // The authority drives a surface's root content: a gated trace of the decision (AU_HOST_EVENTS=placement).
+    if (on('placement')) event('placement', 'surface-drive-mount', { windowId, contentId, typeName })
     const gen = this.nextGen(contentId)
     transport.sendCommand({ op: 'mount', id: contentId, gen, typeName, config, slot: { kind: 'window-content' } })
     this.syncSurface(windowId) // seed the surface's proxied-pool cache so a container can re-read on an edit
@@ -2730,6 +2948,15 @@ export class CompositionRuntime {
         // locates the window by `currentContentId` (any root), so a SECONDARY window unwraps exactly like main.
         this.repointWindowContent(ev.currentContentId, ev.newContentId)
         return
+      case 'wrap-root': {
+        // A floated window's root-header "Wrap in a container": the surface picked the kind in its own
+        // window (the twin-pick) and proxied up. Wrap THIS window's current content solo — no ask here (it
+        // would render in the wrong window). `surfaceId` is the window record id. Trace the outcome so a
+        // refusal stays observable, mirroring the unwrap sibling (which also does not user-notify).
+        const outcome = this.wrapRemoteWindowContentSolo(surfaceId, ev.wrapKind)
+        if (on('placement')) event('placement', 'wrap-root', { window: surfaceId, kind: ev.wrapKind, outcome })
+        return
+      }
       case 'grant-request':
         // The surface's id-range ran low — hand it another block.
         this.grantBlocksTo(surfaceId, 1)
@@ -3110,6 +3337,8 @@ export class CompositionRuntime {
     // A pool change may touch `pool.meta.keymaps` (a keymap add/remove/reorder), so re-mirror the bound-chord
     // set to floated windows. Coalesced + no-op without surfaces, so this pays nothing in the common case.
     this.scheduleActiveChordsPush()
+    // A pool change may edit the composition's `grouping` aspect, which floated windows honour too.
+    this.pushGroupingPolicy()
     // A structural change can move a pane between windows (a float / dock / re-parent), re-scoping which
     // window a `^:` belongs to — so re-derive every window's active-pane head (the ring).
     this.scheduleWindowActive()
@@ -3211,7 +3440,7 @@ export class CompositionRuntime {
     // the scope's prefix, so they match the mounted nodes' qualified ids. `defaults` are kind-based (role
     // closures), scope-independent, so they need no qualification — only WHICH candidates they apply to
     // (the scope's own) changes, and the scope-aware walk handles that.
-    this.rulesByScope = new Map([[ENTRY_SCOPE, { routingRules: this.routingRules, wires: this.wires, reach: this.reach }]])
+    this.rulesByScope = new Map([[ENTRY_SCOPE, { routingRules: this.routingRules, wires: this.wires, reach: this.reach, strategy: parseStrategy(routing) }]])
     if (this.scopes) {
       for (const [sid, info] of this.scopes.scopes) {
         if (sid === ENTRY_SCOPE) continue
@@ -3220,6 +3449,7 @@ export class CompositionRuntime {
           routingRules: this.parseRoutingRules(r),
           wires: this.parseWires(r).map((w) => ({ ...w, source: qualifyScopedId(sid, w.source), targets: w.targets.map((t) => qualifyScopedId(sid, t)) })),
           reach: this.parseReach(r).map((r) => ({ ...r, node: qualifyScopedId(sid, r.node) })),
+          strategy: parseStrategy(r),
         })
       }
     }
@@ -3321,7 +3551,8 @@ export class CompositionRuntime {
     const label = (t: string): string => descriptorLabel(descriptors?.find((d) => bare(d.type) === t), t)
 
     // Capable handler TYPES for this intent (handles-intent-meta), whether or not any instance is present.
-    const wrappable = new Set(wrapTargets().map(target => bare(target.typeName)))
+    // The add wraps ONE picked pane, so only a target admitting a solo wrap can be added this way.
+    const wrappable = new Set(wrapTargetsFor(1).map(target => bare(target.typeName)))
     const capable = handlersFor(type, descriptors).filter(candidate => wrappable.has(bare(candidate)))
     if (capable.length === 0) { this.showUnhandledWarning(type, from); return } // nothing COULD handle it → the advisory floor.
 
@@ -3355,9 +3586,7 @@ export class CompositionRuntime {
     if (outcome === 'no-container') outcome = wrapPaneSolo(pickedPane, pickedType, this.rootContentPlacement())
     if (on('placement')) event('placement', 'add-handler-wrap', { target: pickedPane, kind: pickedType, intent: type, outcome })
     if (outcome !== 'wrapped') {
-      const why = outcome === 'refused' ? 'the slot is fixed or does not admit a container'
-        : outcome === 'no-grouping' ? `${label(pickedType)} cannot wrap a pane`
-        : 'it could not be wrapped here'
+      const why = wrapOutcomeReason(outcome, { kind: label(pickedType), n: 1 })
       getNotificationSurface().show(
         { type: 'ui-notification', kind: 'broadcast', severity: 'warn', message: `Couldn't add ${label(pickedType)} — ${why}.` } as IntentPayload & { severity: 'warn'; message: string },
         () => {},
@@ -3427,15 +3656,14 @@ export class CompositionRuntime {
       this.showUnhandledWarning('open-intent', from)
       return
     }
-    const layout = wrapTargetOutcome()
-    const chosenLayout = layout && (layout.reason === 'requested' || layout.reason === 'only') ? layout.chosen?.typeName : undefined
+    // Every layout here wraps TWO children (the existing content + the opened file), so the choice is
+    // resolved for n = 2: a frame is never offered.
+    const layout = wrapChoice(2)
     const plan = await chooseOpeningPlan({
       name,
       destinations,
       viewers,
-      layouts: { chosen: chosenLayout, options: [...wrapTargets()]
-        .sort((a, b) => a.family === b.family ? 0 : a.family === 'grouping' ? -1 : 1)
-        .map(t => ({ id: t.typeName, label: descriptorLabel(descriptors?.find(d => bare(d.type) === bare(t.typeName)), t.typeName), section: t.family === 'grouping' ? 'Stack' : 'Arrange' })) },
+      layouts: { chosen: layout.use, options: layout.options },
       panes: this.dockCandidates().map(candidate => {
         const placement = placementForPane(candidate.paneId)
         const position = placement ? resolveAddress(placement, candidate.paneId, 'place') : null
@@ -3483,12 +3711,7 @@ export class CompositionRuntime {
       // Trace the wrap outcome so a placement refusal is observable. Check the category before constructing fields.
       if (on('placement')) event('placement', 'wrap', { target: targetId, kind: kind.kind, remote: remoteWindow !== undefined, outcome })
       if (outcome !== 'wrapped') {
-        const why =
-          outcome === 'refused'
-            ? `the slot is fixed or does not admit a container`
-            : outcome === 'no-grouping'
-              ? `no container type is available to wrap into`
-              : `it could not be wrapped here`
+        const why = wrapOutcomeReason(outcome, { kind: this.typeLabel(kind.kind), n: 2 })
         getNotificationSurface().show(
           { type: 'ui-notification', kind: 'broadcast', severity: 'warn', message: `Couldn't wrap ${name} in place — ${why}. Try "Open in a new window".` } as IntentPayload & { severity: 'warn'; message: string },
           () => {},
@@ -3524,51 +3747,35 @@ export class CompositionRuntime {
     const bare = (t: string): string => t.split('::')[0] ?? t
     const isPlaceholder = existingType != null && (this.opts.kindsOf?.(existingType) ?? []).some((k) => bare(k) === 'placeholder-projection')
     const occupied = existing != null && !isPlaceholder
-    let outcome: string
+    let why: string
     if (occupied) {
-      outcome = wrapPane(paneId, instance as never, kind)
+      const outcome = wrapPane(paneId, instance as never, kind)
       if (on('placement')) event('placement', 'open-into-pane', { target: paneId, mode: 'wrap', kind: kind, outcome })
       if (outcome === 'wrapped') return
+      why = wrapOutcomeReason(outcome, { kind: this.typeLabel(kind), n: 2 })
     } else {
       const ok = setPaneContent(paneId, instance) // fill / replace the empty (placeholder) slot in place
-      outcome = ok ? 'filled' : 'refused'
-      if (on('placement')) event('placement', 'open-into-pane', { target: paneId, mode: 'fill', outcome })
+      if (on('placement')) event('placement', 'open-into-pane', { target: paneId, mode: 'fill', outcome: ok ? 'filled' : 'refused' })
       if (ok) return
+      why = wrapOutcomeReason('refused')
     }
     // A refusal (a fixed / non-admitting slot, or no grouping to wrap with): surface it, never a silent drop.
     getNotificationSurface().show(
-      { type: 'ui-notification', kind: 'broadcast', severity: 'warn', message: `Couldn't open ${name} into that pane — ${outcome}. Try "Open in a new window".` } as IntentPayload & { severity: 'warn'; message: string },
+      { type: 'ui-notification', kind: 'broadcast', severity: 'warn', message: `Couldn't open ${name} into that pane — ${why}. Try "Open in a new window".` } as IntentPayload & { severity: 'warn'; message: string },
       () => {},
     )
   }
 
-  /** Pick which grouping container the floor's WRAP builds. The composition's grouping-choice decides
-   *  when it names one (`requested`) or only one container declares grouping (`only`) — used silently.
-   *  Otherwise EVERY discovered grouping container is offered as a sub-pick (the substrate knows no
-   *  container by name; the wrap default is the composition's or the user's, never a host literal).
-   *  Returns `{ kind }` (or `{}` when nothing declares grouping — `wrapPane` then reports no-grouping),
-   *  or `'cancel'` when the user dismissed the sub-pick. */
-  private async pickWrapKind(name: string): Promise<{ kind?: string } | 'cancel'> {
-    // The WRAP-TARGET registry (grouping ∪ spatial), NOT the drop's grouping-only provider — so bento
-    // (spatial) is offered here without touching center-drop semantics. The composition's `group-into` is
-    // honoured (reason `requested` / `only` → use it silently); otherwise the family-SECTIONED picker
-    // (Stack: grouping / Arrange: spatial). Never a hardcoded kind, never alphabetical.
-    const outcome = wrapTargetOutcome()
-    if (!outcome || outcome.available.length === 0) return {} // none declared → wrapPane reports it.
-    if ((outcome.reason === 'requested' || outcome.reason === 'only') && outcome.chosen) {
-      return { kind: outcome.chosen.typeName } // the composition said, or there is only one.
-    }
-    const descriptors = this.opts.describeProjections?.()
-    const bare = (t: string): string => t.split('::')[0] ?? t
-    const SECTION = { grouping: 'Stack', spatial: 'Arrange' } as const
-    const options = [...wrapTargets()]
-      .sort((a, b) => (a.family === b.family ? 0 : a.family === 'grouping' ? -1 : 1)) // Stack first, then Arrange.
-      .map((t) => ({
-        id: t.typeName,
-        label: descriptorLabel(descriptors?.find((d) => bare(d.type) === bare(t.typeName)), t.typeName),
-        section: SECTION[t.family],
-      }))
-    const picked = await getChooserSurface().choose({ title: `Wrap ${name} in which container?`, options })
+  /** Pick which container a wrap of `n` children builds, through the one `wrapChoice`: the composition's
+   *  `group-into` (when it admits `n`) or a sole candidate is used silently; otherwise the family-SECTIONED
+   *  picker (Stack / Arrange / Frame) over the candidates admitting `n`. Never a hardcoded kind.
+   *  Returns `{ kind }` (or `{}` when nothing admits `n` — `wrapPane` then reports no-grouping), or
+   *  `'cancel'` when the user dismissed the pick. */
+  private async pickWrapKind(name: string, n: number): Promise<{ kind?: string } | 'cancel'> {
+    const choice = wrapChoice(n)
+    if (choice.options.length === 0) return {}
+    if (choice.use) return { kind: choice.use }
+    const picked = await getChooserSurface().choose({ title: `Wrap ${name} in which container?`, options: choice.options })
     return picked ? { kind: picked } : 'cancel'
   }
 
@@ -3692,6 +3899,71 @@ export class CompositionRuntime {
    */
   private ambientOwnersOf(intentType: string): PublisherId[] {
     return this.intentTree.ownersHandling(intentType).filter((o) => this.isAmbientReachable(o, intentType))
+  }
+
+  /**
+   * THE AMBIENT PICKER (the CONSUME-stage CHOOSE strategy's runtime half): the tree deferred a >1-claimer
+   *  ambient dispatch here. Resolve each candidate publisher → a chooser option (the option id IS the
+   *  publisher, so the pick maps straight back with no DOM round-trip), open the host chooser, and return the
+   *  picked publisher, or null on Esc / cancel. Candidates arrive in authority (MRU-head-first) order, so
+   *  index 0 is the pre-highlight a blind Enter fires — reproducing the old silent pick.
+   *
+   *  A candidate whose own on-screen slot ENCLOSES no other candidate anchors SPATIALLY (a `au-pane-target`
+   *  drawn over its live rect — the vimium overlay); an ENCLOSING candidate (its slot nests another's, so the
+   *  rects nest) and a NON-SPATIAL one (a host command, an off-screen candidate) fall to a LIST ROW. EVERY
+   *  candidate — enclosing container included — that has an on-screen slot gets a spatial target: the chooser
+   *  nests them smaller-on-top and gives each a distinct vimium letter, so a bento AND the tab inside it both
+   *  highlight and are pickable. Targeting the FIRER's window (via `_from`) is not wired yet.
+   */
+  /** The CONSUME strategy for an ambient dispatch fired from `from`, read off the firer's SCOPE's
+   *  `intent-routing.default-strategy` (nested scope falls back to the entry, then to `choose`). `mru` opts
+   *  the composition back to the silent first-claimer; `choose` (the default) shows the picker. */
+  private ambientStrategyFor(from: PublisherId): 'choose' | 'mru' {
+    return (this.rulesByScope.get(this.scopeOfNode(from)) ?? this.rulesByScope.get(ENTRY_SCOPE))?.strategy ?? 'choose'
+  }
+
+  private async chooseAmbient(_from: PublisherId, intentType: string, candidates: PublisherId[]): Promise<PublisherId | null> {
+    const options = candidates.map((id) => {
+      const anchor = this.spatialAnchor(id)
+      return anchor ? { id, label: this.candidateLabel(id), anchor } : { id, label: this.candidateLabel(id) }
+    })
+    // Name the intent in the title as inline code — "resolve `open`". The backticks render as a <code> chip
+    // (the chooser parses them); strip a trailing `-intent` and any `::repo` qualifier for a readable name.
+    const name = intentType.split('::')[0]!.replace(/-intent$/, '')
+    return getChooserSurface().choose({ title: `resolve \`${name}\``, options })
+  }
+
+  /** The SPATIAL anchor for a candidate — its own `[data-pane-id=<nodeId>]` slot — or undefined when it has
+   *  no on-screen slot (a host command, an unmounted node) or an off-screen (zero-area) one, so it falls to a
+   *  list row. NESTED candidates are NOT deduped: the chooser draws every one and z-orders smaller-on-top,
+   *  with a distinct letter per target, so an enclosing container is a pickable region, not a hidden row. */
+  private spatialAnchor(id: PublisherId): string | undefined {
+    if (typeof document === 'undefined') return undefined
+    const nodeId = this.nodes.get(id)?.nodeId
+    if (!nodeId) return undefined
+    const el = document.querySelector<HTMLElement>(`[data-pane-id="${CSS.escape(nodeId)}"]:not([data-pane-host])`)
+    if (!el) return undefined
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return undefined
+    return nodeId
+  }
+
+  /**
+   * A user-facing label for an ambient candidate: a mounted projection shows its container/projection
+   *  display name (`projectionLabel`); a host-owned candidate (the save-composition fallback, not in `nodes`)
+   *  shows its id without the `host:` prefix.
+   */
+  /** A projection type's display label, from its descriptor; the bare name when none is known. */
+  private typeLabel(type: string | undefined): string | undefined {
+    if (!type) return undefined
+    const bare = (t: string): string => t.split('::')[0] ?? t
+    return descriptorLabel(this.opts.describeProjections?.()?.find((d) => bare(d.type) === bare(type)), bare(type))
+  }
+
+  private candidateLabel(id: PublisherId): string {
+    const type = this.nodes.get(id)?.type
+    if (type) return projectionLabel(type)
+    return id.startsWith('host:') ? id.slice('host:'.length) : id
   }
 
   /**
@@ -3957,9 +4229,9 @@ export class CompositionRuntime {
               ensureRecord: (id: string, record: OpaqueConfig) => this.ensureRecord(id, record),
               createGroup: (record: OpaqueConfig) => this.createGroup(record),
               stageGroup: (record: OpaqueConfig) => this.stageGroup(record),
-              applyStructural: (edits) => this.applyStructural(edits),
-              // THE ASK: a container proposes edits, the host applies them. `propose` delegates to the host's
-              // `applyStructural` write; the host is the decision point.
+              // THE ASK — the SOLE public write channel: a container (or the host's own config overlay)
+              // proposes edits, the host applies them. `propose` delegates to the authority's private
+              // `applyStructural` commit; the host is the one decision point.
               propose: (edits) => this.applyStructural(edits),
               float: (occupantId, sourceEdit, options) => this.float(occupantId, sourceEdit, options),
               moveToWindow: (subtreeId) => void this.moveToWindow(subtreeId),
@@ -4022,7 +4294,11 @@ export class CompositionRuntime {
     // authority's own trees (sync claim into `intentTree`, `focusTree`, `selectionTree`, the direct
     // `mergeRecord` sink), so a same-window dispatch never crosses an event path and single-window pays
     // nothing. Capabilities are the real ones. The proxied twin is the mount agent's `buildHost`.
+    const lifetime = createMountLifetime()
+    const node = this.nodes.get(publisher)
+    if (node) node.lifetime = lifetime
     return createInProcessMountHost({
+      lifetime,
       // Common / per-window.
       entryPath: this.opts.entryPath,
       engineReady: this.opts.engineReady,
@@ -4061,6 +4337,11 @@ export class CompositionRuntime {
       // active pane.
       focus: {
         report: this.focusTree.forNode(publisher).report,
+        // Move REAL DOM focus into the child pane on a container's visible-child change (a tab switch / a
+        // drop that activates a tab / a close that clamps to a survivor). Timing-tolerant: a just-switched
+        // tab's editor is still mounting, so retry until its content is focusable. Idempotent: skip when
+        // that pane already holds focus, so a redundant call never disrupts a selection or scroll.
+        focusPane: (nodeId: string) => { if (paneIdOfActiveElement() !== nodeId) focusPaneWhenReady(nodeId) },
         activePane: () => this.mainActiveHead(),
         watchActive: (listener) => this.watchMainActive(listener),
       },
@@ -4108,6 +4389,35 @@ export class CompositionRuntime {
   /** The composition's slot-default placeholder, read off `pool.meta['slot-defaults'].placeholder` and
    *  bare-normalized (the def-ref value → a bare type name), for the empty-slot ladder's `configured`
    *  rung. `undefined` when the composition declares no `slot-defaults`. */
+  /** The composition's grouping policy, read off its captured document fields. */
+  private groupingPolicy(): GroupingPolicy {
+    const meta = this.pool?.meta
+    const groupInto = groupingChoiceOf(meta)
+    return { ...(groupInto ? { groupInto } : {}), groupNewPanes: groupNewPanesOf(meta) }
+  }
+
+  /** The policy each surface last received (in its init or a push), so an unchanged one is not re-sent. */
+  private sentGroupingPolicy = ''
+
+  /** The policy a newly opened window boots with. Every open window then holds the current one. */
+  private initialGroupingPolicy(): GroupingPolicy {
+    const policy = this.groupingPolicy()
+    this.sentGroupingPolicy = JSON.stringify(policy)
+    if (on('placement')) event('placement', 'grouping-policy', { via: 'init', ...policy })
+    return policy
+  }
+
+  /** Mirror the grouping policy down to every floated window when it changed. No-op without surfaces. */
+  private pushGroupingPolicy(): void {
+    if (this.surfaceTransports.size === 0) return
+    const policy = this.groupingPolicy()
+    const key = JSON.stringify(policy)
+    if (key === this.sentGroupingPolicy) return
+    this.sentGroupingPolicy = key
+    if (on('placement')) event('placement', 'grouping-policy', { via: 'push', surfaces: this.surfaceTransports.size, ...policy })
+    for (const t of this.surfaceTransports.values()) t.sendCommand({ op: 'grouping-policy', ...policy })
+  }
+
   private readSlotDefaults(): string | undefined {
     const sd = this.pool?.meta?.['slot-defaults'] as Record<string, unknown> | undefined
     return refBareName(sd?.['placeholder'])
@@ -4516,6 +4826,8 @@ export class CompositionRuntime {
     } catch {
       // a failing unmount must not break the cascade
     }
+    // After the view's own teardown: close whatever it still has open above the composition.
+    node.lifetime?.end()
     // Drop this publisher's view-state and end follows targeting it.
     this.viewState.dropPublisher(publisher)
     // NOT the selection tree: like focus, it is keyed by the stable `^:`, so a remount (which unmounts the

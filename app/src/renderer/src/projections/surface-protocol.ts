@@ -52,11 +52,12 @@ export class GenerationGuard {
   /** Whether `command` should be applied. Records its generation as the new high-water mark when so. Only
    *  the per-record LIFECYCLE commands are generation-guarded; `pool-sync` / `grant` / `claim` / `commit` /
    *  `selection-deliver` / `windows-changed` / `confirm-close` / `gather-close-guard` / `active-chords` /
-   *  `active-pane` / `close-pane` (pool state, id grants, the gather-then-commit dispatch queries, the
+   *  `active-pane` / `close-pane` / `grouping-policy` (pool state, id grants, the gather-then-commit dispatch queries, the
    *  cross-window selection channel, the window-set list, the close prompt, the close-guard gather, the
-   *  mirrored bound-chord set, the active-pane ring, and the delegated pane close — none a record lifecycle)
+   *  mirrored bound-chord set, the active-pane ring, the delegated pane close, and the composition's grouping
+   *  policy — none a record lifecycle)
    *  are handled by the agent before the guard and never reach here. */
-  admit(command: Exclude<SurfaceCommand, { op: 'pool-sync' | 'grant' | 'claim' | 'commit' | 'selection-deliver' | 'windows-changed' | 'confirm-close' | 'gather-close-guard' | 'active-chords' | 'active-pane' | 'close-pane' }>): boolean {
+  admit(command: Exclude<SurfaceCommand, { op: 'pool-sync' | 'grant' | 'claim' | 'commit' | 'selection-deliver' | 'windows-changed' | 'confirm-close' | 'gather-close-guard' | 'active-chords' | 'active-pane' | 'close-pane' | 'grouping-policy' }>): boolean {
     const last = this.appliedGen.get(command.id)
     if (last !== undefined && command.gen < last) return false // stale — dropped
     this.appliedGen.set(command.id, command.gen)

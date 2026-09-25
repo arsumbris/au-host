@@ -20,21 +20,21 @@ import type { BranchNode, LayoutNode, LeafNode } from './layout/bento/types'
 export type SlotState = CoreSlotState
 
 /**
- * THE UNION CODEC — reading and writing `<projection& | bento-slot | bento-node.branch&>` at a LEAF
- * position is the substrate's, not bento's. Bento keeps the two things that really are its own: the
- * BRANCH arm (a structural node no other container has) and the tree wrapper it reads into.
- *
- * Per-qualifier, because a composition authored in another repo claims bento's types QUALIFIED, and
- * the qualifier is known per save rather than at module load. Reads never need it.
+ * THE UNION CODEC — reading and writing a LEAF position is the substrate's, not bento's. Bento keeps
+ * the two things that really are its own: the BRANCH arm (a structural node no other container has)
+ * and the tree wrapper it reads into. A leaf sits in one of two fields, `bento.root` or a branch's
+ * `children`, and each is its own site; both admit `bento-slot`, so they read and write alike.
  */
-const slotsFor = (qualifier: string) =>
-  makeSlotCodec<Projection>({ slotType: 'bento-slot', qualifier, label: 'bento' })
-const slots = slotsFor('')
+const codecs = {
+  root: makeSlotCodec<Projection>({ site: { type: 'bento', field: 'root' }, label: 'bento' }),
+  children: makeSlotCodec<Projection>({ site: { type: 'bento-node.branch', field: 'children' }, label: 'bento' }),
+}
+type Site = keyof typeof codecs
 
 /** The slot at a position as the SEAM speaks it, or null when the position says nothing.
- *  Shared with `BentoApp`'s `slotFor`. */
-export const seamSlotOf = (slot: SlotState | undefined): ReturnType<typeof slots.toSeamSlot> =>
-  slots.toSeamSlot(slot)
+ *  Shared with `BentoApp`'s `slotFor`. Reads only the slot's state, so any site's codec answers. */
+export const seamSlotOf = (slot: SlotState | undefined): ReturnType<typeof codecs.root.toSeamSlot> =>
+  codecs.root.toSeamSlot(slot)
 
 /** Runtime payload for one leaf: an opaque child projection and its governing slot.
  * `id` addresses the position and stays stable across content swaps. `childId`
@@ -122,17 +122,17 @@ export function qualifierOf(t: string | undefined): string {
  *  the persisted node carries none. Children arrive already resolved (the host resolves
  *  the composition pool before mounting), so binding is a pure structural translation. */
 export function fromSubstrate(layout: Bento): Bound {
-  return { root: nodeFrom(layout.root) }
+  return { root: nodeFrom('root', layout.root) }
 }
 
-function nodeFrom(node: NodeValue): LayoutNode<PaneState> {
+function nodeFrom(site: Site, node: NodeValue): LayoutNode<PaneState> {
   // Match the BARE discriminant (the runtime `type` may carry a `::repo` qualifier the
   // literal generated type doesn't spell). Manual narrowing via `as`, since switching on
   // a stripped string loses TS's discriminant narrowing. A bare `mountable*` child (a
   // string ref) has no `.type`, so guard the string case before touching it.
   if (typeof node !== 'string' && bareType(node.type) === 'bento-node.branch') {
     const b = node as BentoNodeBranch
-    const children = b.children.map((c) => nodeFrom(c))
+    const children = b.children.map((c) => nodeFrom('children', c))
     if (children.length !== 2) {
       // bento's runtime is a binary tree (binary branching); 3+ panes per
       // row are authored as nested binary branches.
@@ -149,14 +149,14 @@ function nodeFrom(node: NodeValue): LayoutNode<PaneState> {
   }
   // Both remaining arms — a `bento-slot` and a BARE mountable ref — are the same union the codec
   // reads, so there is one path rather than two that could disagree about what a position says.
-  return leafFrom(node)
+  return leafFrom(site, node)
 }
 
 /** One LEAF position: whatever occupies it (possibly nothing), plus what the position says.
  *  The runtime node id is the POSITION's — the slot's own `^:` when authored, else minted — and it
  *  is never the occupant's, so an emptied-but-still-ruled position keeps its address. */
-function leafFrom(node: NodeValue): LeafNode<PaneState> {
-  const { child, slot } = slots.read(node)
+function leafFrom(site: Site, node: NodeValue): LeafNode<PaneState> {
+  const { child, slot } = codecs[site].read(node)
   return {
     type: 'leaf',
     id: slot.id ?? genId(),
@@ -164,7 +164,7 @@ function leafFrom(node: NodeValue): LeafNode<PaneState> {
       // The codec already returns an `Occupant` ({ id, instance }); hold it verbatim as the reference
       // unit. `child.id` is the pool `^:` the codec preserved (or substrate-minted for an id-less legacy child).
       ...(child === undefined ? {} : { child }),
-      ...(slots.speaks(slot) ? { slot } : {}),
+      ...(codecs[site].speaks(slot) ? { slot } : {}),
     },
   }
 }
@@ -172,11 +172,11 @@ function leafFrom(node: NodeValue): LeafNode<PaneState> {
 // The host derives config ownership from the type graph and preserves unowned fields
 // at saveConfig. This projection emits only the fields it understands.
 export function toSubstrate(root: LayoutNode<PaneState>, qualifier = ''): Bento {
-  return { type: `bento${qualifier}`, root: nodeBody(root, qualifier) } as unknown as Bento
+  return { type: `bento${qualifier}`, root: nodeBody('root', root, qualifier) } as unknown as Bento
 }
 
 /** Serialize a node's OWN structure, recursing through its children. */
-function nodeBody(node: LayoutNode<PaneState>, qualifier: string): NodeValue {
+function nodeBody(site: Site, node: LayoutNode<PaneState>, qualifier: string): NodeValue {
   switch (node.type) {
     case 'branch':
       return {
@@ -184,10 +184,10 @@ function nodeBody(node: LayoutNode<PaneState>, qualifier: string): NodeValue {
         type: `bento-node.branch${qualifier}`,
         direction: node.direction,
         ratio: node.ratio,
-        children: node.children.map((c) => nodeBody(c, qualifier)),
+        children: node.children.map((c) => nodeBody('children', c, qualifier)),
       } as unknown as NodeValue
     case 'leaf':
-      return leafTo(node, qualifier)
+      return leafTo(site, node)
   }
 }
 
@@ -195,16 +195,18 @@ function nodeBody(node: LayoutNode<PaneState>, qualifier: string): NodeValue {
  *  `[[^^childId]]` REFERENCE into the composition pool (the codec's `write` does this for every
  *  container), so bento's record embeds only its own structure + child ref-ids and never a stale
  *  child. A bare position → the bare ref; a ruled position → a `bento-slot` record whose `child` is
- *  the ref; an empty position → an empty placeholder slot, to keep the branch's arity of two. */
-function leafTo(node: LeafNode<PaneState>, qualifier: string): NodeValue {
+ *  the ref; an empty position → an empty slot record of the site's declared slot type, to keep the
+ *  branch's arity of two. */
+function leafTo(site: Site, node: LeafNode<PaneState>): NodeValue {
   const { child, slot } = node.state
-  const written = slotsFor(qualifier).write({
+  const codec = codecs[site]
+  const written = codec.write({
     // The occupant is already a reference unit ({ id, instance }) — write it as-is. Its `^:` id is
     // present by construction (host-assigned or substrate-minted), so serialize never mints a fresh
     // one: render and serialize name the child the SAME way. That is the guarantee.
     ...(child === undefined ? {} : { child }),
     slot: slot ?? {},
   })
-  return (written ?? { type: `bento-slot${qualifier}` }) as unknown as NodeValue
+  return (written ?? codec.emptyRecord()) as unknown as NodeValue
 }
 

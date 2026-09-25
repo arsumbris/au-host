@@ -1,0 +1,15 @@
+# Owned by the `intent` package.
+# "Swap the focused pane's content." Routed + ambient: the container holding the focused pane claims it and
+# opens its swap picker for that pane, reusing `usePaneSwap.request` — the same in-body picker the ⋯ menu's
+# "Swap pane" row opens, which lets the user pick any admitted viewer (a superset of the editor/reader swap).
+# The container resolves WHICH of its children to swap from the window's active pane. Every other container
+# declines, so the routed walk reaches the focused one. Fired by the keymap; command-only — no constructor.
+#: Swap the focused pane's content via the holding container's swap picker. Routed + ambient.
+extends: intent::au-host-sdk
+meta:
+  - type: intent-routing-meta::au-host-sdk
+    kind: routed
+    dispatch: ambient
+  - type: command-meta::au-host-sdk
+    label: Swap pane
+    category: View

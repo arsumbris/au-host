@@ -117,7 +117,6 @@ export function makePoolEdit<M>(m: PoolEditModel<M>): NonNullable<ContainerPlace
     createRecord: (record) => pool.stageRecord(record as OpaqueConfig) as StagedMint,
     createGroup: (groupInstance) => pool.stageGroup(groupInstance as OpaqueConfig) as StagedMint,
     // THE ASK: hand the batch to the host. `propose` is the substrate's ONLY write channel; the host applies it.
-    // Falls back to `applyStructural` for a host that predates `propose` (transition guard).
-    propose: (edits) => (pool.propose ?? pool.applyStructural)(edits as ReadonlyArray<{ id: string; record: OpaqueConfig }>),
+    propose: (edits) => pool.propose(edits as ReadonlyArray<{ id: string; record: OpaqueConfig }>),
   };
 }

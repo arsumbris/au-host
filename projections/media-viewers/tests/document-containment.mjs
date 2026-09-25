@@ -5,7 +5,7 @@ import { chromium } from '../../../app/node_modules/@playwright/test/index.mjs'
 
 const css = await readFile(new URL('../src/style.css', import.meta.url), 'utf8')
 const source = await readFile(new URL('../src/viewers.ts', import.meta.url), 'utf8')
-const artifact = await readFile(new URL('../../../dogfood/reader-fixtures/html-preview-lab.html', import.meta.url), 'utf8')
+const artifact = await readFile(new URL('./fixtures/html-preview-lab.html', import.meta.url), 'utf8')
 const javascript = ts.transpile(source, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 })
 const browser = await chromium.launch({ headless: true })
 try {

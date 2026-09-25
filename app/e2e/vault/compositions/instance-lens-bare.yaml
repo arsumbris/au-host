@@ -1,0 +1,12 @@
+# INSTANCE-LENS-BARE fixture — a bare editor opening `lens-sample-1.md`, for the instance-count lens above its `type:` claim.
+type: composition::au-host-sdk
+windows:
+  - "[[^^w]]"
+projections:
+  - type: window::au-host-sdk
+    primary: true
+    content: "[[^^ed]]"
+    ^: w
+  - ^: ed
+    type: editor-pane::editor
+    file: lens-sample-1.md

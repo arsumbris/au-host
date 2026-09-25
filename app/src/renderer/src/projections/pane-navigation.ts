@@ -75,21 +75,53 @@ export function visiblePanes():VisiblePane[] {
   }
   return [...unique.values()]
 }
-export function focusPane(id:string):void {
+/** Focus the pane with this `^:`. Returns whether a REAL content element (a remembered target or a
+ *  focusable candidate) took focus — `false` when it fell back to the pane BOX because the content is not
+ *  yet focusable (e.g. an editor still mounting). Throws when the pane is not currently visible. */
+export function focusPane(id:string):boolean {
   const target=visiblePanes().find(p=>p.id===id)
   if(!target) throw new Error('The pane is no longer visible.')
   preparePaneFocus(target.el)
   activatePane(id)
   lastPane=id
   const prior=remembered.get(id)
-  if(prior?.isConnected && paneOf(prior) === id) {prior.focus({preventScroll:true});if(paneOf(deepActive())===id)return}
+  if(prior?.isConnected && paneOf(prior) === id) {prior.focus({preventScroll:true});if(paneOf(deepActive())===id)return true}
   const candidates=target.el.querySelectorAll<HTMLElement>('[contenteditable="true"],textarea,input:not([type="hidden"]),button:not(:disabled),[tabindex="0"]')
   for (const candidate of candidates) {
     if (!candidate.getClientRects().length || candidate.closest('[hidden],[inert]') || getComputedStyle(candidate).visibility==='hidden') continue
     candidate.focus({preventScroll:true})
-    if (paneOf(deepActive())===id) return
+    if (paneOf(deepActive())===id) return true
   }
   target.el.tabIndex=-1;target.el.focus({preventScroll:true})
+  return false
+}
+
+/**
+ * Focus the pane with this `^:` once it is READY — the timing-tolerant form for a just-switched pane whose
+ * content is still mounting (a fresh editor). Retries over up to `frames` animation frames until a real
+ * content element takes focus, then stops; a bare pane BOX focus in the meantime already fixes routing /
+ * close-view (both resolve the pane by `data-pane-id`), so an exhausted retry that only reached the box is
+ * still correct, just less ideal. ABORTS if DOM focus lands in a DIFFERENT pane meanwhile (a user click),
+ * so it never fights an intentional focus move. Silent when the pane never appears.
+ */
+export function focusPaneWhenReady(id:string, frames=40):void {
+  let placed=false // set once we have actually put focus into the pane (box or content)
+  const attempt=(left:number):void=>{
+    // Abort only AFTER we placed focus AND focus moved to a DIFFERENT PANE (a real user action to respect).
+    // A transient blur to nothing (deepActive → body/null) during a remount-churn is NOT a reason to bail —
+    // that stranded the survivor on a close. Before we place focus, the current pane is the OPENER we are
+    // meant to move away from, so it is not a reason to bail either.
+    const cur=paneOf(deepActive())
+    if(placed && cur!=null && cur!==id) return
+    try {
+      const real=focusPane(id) // throws until the pane is visible
+      placed=true
+      if(real) return // a real content element took focus — done
+    } catch { /* not visible yet — retry */ }
+    if(left<=0) return
+    requestAnimationFrame(()=>attempt(left-1))
+  }
+  requestAnimationFrame(()=>attempt(frames))
 }
 export function directionalPane(from:string,direction:string):string|undefined {
   const panes=visiblePanes(),source=panes.find(p=>p.id===from)

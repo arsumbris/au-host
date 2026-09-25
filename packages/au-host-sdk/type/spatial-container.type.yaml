@@ -9,8 +9,8 @@
 # one predicate (`isGroupingKind`) and coupling them breaks a live behaviour:
 #  - "is-a-stack-group" (does a center-drop ADD a child here, and is it the drop's new-group default) —
 #    that is `grouping-container` (tabs, column), and the substrate's drop path reads it. UNCHANGED.
-#  - "wrap-target" (does the WRAP action offer it) — that is the UNION grouping ∪ spatial (tabs, column,
-#    bento, canvas). The wrap action reads the union.
+#  - "wrap-target" (does the WRAP action offer it) — that is the UNION grouping ∪ spatial ∪ frame (tabs,
+#    column; bento, canvas; sandwich, dock). The wrap action reads the union.
 # A spatial container (bento, canvas) is a wrap target but is NOT a stack-group: a center-drop onto a bento
 # still WRAPS (into a stack group), it does not add-into the bento. Making spatial a SUBTYPE of grouping
 # would flip `isGroupingKind` for bento and change that drop behaviour. So spatial is a SIBLING: it extends
@@ -24,8 +24,16 @@
 # is a two-leaf branch (a split); canvas's is free placement. Discovered by `readSubtypes(spatial-container)`
 # and duck-type-enforced exactly like grouping-container's build.
 
-# SHELLS (sandwich, dock, bar, rail) declare NEITHER kind (they hold role-named fixed slots, not
-# interchangeable growable content), so they are excluded from wrap BY TYPE.
+# WRAP HAS A THIRD CLASS FOR CENTER-FILL SHELLS. A shell is not one non-growable thing: it is a growable
+# FILL slot plus role-named peripheral chrome. So the split is by whether a shell HAS a fill:
+#  - NON-FILL shells (bar, rail) hold only role-named items (bar-items), no growable fill, so they are
+#    excluded from wrap BY TYPE.
+#  - CENTER-FILL shells (sandwich, dock) are the third wrap class, `frame-container`: a `center` fill plus
+#    fixed peripheral chrome. A wrap fills their `center` and leaves the peripherals empty (placeholder),
+#    so they are SOLO-wrap targets: `frame-container` declares `arity-meta.max: 1`, and every wrap flow
+#    offers only the targets admitting its child count.
+# The wrap union is therefore grouping ∪ spatial ∪ frame; `frame-container` is the sibling KIND that owns
+# the `center` base field and the synthesized `buildGroup`.
 
 
 
