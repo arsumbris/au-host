@@ -38,8 +38,9 @@ export default defineConfig({
     },
     // Externalize the host's shared deps (React + the SDKs) so this dist emits bare imports that resolve
     // at runtime to the one served au-shared:// instance, via the host's injected import map.
-    // inlineDynamicImports keeps this projection's own remaining code in a single chunk.
-    rollupOptions: { external: sharedDepExternal, output: { inlineDynamicImports: true } },
+    // Dynamic imports stay separate chunks so Mermaid (several MB) loads only when a note has a diagram.
+    // The au-projection:// scheme serves every file in dist, so relative chunk imports resolve.
+    rollupOptions: { external: sharedDepExternal, output: { chunkFileNames: 'chunks/[name]-[hash].js' } },
   },
   resolve: { dedupe: ['react', 'react-dom'] },
 })

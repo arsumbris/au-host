@@ -533,3 +533,8 @@
   color: var(--au-link-internal);
   text-decoration: none;
 }
+
+/* ```mermaid fences render as inline SVG diagrams, scaled down to the column width. */
+.au-reader-mermaid { display: flex; justify-content: center; overflow-x: auto; }
+.au-reader-mermaid > svg { max-inline-size: 100%; height: auto; }
+.au-reader-mermaid-error { margin-block-start: var(--au-space-2); font: var(--au-t-sm)/var(--au-lh-base) var(--au-font-sans); color: var(--au-color-danger); }

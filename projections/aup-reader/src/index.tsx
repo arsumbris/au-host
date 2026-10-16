@@ -38,6 +38,7 @@ import { Frontmatter } from './frontmatter'
 import { YamlDocument } from './yaml-document'
 import { MarkdownImage } from './markdown-image'
 import { CodeBlock } from './code-block'
+import { MermaidBlock } from './mermaid-block'
 import { viewerSwitchSets, runViewerSwitch } from '@arsumbris/container-core'
 
 const fill = {
@@ -417,9 +418,10 @@ function makeComponents(nav: Nav, host: MountHost, path: string | null): Compone
     const isBlock = /language-/.test(className ?? '') || text.includes('\n')
     if (!isBlock) return <code className="au-md__code">{children}</code>
     const lang = /language-([^\s]+)/.exec(className ?? '')?.[1]
+    const code = text.replace(/\n$/, '')
     return (
       <span className="au-md__block">
-        <CodeBlock code={text.replace(/\n$/, '')} language={lang} />
+        {lang === 'mermaid' ? <MermaidBlock code={code} /> : <CodeBlock code={code} language={lang} />}
       </span>
     )
   },
